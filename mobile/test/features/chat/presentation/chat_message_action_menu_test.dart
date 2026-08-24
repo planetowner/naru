@@ -2419,9 +2419,14 @@ void main() {
     await tester.tap(
       find.byKey(const ValueKey<String>('attachment-action-photo')),
     );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey<String>('attachment-panel')),
+      findsNothing,
+    );
 
     for (final Duration elapsed in <Duration>[
-      Duration.zero,
       const Duration(milliseconds: 16),
       const Duration(milliseconds: 32),
       const Duration(milliseconds: 64),

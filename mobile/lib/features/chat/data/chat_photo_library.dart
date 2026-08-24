@@ -87,6 +87,8 @@ abstract interface class ChatPhotoLibrary {
 abstract interface class ChatPhotoLibraryPreloader {
   Future<void> preload();
 
+  void invalidateAssetListingCache();
+
   void invalidateCache();
 }
 
@@ -179,6 +181,7 @@ final class PhotoManagerChatPhotoLibrary
   Future<List<ChatPhotoAlbum>>? _albumRequestInFlight;
 
   int _cacheVersion = 0;
+  int _assetListingCacheVersion = 0;
 
   static FilterOptionGroup _createFilterOption() {
     // FilterOptionGroup의 기본 생성일 상한은 생성 순간의 DateTime.now()예요.
@@ -405,10 +408,9 @@ final class PhotoManagerChatPhotoLibrary
     final PermissionState permissionState =
         await PhotoManager.getPermissionState(requestOption: _permissionOption);
 
-    final ChatPhotoAccessState accessState = _accessStateFor(permissionState);
-    _cachedAccessState = accessState;
-
-    return accessState;
+    // iOS의 미결정 상태도 화면에서는 denied로 표현해요. 조회 결과를
+    // 캐시하면 이후 실제 권한 요청까지 생략되므로 여기서는 저장하지 않아요.
+    return _accessStateFor(permissionState);
   }
 
   @override
@@ -577,6 +579,7 @@ final class PhotoManagerChatPhotoLibrary
     final Future<List<ChatPhotoAsset>> request = _loadAssetsAndCache(
       cacheKey: cacheKey,
       cacheVersion: _cacheVersion,
+      assetListingCacheVersion: _assetListingCacheVersion,
       albumId: albumId,
       page: page,
       pageSize: pageSize,
@@ -589,6 +592,7 @@ final class PhotoManagerChatPhotoLibrary
   Future<List<ChatPhotoAsset>> _loadAssetsAndCache({
     required String cacheKey,
     required int cacheVersion,
+    required int assetListingCacheVersion,
     required String albumId,
     required int page,
     required int pageSize,
@@ -600,13 +604,15 @@ final class PhotoManagerChatPhotoLibrary
         page: page,
         pageSize: pageSize,
       );
-      if (_cacheVersion == cacheVersion) {
+      if (_cacheVersion == cacheVersion &&
+          _assetListingCacheVersion == assetListingCacheVersion) {
         _assetPageCache[cacheKey] = assets;
       }
 
       return assets;
     } finally {
-      if (_cacheVersion == cacheVersion) {
+      if (_cacheVersion == cacheVersion &&
+          _assetListingCacheVersion == assetListingCacheVersion) {
         _assetPageRequests.remove(cacheKey);
       }
     }
@@ -758,12 +764,20 @@ final class PhotoManagerChatPhotoLibrary
   }
 
   @override
+  void invalidateAssetListingCache() {
+    // 선택기를 다시 열 때는 새 사진이 포함되도록 사진 페이지만 갱신해요.
+    // 앨범 조회까지 버리면 사전 로딩 중인 동일한 작업을 다시 하게 돼요.
+    _assetListingCacheVersion += 1;
+    _assetPageCache.clear();
+    _assetPageRequests.clear();
+  }
+
+  @override
   void invalidateCache() {
     _cacheVersion += 1;
     _albumCache = null;
     _albumRequestInFlight = null;
-    _assetPageCache.clear();
-    _assetPageRequests.clear();
+    invalidateAssetListingCache();
     _thumbnailCache.clear();
     _thumbnailRequests.clear();
   }

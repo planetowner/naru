@@ -510,6 +510,12 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
 
       _subscribeToLibraryChanges();
 
+      if (widget.photoLibrary case final ChatPhotoLibraryPreloader preloader) {
+        // 선택기가 닫힌 동안에는 변경 알림을 구독하지 않아요. 다시 열 때
+        // 사진 목록만 새로 조회하고 앨범 정보와 썸네일은 그대로 사용해요.
+        preloader.invalidateAssetListingCache();
+      }
+
       final List<ChatPhotoAlbum> albums = await widget.photoLibrary
           .loadAlbums();
 
@@ -977,41 +983,54 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
         : BorderRadius.zero;
 
     return SizedBox.expand(
-      child: Material(
-        key: const ValueKey<String>('photo-picker'),
-        color: AppColors.white,
-        borderRadius: panelRadius,
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          children: [
-            GestureDetector(
-              key: const ValueKey<String>('photo-picker-handle-area'),
-              behavior: HitTestBehavior.opaque,
-              onVerticalDragStart: widget.onHandleDragStart,
-              onVerticalDragUpdate: widget.onHandleDragUpdate,
-              onVerticalDragEnd: widget.onHandleDragEnd,
-              child: SizedBox(
-                height: 25,
-                width: double.infinity,
-                child: Center(
-                  child: Container(
-                    key: const ValueKey<String>('photo-picker-handle'),
-                    width: 38,
-                    height: 5,
-                    decoration: const BoxDecoration(
-                      color: AppColors.grey400,
-                      borderRadius: BorderRadius.all(Radius.circular(3)),
+      child: DecoratedBox(
+        key: const ValueKey<String>('photo-picker-boundary-effect'),
+        decoration: BoxDecoration(
+          borderRadius: panelRadius,
+          boxShadow: const <BoxShadow>[
+            BoxShadow(
+              color: Color(0x28000000),
+              blurRadius: 6,
+              offset: Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Material(
+          key: const ValueKey<String>('photo-picker'),
+          color: AppColors.white,
+          borderRadius: panelRadius,
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: [
+              GestureDetector(
+                key: const ValueKey<String>('photo-picker-handle-area'),
+                behavior: HitTestBehavior.opaque,
+                onVerticalDragStart: widget.onHandleDragStart,
+                onVerticalDragUpdate: widget.onHandleDragUpdate,
+                onVerticalDragEnd: widget.onHandleDragEnd,
+                child: SizedBox(
+                  height: 25,
+                  width: double.infinity,
+                  child: Center(
+                    child: Container(
+                      key: const ValueKey<String>('photo-picker-handle'),
+                      width: 38,
+                      height: 5,
+                      decoration: const BoxDecoration(
+                        color: AppColors.grey400,
+                        borderRadius: BorderRadius.all(Radius.circular(3)),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-            _buildHeader(),
-            const Divider(height: 1, thickness: 1, color: AppColors.grey100),
-            Expanded(child: _buildBody()),
-            if (_accessState != ChatPhotoAccessState.denied)
-              _buildCollageControl(),
-          ],
+              _buildHeader(),
+              const Divider(height: 1, thickness: 1, color: AppColors.grey100),
+              Expanded(child: _buildBody()),
+              if (_accessState != ChatPhotoAccessState.denied)
+                _buildCollageControl(),
+            ],
+          ),
         ),
       ),
     );
@@ -1142,15 +1161,6 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
   }
 
   Widget _buildBody() {
-    if (_initializing) {
-      return const Center(
-        child: CircularProgressIndicator(
-          strokeWidth: 2.5,
-          color: AppColors.blue500,
-        ),
-      );
-    }
-
     if (_accessState == ChatPhotoAccessState.denied) {
       return Center(
         child: Padding(
@@ -1578,6 +1588,10 @@ final class _PhotoThumbnail extends StatefulWidget {
 }
 
 final class _PhotoThumbnailState extends State<_PhotoThumbnail> {
+  // 참고 영상에서는 빈 셀 뒤 사진이 약 233ms 동안 나타나요.
+  // 다른 선택기 전환 수치는 유지하고 썸네일에만 적용해요.
+  static const Duration _fadeInDuration = Duration(milliseconds: 233);
+
   late Future<Uint8List?> _thumbnailFuture;
 
   @override
@@ -1622,11 +1636,25 @@ final class _PhotoThumbnailState extends State<_PhotoThumbnail> {
           return const ColoredBox(color: AppColors.grey100);
         }
 
-        return Image.memory(
-          bytes,
-          fit: BoxFit.cover,
-          gaplessPlayback: true,
-          filterQuality: FilterQuality.low,
+        return TweenAnimationBuilder<double>(
+          tween: Tween<double>(begin: 0, end: 1),
+          duration: _fadeInDuration,
+          curve: Curves.easeInOut,
+          builder: (BuildContext context, double opacity, Widget? child) {
+            return Opacity(
+              key: ValueKey<String>(
+                'photo-thumbnail-opacity-${widget.assetId}',
+              ),
+              opacity: opacity,
+              child: child,
+            );
+          },
+          child: Image.memory(
+            bytes,
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+            filterQuality: FilterQuality.low,
+          ),
         );
       },
     );

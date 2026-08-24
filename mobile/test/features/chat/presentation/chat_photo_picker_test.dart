@@ -14,7 +14,10 @@ final Uint8List _testPng = base64Decode(
 );
 
 final class _FakePhotoLibrary
-    implements ChatPhotoLibrary, ChatPhotoLibraryChangeSource {
+    implements
+        ChatPhotoLibrary,
+        ChatPhotoLibraryChangeSource,
+        ChatPhotoLibraryPreloader {
   _FakePhotoLibrary()
     : albums = const <ChatPhotoAlbum>[
         ChatPhotoAlbum(
@@ -52,6 +55,19 @@ final class _FakePhotoLibrary
   final Set<ChatPhotoLibraryChangeCallback> _changeListeners =
       <ChatPhotoLibraryChangeCallback>{};
 
+  final Map<String, List<ChatPhotoAsset>> _assetCache =
+      <String, List<ChatPhotoAsset>>{};
+
+  List<ChatPhotoAlbum>? _albumCache;
+
+  int albumSourceLoadCount = 0;
+
+  Completer<List<ChatPhotoAsset>>? assetLoadCompleter;
+
+  Completer<Uint8List?>? thumbnailLoadCompleter;
+
+  bool get hasChangeListeners => _changeListeners.isNotEmpty;
+
   @override
   void addChangeListener(ChatPhotoLibraryChangeCallback listener) {
     _changeListeners.add(listener);
@@ -84,7 +100,15 @@ final class _FakePhotoLibrary
 
   @override
   Future<List<ChatPhotoAlbum>> loadAlbums() async {
-    return albums;
+    final List<ChatPhotoAlbum>? cachedAlbums = _albumCache;
+
+    if (cachedAlbums != null) {
+      return cachedAlbums;
+    }
+
+    albumSourceLoadCount++;
+
+    return _albumCache = List<ChatPhotoAlbum>.of(albums);
   }
 
   @override
@@ -93,8 +117,17 @@ final class _FakePhotoLibrary
     required int page,
     required int pageSize,
   }) async {
-    final List<ChatPhotoAsset> source =
-        assetsByAlbum[albumId] ?? const <ChatPhotoAsset>[];
+    if (assetLoadCompleter
+        case final Completer<List<ChatPhotoAsset>> completer) {
+      return completer.future;
+    }
+
+    final List<ChatPhotoAsset> source = _assetCache.putIfAbsent(
+      albumId,
+      () => List<ChatPhotoAsset>.of(
+        assetsByAlbum[albumId] ?? const <ChatPhotoAsset>[],
+      ),
+    );
 
     final int start = page * pageSize;
 
@@ -113,6 +146,10 @@ final class _FakePhotoLibrary
     required int width,
     required int height,
   }) async {
+    if (thumbnailLoadCompleter case final Completer<Uint8List?> completer) {
+      return completer.future;
+    }
+
     return _testPng;
   }
 
@@ -133,6 +170,23 @@ final class _FakePhotoLibrary
 
   @override
   Future<void> openSettings() async {}
+
+  @override
+  Future<void> preload() async {
+    await loadAlbums();
+    await loadAssets(albumId: 'all', page: 0, pageSize: 60);
+  }
+
+  @override
+  void invalidateAssetListingCache() {
+    _assetCache.clear();
+  }
+
+  @override
+  void invalidateCache() {
+    _albumCache = null;
+    invalidateAssetListingCache();
+  }
 }
 
 Widget _buildPicker({
@@ -211,6 +265,121 @@ Future<void> _tapPhotoAsset(WidgetTester tester, String assetId) async {
 }
 
 void main() {
+  testWidgets('initial photo load does not show a progress indicator', (
+    WidgetTester tester,
+  ) async {
+    final _FakePhotoLibrary library = _FakePhotoLibrary();
+    final Completer<List<ChatPhotoAsset>> assetCompleter =
+        Completer<List<ChatPhotoAsset>>();
+    library.assetLoadCompleter = assetCompleter;
+
+    await tester.pumpWidget(
+      _buildPicker(
+        library: library,
+        onSend: (ChatPhotoSelectionResult result) async {},
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byKey(const ValueKey<String>('photo-grid')), findsOneWidget);
+
+    assetCompleter.complete(library.assetsByAlbum['all']!);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('photo-tile-asset-0')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('loaded thumbnails fade into their grey grid cells', (
+    WidgetTester tester,
+  ) async {
+    final _FakePhotoLibrary library = _FakePhotoLibrary();
+    final Completer<Uint8List?> thumbnailCompleter = Completer<Uint8List?>();
+    library.thumbnailLoadCompleter = thumbnailCompleter;
+
+    await tester.pumpWidget(
+      _buildPicker(
+        library: library,
+        onSend: (ChatPhotoSelectionResult result) async {},
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final Finder thumbnailOpacity = find.byKey(
+      const ValueKey<String>('photo-thumbnail-opacity-asset-0'),
+    );
+
+    expect(thumbnailOpacity, findsNothing);
+
+    thumbnailCompleter.complete(_testPng);
+    await tester.pump();
+    await tester.pump();
+
+    expect(tester.widget<Opacity>(thumbnailOpacity).opacity, 0);
+
+    await tester.pump(const Duration(milliseconds: 116));
+
+    expect(
+      tester.widget<Opacity>(thumbnailOpacity).opacity,
+      allOf(greaterThan(0), lessThan(1)),
+    );
+
+    await tester.pump(const Duration(milliseconds: 117));
+
+    expect(tester.widget<Opacity>(thumbnailOpacity).opacity, 1);
+  });
+
+  testWidgets('reopening reloads photos added while the picker was closed', (
+    WidgetTester tester,
+  ) async {
+    final _FakePhotoLibrary library = _FakePhotoLibrary();
+
+    await tester.pumpWidget(
+      _buildPicker(
+        library: library,
+        onSend: (ChatPhotoSelectionResult result) async {},
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('photo-tile-asset-0')),
+      findsOneWidget,
+    );
+
+    await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
+    await tester.pumpAndSettle();
+
+    expect(library.hasChangeListeners, isFalse);
+
+    library.assetsByAlbum['all']!.insert(
+      0,
+      const ChatPhotoAsset(
+        id: 'photo-added-while-closed',
+        width: 1290,
+        height: 2796,
+      ),
+    );
+
+    await tester.pumpWidget(
+      _buildPicker(
+        library: library,
+        onSend: (ChatPhotoSelectionResult result) async {},
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('photo-tile-photo-added-while-closed')),
+      findsOneWidget,
+    );
+    expect(library.albumSourceLoadCount, 1);
+  });
+
   testWidgets(
     'photo selections are numbered in selection order and renumber after removal',
     (WidgetTester tester) async {
@@ -587,6 +756,20 @@ void main() {
       expect(titleRect.right, lessThan(sendRect.left));
 
       expect(titleRect.center.dx, closeTo(pickerRect.center.dx, 0.5));
+
+      final DecoratedBox boundaryEffect = tester.widget<DecoratedBox>(
+        find.byKey(const ValueKey<String>('photo-picker-boundary-effect')),
+      );
+      final BoxDecoration decoration =
+          boundaryEffect.decoration as BoxDecoration;
+
+      expect(decoration.boxShadow, const <BoxShadow>[
+        BoxShadow(
+          color: Color(0x28000000),
+          blurRadius: 6,
+          offset: Offset(0, 2),
+        ),
+      ]);
     },
   );
 
@@ -731,7 +914,12 @@ void main() {
 
       final Rect duringAdditionRect = tester.getRect(movingAssetFinder);
       final Opacity enteringOpacity = tester.widget<Opacity>(
-        find.descendant(of: enteringItemFinder, matching: find.byType(Opacity)),
+        find.descendant(
+          of: enteringItemFinder,
+          matching: find.byWidgetPredicate(
+            (Widget widget) => widget is Opacity && widget.key == null,
+          ),
+        ),
       );
 
       expect(duringAdditionRect.left, lessThan(beforeAdditionRect.left));
@@ -770,7 +958,12 @@ void main() {
 
       final Rect duringRemovalRect = tester.getRect(movingAssetFinder);
       final Opacity removalOpacity = tester.widget<Opacity>(
-        find.descendant(of: removedItemFinder, matching: find.byType(Opacity)),
+        find.descendant(
+          of: removedItemFinder,
+          matching: find.byWidgetPredicate(
+            (Widget widget) => widget is Opacity && widget.key == null,
+          ),
+        ),
       );
 
       expect(duringRemovalRect.left, greaterThan(beforeRemovalRect.left));

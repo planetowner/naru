@@ -643,6 +643,12 @@ final class _ChatConversationViewState extends State<ChatConversationView>
 
     widget.controller?._attach(this);
     _photoLibrary = widget.photoLibrary ?? PhotoManagerChatPhotoLibrary();
+
+    if (_photoLibrary case final ChatPhotoLibraryPreloader preloader) {
+      // 권한이 이미 있으면 채팅을 보는 동안 선택기 데이터를 준비해요.
+      unawaited(_preloadPhotoLibrary(preloader));
+    }
+
     _videoTranscoder =
         widget.videoTranscoder ??
         (Platform.isIOS
@@ -19137,7 +19143,8 @@ final class _ComposerBottomSurfaceState extends State<_ComposerBottomSurface> {
           : Duration.zero,
       curve: Curves.easeOutCubic,
       onEnd: widget.onHeightAnimationEnd,
-      clipBehavior: Clip.hardEdge,
+      // 선택기 그림자는 채팅 화면 쪽으로만 번지므로 열려 있을 때 잘라내지 않아요.
+      clipBehavior: widget.showPhotoPicker ? Clip.none : Clip.hardEdge,
       decoration: const BoxDecoration(color: AppColors.white),
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 140),
@@ -19150,7 +19157,13 @@ final class _ComposerBottomSurfaceState extends State<_ComposerBottomSurface> {
         layoutBuilder: (Widget? currentChild, List<Widget> previousChildren) {
           return Stack(
             fit: StackFit.expand,
-            children: <Widget>[...previousChildren, ?currentChild],
+            children: <Widget>[
+              // 사진 선택기를 열 때 이전 첨부 메뉴를 남기면 반투명한
+              // 선택기 아래로 아이콘이 비쳐요. 선택기의 진입 연출은
+              // 유지하고 이전 메뉴만 즉시 렌더링에서 제외해요.
+              if (!widget.showPhotoPicker) ...previousChildren,
+              ?currentChild,
+            ],
           );
         },
 
