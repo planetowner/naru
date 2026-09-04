@@ -184,10 +184,10 @@ final class PhotoManagerChatPhotoLibrary
   int _assetListingCacheVersion = 0;
 
   static FilterOptionGroup _createFilterOption() {
-    // FilterOptionGroup의 기본 생성일 상한은 생성 순간의 DateTime.now()예요.
-    // 조회 옵션을 앱 수명 동안 재사용하면 앱 실행 후 추가된 사진이
-    // 영구적으로 빠지므로 앨범을 조회할 때마다 새로 만들어요.
+    // PhotoManager의 기본 생성일 필터는 생성 순간을 상한으로 고정해요.
+    // 앨범 객체를 캐시해도 이후 저장된 사진이 빠지지 않도록 날짜 제한을 없애요.
     return FilterOptionGroup(
+      createTimeCond: DateTimeCond.def().copyWith(ignore: true),
       orders: const <OrderOption>[
         OrderOption(type: OrderOptionType.createDate, asc: false),
       ],
