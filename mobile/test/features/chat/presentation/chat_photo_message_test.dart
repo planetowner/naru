@@ -135,6 +135,24 @@ Directory _setUpPhotoCacheDirectory(String prefix) {
   return cacheDirectory;
 }
 
+Future<void> _pumpRealAsyncUntil(
+  WidgetTester tester,
+  bool Function() condition, {
+  required String failureReason,
+}) async {
+  final Stopwatch timeout = Stopwatch()..start();
+
+  await tester.runAsync(() async {
+    while (!condition() && timeout.elapsed < const Duration(seconds: 5)) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+      await tester.pump();
+    }
+  });
+  await tester.pump();
+
+  expect(condition(), isTrue, reason: failureReason);
+}
+
 final class _IncomingPhotoHarness extends StatefulWidget {
   const _IncomingPhotoHarness({super.key});
 
@@ -634,16 +652,15 @@ void main() {
     expect(fileImage.file.path, originalFile.path);
     expect(originalAccessUrlRequests, 0);
 
-    await tester.runAsync(() async {
-      await tester.tap(
-        find.byKey(const ValueKey<String>('photo-viewer-download')),
-      );
-      await tester.pump();
-      for (int attempt = 0; attempt < 100 && photoSaveCall == null; attempt++) {
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-      }
-    });
-    await tester.pump(const Duration(milliseconds: 200));
+    await tester.tap(
+      find.byKey(const ValueKey<String>('photo-viewer-download')),
+    );
+    await tester.pump();
+    await _pumpRealAsyncUntil(
+      tester,
+      () => find.text('Photo saved').evaluate().isNotEmpty,
+      failureReason: '사진 저장 완료 안내가 표시되지 않았습니다.',
+    );
 
     expect(photoSaveCall?.method, 'saveImageWithPath');
     final Map<Object?, Object?> photoSaveArguments =
@@ -1365,16 +1382,16 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(_photoFinder(0));
     await tester.pumpAndSettle();
-    await tester.runAsync(() async {
-      await tester.tap(
-        find.byKey(const ValueKey<String>('photo-viewer-share')),
-      );
-      await tester.pump();
-      for (int attempt = 0; attempt < 100 && sharedPath == null; attempt++) {
-        await Future<void>.delayed(const Duration(milliseconds: 2));
-      }
-    });
+    await tester.tap(find.byKey(const ValueKey<String>('photo-viewer-share')));
     await tester.pump();
+    await _pumpRealAsyncUntil(
+      tester,
+      () =>
+          sharedPath != null &&
+          sharedBytes != null &&
+          !File(sharedPath!).existsSync(),
+      failureReason: '사진 공유와 임시 파일 정리가 완료되지 않았습니다.',
+    );
 
     expect(sharedPath, endsWith('.jpg'));
     expect(sharedBytes, _testPng);
