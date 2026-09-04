@@ -24,6 +24,8 @@ const MethodChannel _photoManagerChannel = MethodChannel(
   'com.fluttercandies/photo_manager',
 );
 
+const MethodChannel _mediaShareChannel = MethodChannel('juliatalk/media-share');
+
 void _setUpVideoSave() {
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
       .setMockMethodCallHandler(_photoManagerChannel, (MethodCall call) async {
@@ -309,6 +311,14 @@ void main() {
         find.byKey(const ValueKey<String>('video-viewer-download')),
         findsOneWidget,
       );
+      expect(
+        find.byKey(const ValueKey<String>('video-viewer-edit')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('video-viewer-share')),
+        findsOneWidget,
+      );
       expect(find.text('June'), findsOneWidget);
       expect(find.text('Jul 1, 2026 at 12:52 PM'), findsOneWidget);
 
@@ -338,6 +348,12 @@ void main() {
       final Rect downloadRect = tester.getRect(
         find.byKey(const ValueKey<String>('video-viewer-download')),
       );
+      final Rect editRect = tester.getRect(
+        find.byKey(const ValueKey<String>('video-viewer-edit')),
+      );
+      final Rect shareRect = tester.getRect(
+        find.byKey(const ValueKey<String>('video-viewer-share')),
+      );
 
       expect(topBarRect, const Rect.fromLTWH(0, 0, 393, 126));
       expect(bottomOverlayRect, const Rect.fromLTWH(0, 688, 393, 164));
@@ -353,6 +369,8 @@ void main() {
       expect(totalTimeRect.left - progressRect.right, 6);
       expect(totalTimeRect.right, 377);
       expect(downloadRect, const Rect.fromLTWH(172.5, 781, 48, 48));
+      expect(editRect, const Rect.fromLTWH(41.5, 781, 48, 48));
+      expect(shareRect, const Rect.fromLTWH(303.5, 781, 48, 48));
 
       final Text elapsedTime = tester.widget<Text>(
         find.descendant(
@@ -395,6 +413,32 @@ void main() {
       expect(hiddenBottomOverlay.curve, Curves.linear);
     },
   );
+
+  testWidgets('video viewer shares the original local file', (
+    WidgetTester tester,
+  ) async {
+    String? sharedPath;
+    final TestDefaultBinaryMessenger messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(_mediaShareChannel, (
+      MethodCall call,
+    ) async {
+      sharedPath = (call.arguments as Map<Object?, Object?>)['path'] as String;
+      return null;
+    });
+    addTearDown(() {
+      messenger.setMockMethodCallHandler(_mediaShareChannel, null);
+    });
+
+    await tester.pumpWidget(_buildVideoMessageScreen(videoFile));
+    await tester.pumpAndSettle();
+    await _openVideoViewer(tester);
+    await tester.tap(find.byKey(const ValueKey<String>('video-viewer-share')));
+    await tester.pump();
+
+    expect(sharedPath, videoFile.path);
+    expect(videoPlatform.calls, contains('pause'));
+  });
 
   testWidgets('video save uses the shared centered confirmation', (
     WidgetTester tester,

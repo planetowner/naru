@@ -5,21 +5,36 @@ import 'package:flutter/material.dart';
 
 import '../../../design_system/app_colors.dart';
 import '../../../design_system/app_typography.dart';
+import '../../../design_system/components/app_media_viewer_chrome.dart';
 import '../data/chat_photo_library.dart';
+import '../data/chat_video_transcoder.dart';
+import 'chat_photo_editor_screen.dart';
 
 final class ChatPhotoSelectionResult {
   ChatPhotoSelectionResult({
     required List<ChatPhotoAsset> assets,
     required this.collage,
     Map<String, Uint8List> previewBytesByAssetId = const <String, Uint8List>{},
+    Map<String, ChatPhotoFile> editedFilesByAssetId =
+        const <String, ChatPhotoFile>{},
+    Map<String, ChatVideoTrimRange> videoTrimRangesByAssetId =
+        const <String, ChatVideoTrimRange>{},
   }) : assets = List<ChatPhotoAsset>.unmodifiable(assets),
        previewBytesByAssetId = Map<String, Uint8List>.unmodifiable(
          previewBytesByAssetId,
+       ),
+       editedFilesByAssetId = Map<String, ChatPhotoFile>.unmodifiable(
+         editedFilesByAssetId,
+       ),
+       videoTrimRangesByAssetId = Map<String, ChatVideoTrimRange>.unmodifiable(
+         videoTrimRangesByAssetId,
        );
 
   final List<ChatPhotoAsset> assets;
   final bool collage;
   final Map<String, Uint8List> previewBytesByAssetId;
+  final Map<String, ChatPhotoFile> editedFilesByAssetId;
+  final Map<String, ChatVideoTrimRange> videoTrimRangesByAssetId;
 }
 
 typedef ChatPhotoSendCallback =
@@ -61,6 +76,23 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
   static const int _maximumSelectionCount = 10;
   static const int _gridCrossAxisCount = 3;
   static const double _gridSpacing = 2;
+  // 3배수 카카오톡 캡처에서 잰 논리 크기로 선택기 컨트롤의 비율을 맞춰요.
+  static const double _handleAreaHeight = 20;
+  static const double _handleWidth = 36;
+  static const double _handleHeight = 4;
+  static const double _headerHeight = 52;
+  static const double _closeIconSize = 26;
+  static const double _sendButtonMinimumWidth = 56;
+  static const double _sendButtonHeight = 32;
+  static const double _collageIndicatorSize = 22;
+  static const double _collageCheckSize = 16;
+  static const double _collageControlHeight = 48;
+  static const double _collageControlVerticalOffset = 13;
+  static const double _photoEditButtonSize = 40;
+  static const double _photoEditButtonRight = 10;
+  static const double _photoEditButtonBottom = 25;
+  static const double _photoEditIconSize =
+      _photoEditButtonSize * AppMediaEditIcon.iconToButtonRatio;
   static const Duration _libraryRefreshDebounceDuration = Duration(
     milliseconds: 180,
   );
@@ -97,6 +129,7 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
   bool _loadingMore = false;
   bool _hasMoreAssets = true;
   bool _sending = false;
+  bool _openingEditor = false;
   bool _refreshingLibrary = false;
   bool _libraryRefreshRequested = false;
   bool _collagePhotos = true;
@@ -716,7 +749,7 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
     });
   }
 
-  Future<void> _sendSelection() async {
+  Future<void> _sendSelection({ChatPhotoEditorResult? editorResult}) async {
     if (_selectedAssets.isEmpty || _sending) {
       return;
     }
@@ -730,15 +763,71 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
           collage: _collagePhotos,
           previewBytesByAssetId: <String, Uint8List>{
             for (final ChatPhotoAsset asset in _selectedAssets)
-              if (_thumbnailBytesByAssetId.containsKey(asset.id))
-                asset.id: _thumbnailBytesByAssetId[asset.id]!,
+              if (editorResult?.previewBytesByAssetId[asset.id]
+                  case final Uint8List editedPreview)
+                asset.id: editedPreview
+              else if (_thumbnailBytesByAssetId[asset.id]
+                  case final Uint8List thumbnail)
+                asset.id: thumbnail,
           },
+          editedFilesByAssetId:
+              editorResult?.editedFilesByAssetId ??
+              const <String, ChatPhotoFile>{},
+          videoTrimRangesByAssetId:
+              editorResult?.videoTrimRangesByAssetId ??
+              const <String, ChatVideoTrimRange>{},
         ),
       );
     } finally {
       _sending = false;
 
       if (mounted) {
+        _schedulePendingLibraryRefresh();
+      }
+    }
+  }
+
+  Future<void> _openEditor() async {
+    if (!isChatPhotoEditorSupported ||
+        _selectedAssets.isEmpty ||
+        _openingEditor ||
+        _sending) {
+      return;
+    }
+
+    setState(() {
+      _openingEditor = true;
+    });
+
+    try {
+      final ChatPhotoEditorResult? editorResult = await openChatPhotoEditor(
+        context: context,
+        assets: _selectedAssets,
+        photoLibrary: widget.photoLibrary,
+      );
+
+      if (!mounted || editorResult == null) {
+        return;
+      }
+
+      await _sendSelection(editorResult: editorResult);
+    } on Object {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('The selected media could not be edited.'),
+          ),
+        );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _openingEditor = false;
+        });
         _schedulePendingLibraryRefresh();
       }
     }
@@ -1009,13 +1098,14 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
                 onVerticalDragUpdate: widget.onHandleDragUpdate,
                 onVerticalDragEnd: widget.onHandleDragEnd,
                 child: SizedBox(
-                  height: 25,
+                  key: const ValueKey<String>('photo-picker-handle-row'),
+                  height: _handleAreaHeight,
                   width: double.infinity,
                   child: Center(
                     child: Container(
                       key: const ValueKey<String>('photo-picker-handle'),
-                      width: 38,
-                      height: 5,
+                      width: _handleWidth,
+                      height: _handleHeight,
                       decoration: const BoxDecoration(
                         color: AppColors.grey400,
                         borderRadius: BorderRadius.all(Radius.circular(3)),
@@ -1025,7 +1115,6 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
                 ),
               ),
               _buildHeader(),
-              const Divider(height: 1, thickness: 1, color: AppColors.grey100),
               Expanded(child: _buildBody()),
               if (_accessState != ChatPhotoAccessState.denied)
                 _buildCollageControl(),
@@ -1040,6 +1129,34 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
     final int selectedCount = _selectedAssets.length;
 
     final bool canSend = selectedCount > 0 && !_sending;
+
+    final TextStyle sendLabelStyle = AppTypography.typography6.copyWith(
+      color: canSend ? AppColors.white : AppColors.grey500,
+    );
+
+    final Widget sendLabel = selectedCount == 0
+        ? Text(
+            'Send',
+            maxLines: 1,
+            softWrap: false,
+            textAlign: TextAlign.center,
+            style: sendLabelStyle.copyWith(fontWeight: AppTypography.semibold),
+          )
+        : Text.rich(
+            TextSpan(
+              children: <InlineSpan>[
+                TextSpan(
+                  text: '$selectedCount',
+                  style: const TextStyle(fontWeight: AppTypography.bold),
+                ),
+                const TextSpan(text: ' Send'),
+              ],
+            ),
+            maxLines: 1,
+            softWrap: false,
+            textAlign: TextAlign.center,
+            style: sendLabelStyle.copyWith(fontWeight: AppTypography.regular),
+          );
 
     final Widget title;
 
@@ -1084,7 +1201,7 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
       title = Text(
         'Photo',
         key: const ValueKey<String>('photo-picker-title'),
-        style: AppTypography.typography5.copyWith(
+        style: AppTypography.typography6.copyWith(
           color: AppColors.grey900,
           fontWeight: AppTypography.bold,
         ),
@@ -1092,15 +1209,16 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
     }
 
     return SizedBox(
+      key: const ValueKey<String>('photo-picker-header'),
       width: double.infinity,
-      height: 58,
+      height: _headerHeight,
       child: Stack(
         fit: StackFit.expand,
         alignment: Alignment.center,
         children: [
           Align(alignment: Alignment.center, child: title),
           Positioned(
-            left: 4,
+            left: 2,
             top: 0,
             bottom: 0,
             child: Center(
@@ -1110,7 +1228,7 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
                 onPressed: widget.onClose,
                 icon: const Icon(
                   Icons.close_rounded,
-                  size: 29,
+                  size: _closeIconSize,
                   color: AppColors.grey900,
                 ),
               ),
@@ -1124,7 +1242,7 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
               child: Material(
                 key: const ValueKey<String>('photo-picker-send'),
                 color: canSend ? AppColors.blue500 : AppColors.grey100,
-                borderRadius: const BorderRadius.all(Radius.circular(22)),
+                borderRadius: const BorderRadius.all(Radius.circular(16)),
                 clipBehavior: Clip.antiAlias,
                 child: InkWell(
                   splashFactory: NoSplash.splashFactory,
@@ -1134,20 +1252,18 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
                           unawaited(_sendSelection());
                         }
                       : null,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(minWidth: 72),
+                  child: SizedBox(
+                    width: selectedCount == 0 ? _sendButtonMinimumWidth : null,
+                    height: _sendButtonHeight,
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 15,
-                        vertical: 9,
+                      key: const ValueKey<String>('photo-picker-send-padding'),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: selectedCount == 0 ? 0 : 11,
                       ),
-                      child: Text(
-                        selectedCount == 0 ? 'Send' : '$selectedCount Send',
-                        textAlign: TextAlign.center,
-                        style: AppTypography.subTypography10.copyWith(
-                          color: canSend ? AppColors.white : AppColors.grey500,
-                          fontWeight: AppTypography.semibold,
-                        ),
+                      child: Center(
+                        child: selectedCount == 0
+                            ? FittedBox(fit: BoxFit.scaleDown, child: sendLabel)
+                            : sendLabel,
                       ),
                     ),
                   ),
@@ -1342,56 +1458,127 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
   }
 
   Widget _buildCollageControl() {
+    final EdgeInsets viewPadding = MediaQuery.viewPaddingOf(context);
+    final double leftPadding = viewPadding.left > 12 ? viewPadding.left : 12;
+    final double rightPadding = viewPadding.right > _photoEditButtonRight
+        ? viewPadding.right
+        : _photoEditButtonRight;
+    final double editButtonBottom = viewPadding.bottom < _photoEditButtonBottom
+        ? viewPadding.bottom
+        : _photoEditButtonBottom;
+    final bool canEdit =
+        isChatPhotoEditorSupported &&
+        _selectedAssets.isNotEmpty &&
+        !_openingEditor &&
+        !_sending;
+
     return Material(
       color: AppColors.white,
-      child: SafeArea(
-        top: false,
-        minimum: const EdgeInsets.fromLTRB(20, 6, 20, 10),
-        child: InkWell(
-          key: const ValueKey<String>('photo-collage-toggle'),
-          borderRadius: const BorderRadius.all(Radius.circular(12)),
-          onTap: () {
-            setState(() {
-              _collagePhotos = !_collagePhotos;
-            });
-          },
-          child: SizedBox(
-            height: 54,
-            child: Row(
-              children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 140),
-                  width: 25,
-                  height: 25,
-                  decoration: BoxDecoration(
-                    color: _collagePhotos ? AppColors.blue500 : AppColors.white,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: _collagePhotos
-                          ? AppColors.blue500
-                          : AppColors.grey300,
-                      width: 1.5,
+      child: SizedBox(
+        key: const ValueKey<String>('photo-picker-bottom-control'),
+        height: _collageControlHeight + viewPadding.bottom,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned(
+              left: leftPadding,
+              right: rightPadding,
+              top: _collageControlVerticalOffset,
+              height: _collageControlHeight,
+              child: SizedBox(
+                key: const ValueKey<String>('photo-picker-bottom-row'),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        key: const ValueKey<String>('photo-collage-toggle'),
+                        borderRadius: const BorderRadius.all(
+                          Radius.circular(12),
+                        ),
+                        onTap: () {
+                          setState(() {
+                            _collagePhotos = !_collagePhotos;
+                          });
+                        },
+                        child: Row(
+                          children: [
+                            AnimatedContainer(
+                              key: const ValueKey<String>(
+                                'photo-collage-check',
+                              ),
+                              duration: const Duration(milliseconds: 140),
+                              width: _collageIndicatorSize,
+                              height: _collageIndicatorSize,
+                              decoration: BoxDecoration(
+                                color: _collagePhotos
+                                    ? AppColors.blue500
+                                    : AppColors.white,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: _collagePhotos
+                                      ? AppColors.blue500
+                                      : AppColors.grey300,
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: _collagePhotos
+                                  ? const Icon(
+                                      Icons.check_rounded,
+                                      size: _collageCheckSize,
+                                      color: AppColors.white,
+                                    )
+                                  : null,
+                            ),
+                            const SizedBox(width: 7),
+                            Text(
+                              'Collage Photos',
+                              style: AppTypography.typography6.copyWith(
+                                color: AppColors.grey900,
+                                fontWeight: AppTypography.regular,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: _photoEditButtonSize),
+                  ],
+                ),
+              ),
+            ),
+            Positioned(
+              right: rightPadding,
+              bottom: editButtonBottom,
+              child: Material(
+                key: const ValueKey<String>('photo-edit-button'),
+                color: canEdit ? AppColors.white : AppColors.grey100,
+                elevation: 2,
+                shadowColor: const Color(0x30000000),
+                shape: const CircleBorder(
+                  side: BorderSide(color: AppColors.grey200),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: canEdit
+                      ? () {
+                          unawaited(_openEditor());
+                        }
+                      : null,
+                  customBorder: const CircleBorder(),
+                  child: SizedBox.square(
+                    dimension: _photoEditButtonSize,
+                    child: Center(
+                      child: AppMediaEditIcon(
+                        key: const ValueKey<String>('photo-edit-icon'),
+                        dimension: _photoEditIconSize,
+                        color: canEdit ? AppColors.grey900 : AppColors.grey400,
+                      ),
                     ),
                   ),
-                  child: _collagePhotos
-                      ? const Icon(
-                          Icons.check_rounded,
-                          size: 18,
-                          color: AppColors.white,
-                        )
-                      : null,
                 ),
-                const SizedBox(width: 12),
-                Text(
-                  'Collage Photos',
-                  style: AppTypography.subTypography10.copyWith(
-                    color: AppColors.grey900,
-                    fontWeight: AppTypography.medium,
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );

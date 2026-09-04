@@ -90,6 +90,8 @@ const MethodChannel _photoManagerChannel = MethodChannel(
   'com.fluttercandies/photo_manager',
 );
 
+const MethodChannel _mediaShareChannel = MethodChannel('juliatalk/media-share');
+
 void _setUpPhotoSave({ValueChanged<MethodCall>? onCall}) {
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
       .setMockMethodCallHandler(_photoManagerChannel, (MethodCall call) async {
@@ -1113,11 +1115,25 @@ void main() {
       find.byKey(const ValueKey<String>('photo-viewer-download')),
       findsOneWidget,
     );
+    expect(
+      find.byKey(const ValueKey<String>('photo-viewer-edit')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('photo-viewer-share')),
+      findsOneWidget,
+    );
     final Finder backButton = find.byKey(
       const ValueKey<String>('photo-viewer-back'),
     );
     final Finder downloadButton = find.byKey(
       const ValueKey<String>('photo-viewer-download'),
+    );
+    final Finder editButton = find.byKey(
+      const ValueKey<String>('photo-viewer-edit'),
+    );
+    final Finder shareButton = find.byKey(
+      const ValueKey<String>('photo-viewer-share'),
     );
     final Finder topBar = find.byKey(
       const ValueKey<String>('photo-viewer-top-bar'),
@@ -1156,13 +1172,17 @@ void main() {
       find.byWidget(photoViewerScaffold),
     );
     final Rect backButtonRect = tester.getRect(backButton);
+    final Rect editButtonRect = tester.getRect(editButton);
     final Rect downloadButtonRect = tester.getRect(downloadButton);
+    final Rect shareButtonRect = tester.getRect(shareButton);
     final Text senderNameText = tester.widget<Text>(senderName);
     final Text timestampText = tester.widget<Text>(timestamp);
 
     expect(photoViewerScaffold.backgroundColor, const Color(0xFF202020));
     expect(tester.getSize(backButton), const Size.square(44));
+    expect(tester.getSize(editButton), const Size.square(48));
     expect(tester.getSize(downloadButton), const Size.square(48));
+    expect(tester.getSize(shareButton), const Size.square(48));
     expect(backButtonDecoration.color, const Color(0xFF272727));
     expect(backButtonDecoration.shape, BoxShape.circle);
     expect(backButtonBorder.top.color, const Color(0xFF4E4E4E));
@@ -1177,6 +1197,18 @@ void main() {
     expect(bottomOverlayRect.bottom, photoViewerScaffoldRect.bottom);
     expect(downloadButtonRect.top - bottomOverlayRect.top, 23);
     expect(bottomOverlayRect.bottom - downloadButtonRect.bottom, 23);
+    expect(
+      editButtonRect.center.dx,
+      photoViewerScaffoldRect.left + photoViewerScaffoldRect.width / 6,
+    );
+    expect(downloadButtonRect.center.dx, photoViewerScaffoldRect.center.dx);
+    expect(
+      shareButtonRect.center.dx,
+      closeTo(
+        photoViewerScaffoldRect.left + photoViewerScaffoldRect.width * 5 / 6,
+        0.001,
+      ),
+    );
     expect(tester.getCenter(info).dy, tester.getCenter(backButton).dy);
     expect(tester.getCenter(senderName).dx, topBarRect.center.dx);
     expect(tester.getCenter(timestamp).dx, topBarRect.center.dx);
@@ -1293,6 +1325,62 @@ void main() {
     expect(confirmation, findsNothing);
   });
 
+  testWidgets('photo viewer shares a typed copy of the current photo', (
+    WidgetTester tester,
+  ) async {
+    final Directory temporaryDirectory = Directory.systemTemp.createTempSync(
+      'juliatalk-photo-share-test-',
+    );
+    String? sharedPath;
+    Uint8List? sharedBytes;
+    final TestDefaultBinaryMessenger messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(_pathProviderChannel, (
+      MethodCall call,
+    ) async {
+      if (call.method == 'getTemporaryDirectory') {
+        return temporaryDirectory.path;
+      }
+
+      return null;
+    });
+    messenger.setMockMethodCallHandler(_mediaShareChannel, (
+      MethodCall call,
+    ) async {
+      sharedPath = (call.arguments as Map<Object?, Object?>)['path'] as String;
+      sharedBytes = await File(sharedPath!).readAsBytes();
+      return null;
+    });
+    addTearDown(() {
+      messenger.setMockMethodCallHandler(_pathProviderChannel, null);
+      messenger.setMockMethodCallHandler(_mediaShareChannel, null);
+      if (temporaryDirectory.existsSync()) {
+        temporaryDirectory.deleteSync(recursive: true);
+      }
+    });
+
+    await tester.pumpWidget(
+      _buildPhotoMessageScreen(_photoMessage(senderId: '1', recipientId: '2')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(_photoFinder(0));
+    await tester.pumpAndSettle();
+    await tester.runAsync(() async {
+      await tester.tap(
+        find.byKey(const ValueKey<String>('photo-viewer-share')),
+      );
+      await tester.pump();
+      for (int attempt = 0; attempt < 100 && sharedPath == null; attempt++) {
+        await Future<void>.delayed(const Duration(milliseconds: 2));
+      }
+    });
+    await tester.pump();
+
+    expect(sharedPath, endsWith('.jpg'));
+    expect(sharedBytes, _testPng);
+    expect(File(sharedPath!).existsSync(), isFalse);
+  });
+
   testWidgets('photo viewer shows the sender name for the current viewer', (
     WidgetTester tester,
   ) async {
@@ -1344,6 +1432,10 @@ void main() {
   testWidgets(
     'multi-photo viewer starts from tapped photo and swipes forward',
     (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(393, 852));
+      addTearDown(() async {
+        await tester.binding.setSurfaceSize(null);
+      });
       await tester.pumpWidget(
         _buildPhotoMessageScreen(
           _photoMessage(senderId: '1', recipientId: '2', attachmentCount: 3),
@@ -1355,6 +1447,79 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Number 2 out of 3'), findsOneWidget);
+      final Text counterText = tester.widget<Text>(
+        find.text('Number 2 out of 3'),
+      );
+      final Finder firstThumbnail = find.byKey(
+        const ValueKey<String>('photo-viewer-thumbnail-frame-photo-preview-0'),
+      );
+      final Finder selectedThumbnail = find.byKey(
+        const ValueKey<String>('photo-viewer-thumbnail-frame-photo-preview-1'),
+      );
+      final Finder thirdThumbnail = find.byKey(
+        const ValueKey<String>('photo-viewer-thumbnail-frame-photo-preview-2'),
+      );
+      final Finder filmstripChromeExtension = find.byKey(
+        const ValueKey<String>('photo-viewer-filmstrip-chrome-extension'),
+      );
+      final Rect firstThumbnailRect = tester.getRect(firstThumbnail);
+      final Rect selectedThumbnailRect = tester.getRect(selectedThumbnail);
+      final Rect thirdThumbnailRect = tester.getRect(thirdThumbnail);
+      final Rect filmstripChromeExtensionRect = tester.getRect(
+        filmstripChromeExtension,
+      );
+      final ColoredBox filmstripChromeExtensionBox = tester.widget<ColoredBox>(
+        filmstripChromeExtension,
+      );
+      final AnimatedContainer selectedThumbnailContainer = tester
+          .widget<AnimatedContainer>(selectedThumbnail);
+      final BoxDecoration selectedThumbnailDecoration =
+          selectedThumbnailContainer.decoration! as BoxDecoration;
+      final Border selectedThumbnailBorder =
+          selectedThumbnailDecoration.border! as Border;
+      final BorderRadius selectedThumbnailBorderRadius =
+          selectedThumbnailDecoration.borderRadius! as BorderRadius;
+      final ClipRRect selectedThumbnailImageClip = tester.widget<ClipRRect>(
+        find
+            .descendant(of: selectedThumbnail, matching: find.byType(ClipRRect))
+            .first,
+      );
+
+      expect(counterText.style?.fontSize, 11);
+      expect(
+        tester.getCenter(find.text('Number 2 out of 3')).dy,
+        closeTo(748 + 1 / 3, 0.001),
+      );
+      expect(firstThumbnailRect.size, const Size.square(42));
+      expect(selectedThumbnailRect.size, const Size.square(44));
+      expect(thirdThumbnailRect.size, const Size.square(42));
+      expect(firstThumbnailRect.center.dy, 708);
+      expect(selectedThumbnailRect.center.dy, 708);
+      expect(thirdThumbnailRect.center.dy, 708);
+      expect(selectedThumbnailRect.left - firstThumbnailRect.right, 5);
+      expect(thirdThumbnailRect.left - selectedThumbnailRect.right, 5);
+      expect((firstThumbnailRect.left + thirdThumbnailRect.right) / 2, 393 / 2);
+      expect(
+        tester
+            .getCenter(
+              find.byKey(const ValueKey<String>('photo-viewer-counter')),
+            )
+            .dx,
+        393 / 2,
+      );
+      expect(selectedThumbnailContainer.padding, isNull);
+      expect(selectedThumbnailBorder.top.width, 2);
+      expect(selectedThumbnailBorderRadius.topLeft, const Radius.circular(5));
+      expect(
+        selectedThumbnailImageClip.borderRadius,
+        const BorderRadius.all(Radius.circular(3)),
+      );
+      expect(firstThumbnailRect.top - filmstripChromeExtensionRect.top, 23);
+      expect(
+        filmstripChromeExtensionRect,
+        const Rect.fromLTWH(0, 664, 393, 94),
+      );
+      expect(filmstripChromeExtensionBox.color, const Color(0xFF202020));
       expect(
         find.byKey(
           const ValueKey<String>('photo-viewer-image-photo-preview-1'),

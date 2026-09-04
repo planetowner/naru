@@ -22,5 +22,15 @@ import UIKit
     ) {
       VideoTranscodeBridge.register(with: registrar)
     }
+    if let registrar = engineBridge.pluginRegistry.registrar(
+      forPlugin: "JuliaTalkPencilKitEditorBridge"
+    ) {
+      PencilKitEditorBridge.register(with: registrar)
+    }
+    if let registrar = engineBridge.pluginRegistry.registrar(
+      forPlugin: "JuliaTalkMediaShareBridge"
+    ) {
+      MediaShareBridge.register(with: registrar)
+    }
   }
 }

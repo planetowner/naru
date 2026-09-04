@@ -4,6 +4,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:juliatalk/design_system/app_colors.dart';
+import 'package:juliatalk/design_system/components/app_media_viewer_chrome.dart';
 import 'package:juliatalk/features/chat/data/chat_photo_library.dart';
 import 'package:juliatalk/features/chat/presentation/chat_photo_picker.dart';
 
@@ -772,6 +774,151 @@ void main() {
       ]);
     },
   );
+
+  testWidgets('photo picker controls use the KakaoTalk reference sizes', (
+    WidgetTester tester,
+  ) async {
+    final _FakePhotoLibrary library = _FakePhotoLibrary();
+    final double devicePixelRatio = tester.view.devicePixelRatio;
+    tester.view.viewPadding = FakeViewPadding(bottom: 34 * devicePixelRatio);
+
+    addTearDown(() {
+      tester.view.viewPadding = const FakeViewPadding();
+    });
+
+    await tester.pumpWidget(
+      _buildPicker(
+        library: library,
+        onSend: (ChatPhotoSelectionResult result) async {},
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final Icon closeIcon = tester.widget<Icon>(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('photo-picker-close')),
+        matching: find.byIcon(Icons.close_rounded),
+      ),
+    );
+    final Text photoTitle = tester.widget<Text>(find.text('Photo'));
+    final Text sendLabel = tester.widget<Text>(find.text('Send'));
+    final Text collageLabel = tester.widget<Text>(find.text('Collage Photos'));
+    final Icon collageCheck = tester.widget<Icon>(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('photo-collage-check')),
+        matching: find.byIcon(Icons.check_rounded),
+      ),
+    );
+
+    expect(closeIcon.size, 26);
+    expect(photoTitle.style?.fontSize, 15);
+    expect(sendLabel.style?.fontSize, 15);
+    expect(sendLabel.maxLines, 1);
+    expect(sendLabel.softWrap, isFalse);
+    expect(collageLabel.style?.fontSize, 15);
+    expect(collageCheck.size, 16);
+    expect(
+      tester.getSize(find.byKey(const ValueKey<String>('photo-picker'))),
+      const Size(420, 520),
+    );
+    expect(
+      tester.getSize(find.byKey(const ValueKey<String>('photo-picker-send'))),
+      const Size(56, 32),
+    );
+    expect(
+      tester.getSize(find.byKey(const ValueKey<String>('photo-picker-header'))),
+      const Size(420, 52),
+    );
+    expect(
+      tester.getSize(
+        find.byKey(const ValueKey<String>('photo-picker-handle-row')),
+      ),
+      const Size(420, 20),
+    );
+    expect(
+      tester.getSize(find.byKey(const ValueKey<String>('photo-picker-handle'))),
+      const Size(36, 4),
+    );
+    final Rect pickerRect = tester.getRect(
+      find.byKey(const ValueKey<String>('photo-picker')),
+    );
+    final Rect gridRect = tester.getRect(
+      find.byKey(const ValueKey<String>('photo-grid')),
+    );
+    expect(gridRect.top - pickerRect.top, 72);
+    expect(
+      tester.getSize(find.byKey(const ValueKey<String>('photo-collage-check'))),
+      const Size.square(22),
+    );
+    expect(
+      tester.getSize(find.byKey(const ValueKey<String>('photo-edit-button'))),
+      const Size.square(40),
+    );
+    expect(
+      tester
+          .getSize(
+            find.byKey(const ValueKey<String>('photo-picker-bottom-control')),
+          )
+          .height,
+      82,
+    );
+    final Size bottomRowSize = tester.getSize(
+      find.byKey(const ValueKey<String>('photo-picker-bottom-row')),
+    );
+    expect(bottomRowSize.width, 398);
+    expect(bottomRowSize.height, 48);
+    final AppMediaEditIcon editIcon = tester.widget<AppMediaEditIcon>(
+      find.byKey(const ValueKey<String>('photo-edit-icon')),
+    );
+    expect(editIcon.dimension, 20);
+    expect(editIcon.color, AppColors.grey400);
+    expect(
+      editIcon.dimension / 40,
+      AppMediaEditIcon.referenceDimension /
+          AppMediaEditIcon.referenceButtonDimension,
+    );
+    expect(
+      tester.getSize(find.byKey(const ValueKey<String>('photo-edit-icon'))),
+      const Size.square(20),
+    );
+    final Rect editButtonRect = tester.getRect(
+      find.byKey(const ValueKey<String>('photo-edit-button')),
+    );
+    final Rect collageCheckRect = tester.getRect(
+      find.byKey(const ValueKey<String>('photo-collage-check')),
+    );
+    final Rect collageLabelRect = tester.getRect(find.text('Collage Photos'));
+    expect(pickerRect.right - editButtonRect.right, 10);
+    expect(pickerRect.bottom - editButtonRect.bottom, 25);
+    expect(collageCheckRect.center.dy, editButtonRect.center.dy);
+    expect(collageLabelRect.center.dy, editButtonRect.center.dy);
+
+    await _tapPhotoAsset(tester, 'asset-0');
+
+    final Padding selectedSendPadding = tester.widget<Padding>(
+      find.byKey(const ValueKey<String>('photo-picker-send-padding')),
+    );
+    final Text selectedSendLabel = tester.widget<Text>(
+      find.byWidgetPredicate(
+        (Widget widget) =>
+            widget is Text && widget.textSpan?.toPlainText() == '1 Send',
+      ),
+    );
+    final List<InlineSpan> selectedLabelParts =
+        (selectedSendLabel.textSpan! as TextSpan).children!;
+
+    expect(
+      selectedSendPadding.padding,
+      const EdgeInsets.symmetric(horizontal: 11),
+    );
+    expect(selectedSendLabel.maxLines, 1);
+    expect(selectedSendLabel.softWrap, isFalse);
+    expect(
+      (selectedLabelParts.first as TextSpan).style?.fontWeight,
+      FontWeight.w700,
+    );
+    expect((selectedLabelParts.last as TextSpan).style?.fontWeight, isNull);
+  });
 
   testWidgets('photo picker handle reports vertical drag gestures', (
     WidgetTester tester,

@@ -22,6 +22,7 @@ import 'package:video_player/video_player.dart';
 import '../../../design_system/app_colors.dart';
 import '../../../design_system/app_radius.dart';
 import '../../../design_system/app_typography.dart';
+import '../../../design_system/components/app_media_viewer_chrome.dart';
 import '../../../design_system/components/app_profile_image.dart';
 import '../data/chat_photo_library.dart';
 import '../data/chat_video_disk_cache.dart';
@@ -33,6 +34,8 @@ import '../domain/chat_message.dart';
 import '../domain/chat_message_group.dart';
 import '../domain/chat_message_grouper.dart';
 import 'chat_date_formatter.dart';
+import 'chat_media_share.dart';
+import 'chat_photo_editor_screen.dart';
 import 'chat_photo_picker.dart';
 import 'chat_scrollbar_range_tracker.dart';
 import 'read_receipt_formatter.dart';
@@ -52,15 +55,14 @@ const double _messageToComposerGap = 12;
 
 const double _composerRaisedBottomPadding = 10;
 
-const double _topBarButtonDimension = 44;
+const double _topBarButtonDimension = AppMediaViewerChrome.buttonDimension;
 
-const double _topBarHorizontalMargin = 16;
+const double _topBarHorizontalMargin = AppMediaViewerChrome.horizontalMargin;
 
-const double _topBarTrailingSpacing = 23;
+const double _topBarTrailingSpacing = AppMediaViewerChrome.trailingSpacing;
 
-const Duration _mediaViewerControlsAnimationDuration = Duration(
-  milliseconds: 200,
-);
+const Duration _mediaViewerControlsAnimationDuration =
+    AppMediaViewerChrome.controlsAnimationDuration;
 
 const Duration _mediaSaveConfirmationDuration = Duration(milliseconds: 2950);
 
@@ -75,18 +77,25 @@ const double _messageCopyConfirmationOvershoot = 13 / 3;
 // TODO: 사진·영상 저장과 메시지 복사를 제외한 스낵바도 새 피드백 버튼으로 바꿔요.
 
 Curve _mediaViewerControlsSlideCurve(bool visible) {
-  return visible ? Curves.easeOutCubic : Curves.linear;
+  return AppMediaViewerChrome.controlsSlideCurve(visible);
 }
 
-const Color _mediaViewerChromeBarColor = Color(0xFF202020);
+const Color _mediaViewerChromeBarColor = AppMediaViewerChrome.backgroundColor;
 
-const double _mediaViewerDownloadButtonDimension = 48;
+const double _mediaViewerActionButtonDimension =
+    AppMediaEditIcon.referenceButtonDimension;
+
+const double _mediaViewerActionIconDimension =
+    AppMediaEditIcon.referenceDimension;
+
+const double _mediaViewerActionIconStrokeWidth =
+    AppMediaEditIcon.referenceStrokeWidth;
 
 const double _mediaViewerActionBarContentHeight =
-    _topBarTrailingSpacing * 2 + _mediaViewerDownloadButtonDimension;
+    _topBarTrailingSpacing * 2 + _mediaViewerActionButtonDimension;
 
 double _mediaViewerTopBarHeight(double topPadding) {
-  return topPadding + _topBarButtonDimension + _topBarTrailingSpacing;
+  return AppMediaViewerChrome.topBarHeight(topPadding);
 }
 
 const double _attachmentPanelFallbackHeight = 302;
@@ -1191,6 +1200,11 @@ final class _ChatConversationViewState extends State<ChatConversationView>
                 if (result.previewBytesByAssetId.containsKey(asset.id))
                   asset.id: result.previewBytesByAssetId[asset.id]!,
             },
+            editedFilesByAssetId: <String, ChatPhotoFile>{
+              for (final ChatPhotoAsset asset in photoAssets)
+                if (result.editedFilesByAssetId.containsKey(asset.id))
+                  asset.id: result.editedFilesByAssetId[asset.id]!,
+            },
           );
     final List<ChatMessage> pendingPhotoMessages = photoResult == null
         ? const <ChatMessage>[]
@@ -1217,13 +1231,15 @@ final class _ChatConversationViewState extends State<ChatConversationView>
           );
 
     for (final ChatPhotoAsset asset in videoAssets) {
+      final ChatVideoTrimRange? trimRange =
+          result.videoTrimRangesByAssetId[asset.id];
       pendingVideoMessages.add(
         messageListState.addOutgoingVideoMessage(
           attachment: ChatVideoAttachment(
             assetId: asset.id,
             width: asset.width,
             height: asset.height,
-            duration: asset.duration,
+            duration: trimRange?.duration ?? asset.duration,
             previewBytes: result.previewBytesByAssetId[asset.id],
           ),
           replyTo: replyTo,
@@ -1247,6 +1263,8 @@ final class _ChatConversationViewState extends State<ChatConversationView>
           videoAssets: videoAssets,
           videoSender: videoSender,
           pendingVideoMessages: pendingVideoMessages,
+          videoTrimRangesByAssetId: result.videoTrimRangesByAssetId,
+          mediaFilesByAssetId: result.editedFilesByAssetId,
           replyTo: replyTo,
         ),
       );
@@ -1260,6 +1278,8 @@ final class _ChatConversationViewState extends State<ChatConversationView>
     required List<ChatPhotoAsset> videoAssets,
     required ChatVideoMessageSender? videoSender,
     required List<ChatMessage> pendingVideoMessages,
+    required Map<String, ChatVideoTrimRange> videoTrimRangesByAssetId,
+    required Map<String, ChatPhotoFile> mediaFilesByAssetId,
     required ChatReplyReference? replyTo,
   }) async {
     beginMediaSendDiagnostics();
@@ -1287,6 +1307,8 @@ final class _ChatConversationViewState extends State<ChatConversationView>
           asset: videoAssets[index],
           sender: videoSender,
           pendingMessage: pendingVideoMessages[index],
+          trimRange: videoTrimRangesByAssetId[videoAssets[index].id],
+          sourceFile: mediaFilesByAssetId[videoAssets[index].id],
           replyTo: replyTo,
           videoCount: videoAssets.length,
           videoIndex: index + 1,
@@ -1302,6 +1324,8 @@ final class _ChatConversationViewState extends State<ChatConversationView>
     required ChatPhotoAsset asset,
     required ChatVideoMessageSender sender,
     required ChatMessage pendingMessage,
+    required ChatVideoTrimRange? trimRange,
+    required ChatPhotoFile? sourceFile,
     required ChatReplyReference? replyTo,
     required int videoCount,
     required int videoIndex,
@@ -1312,12 +1336,12 @@ final class _ChatConversationViewState extends State<ChatConversationView>
     try {
       Future<ChatPhotoFile?> loadOriginalFile() async {
         final Stopwatch stopwatch = Stopwatch()..start();
-        final ChatPhotoFile? file = await _photoLibrary.loadOriginalFile(
-          assetId: asset.id,
-        );
+        final ChatPhotoFile? file =
+            sourceFile ??
+            await _photoLibrary.loadOriginalFile(assetId: asset.id);
         stopwatch.stop();
         _logVideoSendTiming(
-          'local_original',
+          sourceFile == null ? 'local_original' : 'provided_original',
           stopwatch,
           videoCount: videoCount,
           videoIndex: videoIndex,
@@ -1328,9 +1352,9 @@ final class _ChatConversationViewState extends State<ChatConversationView>
 
       Future<Uint8List?> loadPreviewBytes() async {
         final Stopwatch stopwatch = Stopwatch()..start();
-        final Uint8List? bytes = await _photoLibrary.loadMessagePreview(
-          assetId: asset.id,
-        );
+        final Uint8List? bytes =
+            pendingMessage.videoAttachment?.previewBytes ??
+            await _photoLibrary.loadMessagePreview(assetId: asset.id);
         stopwatch.stop();
         _logVideoSendTiming(
           'local_preview',
@@ -1376,6 +1400,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
             width: asset.width,
             height: asset.height,
             duration: asset.duration,
+            trimRange: trimRange,
           );
       encodingStopwatch.stop();
       _logVideoSendTiming(
@@ -1397,7 +1422,9 @@ final class _ChatConversationViewState extends State<ChatConversationView>
         height: encodedVideo.height,
         duration: encodedVideo.duration,
         previewBytes:
-            previewBytes ?? pendingMessage.videoAttachment?.previewBytes,
+            encodedVideo.previewBytes ??
+            previewBytes ??
+            pendingMessage.videoAttachment?.previewBytes,
         fileName: encodedVideo.fileName,
         mimeType: encodedVideo.mimeType,
         sizeBytes: encodedVideo.sizeBytes,
@@ -1488,6 +1515,13 @@ final class _ChatConversationViewState extends State<ChatConversationView>
 
             try {
               Future<ChatPhotoFile?> loadOriginalFile() async {
+                final ChatPhotoFile? editedFile =
+                    result.editedFilesByAssetId[asset.id];
+
+                if (editedFile != null) {
+                  return editedFile;
+                }
+
                 final Stopwatch stopwatch = Stopwatch()..start();
                 final ChatPhotoFile? file = await _photoLibrary
                     .loadOriginalFile(assetId: asset.id);
@@ -1503,6 +1537,13 @@ final class _ChatConversationViewState extends State<ChatConversationView>
               }
 
               Future<Uint8List?> loadPreviewBytes() async {
+                final Uint8List? editedPreview =
+                    result.previewBytesByAssetId[asset.id];
+
+                if (editedPreview != null) {
+                  return editedPreview;
+                }
+
                 final Stopwatch stopwatch = Stopwatch()..start();
                 final Uint8List? bytes = await _photoLibrary.loadMessagePreview(
                   assetId: asset.id,
@@ -1674,8 +1715,57 @@ final class _ChatConversationViewState extends State<ChatConversationView>
     }
 
     _quickPhotoPreviewOpen = true;
+    ChatPhotoEditorResult? editorResult;
+    bool shouldSend = false;
 
-    final bool? shouldSend = await Navigator.of(context).push<bool>(
+    try {
+      if (isChatPhotoEditorSupported) {
+        editorResult = await openChatPhotoEditor(
+          context: context,
+          assets: <ChatPhotoAsset>[asset],
+          photoLibrary: _photoLibrary,
+        );
+        shouldSend = editorResult != null;
+      } else {
+        shouldSend =
+            await _openLegacyQuickPhotoPreview(
+              asset: asset,
+              thumbnailBytes: thumbnailBytes,
+            ) ==
+            true;
+      }
+    } on Object {
+      _showChatOperationFailure('The selected photo could not be edited.');
+    } finally {
+      _quickPhotoPreviewOpen = false;
+    }
+
+    if (!mounted || !shouldSend) {
+      return;
+    }
+
+    setState(_clearQuickPhotoPrompt);
+
+    await _sendSelectedPhotos(
+      ChatPhotoSelectionResult(
+        assets: <ChatPhotoAsset>[asset],
+        collage: true,
+        previewBytesByAssetId: <String, Uint8List>{
+          asset.id:
+              editorResult?.previewBytesByAssetId[asset.id] ?? thumbnailBytes,
+        },
+        editedFilesByAssetId:
+            editorResult?.editedFilesByAssetId ??
+            const <String, ChatPhotoFile>{},
+      ),
+    );
+  }
+
+  Future<bool?> _openLegacyQuickPhotoPreview({
+    required ChatPhotoAsset asset,
+    required Uint8List thumbnailBytes,
+  }) {
+    return Navigator.of(context).push<bool>(
       PageRouteBuilder<bool>(
         transitionDuration: const Duration(milliseconds: 180),
         reverseTransitionDuration: const Duration(milliseconds: 160),
@@ -1700,22 +1790,6 @@ final class _ChatConversationViewState extends State<ChatConversationView>
             ) {
               return FadeTransition(opacity: animation, child: child);
             },
-      ),
-    );
-
-    _quickPhotoPreviewOpen = false;
-
-    if (!mounted || shouldSend != true) {
-      return;
-    }
-
-    setState(_clearQuickPhotoPrompt);
-
-    await _sendSelectedPhotos(
-      ChatPhotoSelectionResult(
-        assets: <ChatPhotoAsset>[asset],
-        collage: true,
-        previewBytesByAssetId: <String, Uint8List>{asset.id: thumbnailBytes},
       ),
     );
   }
@@ -1748,6 +1822,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
             sentAt: message.createdAt,
             onCreateMediaAssetAccessUrl: _cachedMediaAssetAccessUrlCreator,
             onCreateThumbnailAccessUrl: _cachedPhotoThumbnailAccessUrlCreator,
+            onSendMedia: _sendSelectedPhotos,
           );
         },
       ),
@@ -1776,6 +1851,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
             senderName: senderName,
             sentAt: message.createdAt,
             onCreateThumbnailAccessUrl: _cachedPhotoThumbnailAccessUrlCreator,
+            onSendMedia: _sendSelectedPhotos,
           );
         },
       ),
@@ -4111,7 +4187,7 @@ final class _ChatTopBar extends StatelessWidget {
                   top: 0,
                   child: Tooltip(
                     message: 'Back',
-                    child: _TopBarButtonSurface(
+                    child: AppTopBarButtonSurface(
                       key: const ValueKey<String>('chat-back-group'),
                       height: _topBarButtonDimension,
                       width: backGroupWidth,
@@ -4157,7 +4233,7 @@ final class _ChatTopBar extends StatelessWidget {
                                   width: _topBarButtonDimension,
                                   height: _topBarButtonDimension,
                                   child: Center(
-                                    child: _TopBarBackIcon(color: _iconColor),
+                                    child: AppTopBarBackIcon(color: _iconColor),
                                   ),
                                 ),
                               ),
@@ -4171,7 +4247,7 @@ final class _ChatTopBar extends StatelessWidget {
               Positioned(
                 top: 0,
                 right: _topBarHorizontalMargin,
-                child: _TopBarButtonSurface(
+                child: AppTopBarButtonSurface(
                   key: const ValueKey<String>('chat-actions-group'),
                   width: _actionsWidth,
                   height: _topBarButtonDimension,
@@ -4248,56 +4324,6 @@ final class _ChatTopBarActionButton extends StatelessWidget {
           height: _topBarButtonDimension,
           child: Center(child: icon),
         ),
-      ),
-    );
-  }
-}
-
-final class _TopBarButtonSurface extends StatelessWidget {
-  const _TopBarButtonSurface({
-    required this.height,
-    required this.color,
-    required this.borderColor,
-    required this.child,
-    this.width,
-    this.shape = BoxShape.rectangle,
-    super.key,
-  });
-
-  final double? width;
-  final double height;
-  final Color color;
-  final Color borderColor;
-  final Widget child;
-  final BoxShape shape;
-
-  @override
-  Widget build(BuildContext context) {
-    final BorderRadius borderRadius = BorderRadius.circular(height / 2);
-
-    return SizedBox(
-      width: width,
-      height: height,
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                color: color,
-                shape: shape,
-                borderRadius: shape == BoxShape.circle ? null : borderRadius,
-                border: Border.all(color: borderColor, width: 0.67),
-              ),
-            ),
-          ),
-          Material(
-            color: Colors.transparent,
-            shape: shape == BoxShape.circle ? const CircleBorder() : null,
-            borderRadius: shape == BoxShape.circle ? null : borderRadius,
-            clipBehavior: Clip.antiAlias,
-            child: child,
-          ),
-        ],
       ),
     );
   }
@@ -15546,6 +15572,7 @@ final class _PhotoViewerScreen extends StatefulWidget {
     required this.sentAt,
     required this.onCreateMediaAssetAccessUrl,
     required this.onCreateThumbnailAccessUrl,
+    required this.onSendMedia,
   });
 
   final List<ChatPhotoAttachment> attachments;
@@ -15554,6 +15581,7 @@ final class _PhotoViewerScreen extends StatefulWidget {
   final DateTime sentAt;
   final ChatMediaAssetAccessUrlCreator? onCreateMediaAssetAccessUrl;
   final ChatMediaAssetAccessUrlCreator? onCreateThumbnailAccessUrl;
+  final ChatPhotoSendCallback onSendMedia;
 
   @override
   State<_PhotoViewerScreen> createState() {
@@ -15562,8 +15590,6 @@ final class _PhotoViewerScreen extends StatefulWidget {
 }
 
 final class _PhotoViewerScreenState extends State<_PhotoViewerScreen> {
-  static const Color _filmstripOverlayColor = Color(0x94000000);
-
   static const Color _thumbnailBorderColor = AppColors.blue500;
 
   late final PageController _pageController;
@@ -15576,6 +15602,8 @@ final class _PhotoViewerScreenState extends State<_PhotoViewerScreen> {
   late int _currentIndex;
 
   bool _controlsVisible = true;
+
+  bool _mediaActionInProgress = false;
 
   double _verticalDragDistance = 0;
 
@@ -15730,6 +15758,210 @@ final class _PhotoViewerScreenState extends State<_PhotoViewerScreen> {
     _verticalDragDistance = 0;
   }
 
+  Future<ChatPhotoFile> _loadPhotoSource(
+    ChatPhotoAttachment attachment, {
+    ClipboardDiagnostics? diagnostics,
+  }) async {
+    final String? mediaAssetId = attachment.mediaAssetId;
+    final ChatMediaAssetAccessUrlCreator? createAccessUrl =
+        widget.onCreateMediaAssetAccessUrl;
+    final Uint8List? originalBytes = attachment.uploadBytes;
+    File? imageFile = mediaAssetId == null
+        ? null
+        : await _ChatPhotoDiskCache.findCached(
+            mediaAssetId,
+            variant: _ChatPhotoCacheVariant.original,
+          );
+    Uint8List? imageBytes;
+
+    if (imageFile != null) {
+      diagnostics?.record(
+        '[photo-save] stage=bytes_source source=local_file '
+        'bytes=${await imageFile.length()}',
+      );
+    } else if (originalBytes != null && originalBytes.isNotEmpty) {
+      diagnostics?.record(
+        '[photo-save] stage=bytes_source source=memory '
+        'bytes=${originalBytes.length}',
+      );
+      imageFile = mediaAssetId == null
+          ? null
+          : await _ChatPhotoDiskCache.store(
+              mediaAssetId: mediaAssetId,
+              bytes: originalBytes,
+              variant: _ChatPhotoCacheVariant.original,
+            );
+      imageBytes = imageFile == null ? originalBytes : null;
+    } else if (mediaAssetId != null && createAccessUrl != null) {
+      diagnostics?.record('[photo-save] stage=bytes_source source=network');
+      final Stopwatch downloadStopwatch = Stopwatch()..start();
+
+      imageFile = await _ChatPhotoDiskCache.load(
+        mediaAssetId: mediaAssetId,
+        createAccessUrl: createAccessUrl,
+        variant: _ChatPhotoCacheVariant.original,
+      );
+      downloadStopwatch.stop();
+      diagnostics?.record(
+        '[photo-save] stage=download '
+        'elapsed_ms=${_elapsedMilliseconds(downloadStopwatch)} '
+        'result=${imageFile == null ? 'failed' : 'success'}'
+        '${imageFile == null ? '' : ' bytes=${await imageFile.length()}'}',
+      );
+
+      if (imageFile == null) {
+        throw StateError('Photo download failed.');
+      }
+    } else {
+      imageBytes = attachment.previewBytes;
+
+      if (imageBytes == null || imageBytes.isEmpty) {
+        throw StateError('Photo bytes are not available.');
+      }
+
+      diagnostics?.record(
+        '[photo-save] stage=bytes_source source=memory '
+        'bytes=${imageBytes.length}',
+      );
+    }
+
+    final Uint8List bytes = imageBytes ?? await imageFile!.readAsBytes();
+    final String extension = _photoFileExtension(attachment);
+    final String fileName = _safeLocalFileName(
+      attachment.fileName ?? 'juliatalk-${attachment.assetId}.$extension',
+    );
+    final String mimeType =
+        attachment.mimeType ??
+        switch (extension) {
+          'png' => 'image/png',
+          'heic' => 'image/heic',
+          'webp' => 'image/webp',
+          _ => 'image/jpeg',
+        };
+
+    return ChatPhotoFile(
+      bytes: bytes,
+      fileName: fileName,
+      mimeType: mimeType,
+      sizeBytes: bytes.length,
+      localPath: imageFile?.path,
+    );
+  }
+
+  Future<void> _editCurrentPhoto() async {
+    if (_mediaActionInProgress || !isChatPhotoEditorSupported) {
+      return;
+    }
+
+    _mediaActionInProgress = true;
+    final ChatPhotoAttachment attachment = _currentAttachment;
+    final String assetId =
+        'viewer-photo-${DateTime.now().microsecondsSinceEpoch}';
+
+    try {
+      final ChatPhotoFile sourceFile = await _loadPhotoSource(attachment);
+
+      if (!mounted) {
+        return;
+      }
+
+      final ChatPhotoAsset asset = ChatPhotoAsset(
+        id: assetId,
+        width: attachment.width,
+        height: attachment.height,
+      );
+      final ChatPhotoEditorResult? result = await openChatPhotoFileEditor(
+        context: context,
+        asset: asset,
+        sourceFile: sourceFile,
+      );
+
+      if (!mounted || result == null) {
+        return;
+      }
+
+      final ChatPhotoFile selectedFile =
+          result.editedFilesByAssetId[assetId] ?? sourceFile;
+      final Uint8List previewBytes =
+          result.previewBytesByAssetId[assetId] ??
+          attachment.previewBytes ??
+          selectedFile.bytes;
+
+      await widget.onSendMedia(
+        ChatPhotoSelectionResult(
+          assets: <ChatPhotoAsset>[asset],
+          collage: true,
+          previewBytesByAssetId: <String, Uint8List>{assetId: previewBytes},
+          editedFilesByAssetId: <String, ChatPhotoFile>{assetId: selectedFile},
+        ),
+      );
+
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    } on Object {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            const SnackBar(content: Text('Photo could not be edited.')),
+          );
+      }
+    } finally {
+      _mediaActionInProgress = false;
+    }
+  }
+
+  Future<void> _shareCurrentPhoto() async {
+    if (_mediaActionInProgress) {
+      return;
+    }
+
+    _mediaActionInProgress = true;
+    File? shareFile;
+
+    try {
+      final ChatPhotoAttachment attachment = _currentAttachment;
+      final ChatPhotoFile sourceFile = await _loadPhotoSource(attachment);
+      final Directory temporaryDirectory = await getTemporaryDirectory();
+      final Directory shareDirectory = Directory(
+        '${temporaryDirectory.path}/juliatalk-media-shares',
+      );
+      await shareDirectory.create(recursive: true);
+      final String extension = _photoFileExtension(attachment);
+      shareFile = File(
+        '${shareDirectory.path}/'
+        '${DateTime.now().microsecondsSinceEpoch}.$extension',
+      );
+
+      // 캐시 파일은 확장자가 없어서 공유 대상 앱이 사진 형식을 놓칠 수 있어요.
+      if (sourceFile.localPath case final String localPath) {
+        await File(localPath).copy(shareFile.path);
+      } else {
+        await shareFile.writeAsBytes(sourceFile.bytes, flush: true);
+      }
+
+      await ChatMediaShare.shareFile(shareFile.path);
+    } on Object {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            const SnackBar(content: Text('Photo could not be shared.')),
+          );
+      }
+    } finally {
+      if (shareFile != null) {
+        try {
+          await shareFile.delete();
+        } on FileSystemException {
+          // 공유가 끝난 뒤 임시 파일 삭제 실패는 사용자 동작에 영향을 주지 않아요.
+        }
+      }
+      _mediaActionInProgress = false;
+    }
+  }
+
   Future<void> _downloadCurrentPhoto() async {
     final ChatPhotoAttachment attachment = _currentAttachment;
     final int timestamp = DateTime.now().millisecondsSinceEpoch;
@@ -15738,68 +15970,14 @@ final class _PhotoViewerScreenState extends State<_PhotoViewerScreen> {
       ..record('[photo-save] stage=tap');
 
     try {
-      final String? mediaAssetId = attachment.mediaAssetId;
-      final ChatMediaAssetAccessUrlCreator? createAccessUrl =
-          widget.onCreateMediaAssetAccessUrl;
-      final Uint8List? originalBytes = attachment.uploadBytes;
-      File? imageFile = mediaAssetId == null
+      final ChatPhotoFile sourceFile = await _loadPhotoSource(
+        attachment,
+        diagnostics: diagnostics,
+      );
+      final File? imageFile = sourceFile.localPath == null
           ? null
-          : await _ChatPhotoDiskCache.findCached(
-              mediaAssetId,
-              variant: _ChatPhotoCacheVariant.original,
-            );
-      Uint8List? imageBytes;
-
-      if (imageFile != null) {
-        diagnostics.record(
-          '[photo-save] stage=bytes_source source=local_file '
-          'bytes=${await imageFile.length()}',
-        );
-      } else if (originalBytes != null && originalBytes.isNotEmpty) {
-        diagnostics.record(
-          '[photo-save] stage=bytes_source source=memory '
-          'bytes=${originalBytes.length}',
-        );
-        imageFile = mediaAssetId == null
-            ? null
-            : await _ChatPhotoDiskCache.store(
-                mediaAssetId: mediaAssetId,
-                bytes: originalBytes,
-                variant: _ChatPhotoCacheVariant.original,
-              );
-        imageBytes = imageFile == null ? originalBytes : null;
-      } else if (mediaAssetId != null && createAccessUrl != null) {
-        diagnostics.record('[photo-save] stage=bytes_source source=network');
-        final Stopwatch downloadStopwatch = Stopwatch()..start();
-
-        imageFile = await _ChatPhotoDiskCache.load(
-          mediaAssetId: mediaAssetId,
-          createAccessUrl: createAccessUrl,
-          variant: _ChatPhotoCacheVariant.original,
-        );
-        downloadStopwatch.stop();
-        diagnostics.record(
-          '[photo-save] stage=download '
-          'elapsed_ms=${_elapsedMilliseconds(downloadStopwatch)} '
-          'result=${imageFile == null ? 'failed' : 'success'}'
-          '${imageFile == null ? '' : ' bytes=${await imageFile.length()}'}',
-        );
-
-        if (imageFile == null) {
-          throw StateError('Photo download failed.');
-        }
-      } else {
-        imageBytes = attachment.previewBytes;
-
-        if (imageBytes == null || imageBytes.isEmpty) {
-          throw StateError('Photo bytes are not available.');
-        }
-
-        diagnostics.record(
-          '[photo-save] stage=bytes_source source=memory '
-          'bytes=${imageBytes.length}',
-        );
-      }
+          : File(sourceFile.localPath!);
+      final Uint8List imageBytes = sourceFile.bytes;
 
       File? photoLibraryInputFile;
       final Stopwatch photoLibraryStopwatch = Stopwatch()..start();
@@ -15817,7 +15995,7 @@ final class _PhotoViewerScreenState extends State<_PhotoViewerScreen> {
           );
         } else {
           await PhotoManager.editor.saveImage(
-            imageBytes!,
+            imageBytes,
             filename: 'juliatalk-$timestamp.jpg',
             title: 'JuliaTalk Photo',
             creationDate: DateTime.now(),
@@ -15941,8 +16119,14 @@ final class _PhotoViewerScreenState extends State<_PhotoViewerScreen> {
                     curve: Curves.easeOutCubic,
                   );
                 },
+                onEditPressed: () {
+                  unawaited(_editCurrentPhoto());
+                },
                 onDownloadPressed: () {
                   unawaited(_downloadCurrentPhoto());
+                },
+                onSharePressed: () {
+                  unawaited(_shareCurrentPhoto());
                 },
               ),
               _ActionConfirmation(
@@ -15964,6 +16148,7 @@ final class _VideoViewerScreen extends StatefulWidget {
     required this.senderName,
     required this.sentAt,
     required this.onCreateThumbnailAccessUrl,
+    required this.onSendMedia,
   });
 
   final ChatVideoAttachment attachment;
@@ -15971,6 +16156,7 @@ final class _VideoViewerScreen extends StatefulWidget {
   final String senderName;
   final DateTime sentAt;
   final ChatMediaAssetAccessUrlCreator? onCreateThumbnailAccessUrl;
+  final ChatPhotoSendCallback onSendMedia;
 
   @override
   State<_VideoViewerScreen> createState() => _VideoViewerScreenState();
@@ -15987,6 +16173,8 @@ final class _VideoViewerScreenState extends State<_VideoViewerScreen> {
   bool _controllerReady = false;
   bool _controlsVisible = true;
   bool _completionResetInProgress = false;
+
+  bool _mediaActionInProgress = false;
   bool _scrubbing = false;
   double _verticalDragDistance = 0;
 
@@ -16268,6 +16456,111 @@ final class _VideoViewerScreenState extends State<_VideoViewerScreen> {
     _verticalDragDistance = 0;
   }
 
+  Future<void> _editVideo() async {
+    if (_mediaActionInProgress || !isChatPhotoEditorSupported) {
+      return;
+    }
+
+    _mediaActionInProgress = true;
+    final VideoPlayerController? controller = _controller;
+    _controlsTimer?.cancel();
+
+    try {
+      if (controller != null && controller.value.isInitialized) {
+        await controller.pause();
+      }
+
+      final ChatVideoAttachment attachment = widget.attachment;
+      final String assetId =
+          'viewer-video-${DateTime.now().microsecondsSinceEpoch}';
+      final String fileName = _safeLocalFileName(
+        attachment.fileName ??
+            'juliatalk-video.${_videoFileExtension(attachment.fileName)}',
+      );
+      final ChatPhotoFile sourceFile = ChatPhotoFile(
+        bytes: Uint8List(0),
+        fileName: fileName,
+        mimeType: attachment.mimeType ?? 'video/mp4',
+        sizeBytes: await widget.videoFile.length(),
+        localPath: widget.videoFile.path,
+      );
+      final ChatPhotoAsset asset = ChatPhotoAsset(
+        id: assetId,
+        width: attachment.width,
+        height: attachment.height,
+        type: ChatPhotoAssetType.video,
+        duration: _duration,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      final ChatPhotoEditorResult? result = await openChatPhotoFileEditor(
+        context: context,
+        asset: asset,
+        sourceFile: sourceFile,
+      );
+
+      if (!mounted || result == null) {
+        return;
+      }
+
+      await widget.onSendMedia(
+        ChatPhotoSelectionResult(
+          assets: <ChatPhotoAsset>[asset],
+          collage: true,
+          previewBytesByAssetId: attachment.previewBytes == null
+              ? const <String, Uint8List>{}
+              : <String, Uint8List>{assetId: attachment.previewBytes!},
+          editedFilesByAssetId: <String, ChatPhotoFile>{assetId: sourceFile},
+          videoTrimRangesByAssetId: result.videoTrimRangesByAssetId,
+        ),
+      );
+
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    } on Object {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            const SnackBar(content: Text('Video could not be edited.')),
+          );
+      }
+    } finally {
+      _mediaActionInProgress = false;
+    }
+  }
+
+  Future<void> _shareVideo() async {
+    if (_mediaActionInProgress) {
+      return;
+    }
+
+    _mediaActionInProgress = true;
+    final VideoPlayerController? controller = _controller;
+    _controlsTimer?.cancel();
+
+    try {
+      if (controller != null && controller.value.isInitialized) {
+        await controller.pause();
+      }
+      await ChatMediaShare.shareFile(widget.videoFile.path);
+    } on Object {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            const SnackBar(content: Text('Video could not be shared.')),
+          );
+      }
+    } finally {
+      _mediaActionInProgress = false;
+    }
+  }
+
   Future<void> _downloadVideo() async {
     final int timestamp = DateTime.now().millisecondsSinceEpoch;
     final String extension = _videoFileExtension(widget.attachment.fileName);
@@ -16419,8 +16712,14 @@ final class _VideoViewerScreenState extends State<_VideoViewerScreen> {
                 onSeekEnd: (double fraction) {
                   unawaited(_handleSeekEnd(fraction));
                 },
+                onEditPressed: () {
+                  unawaited(_editVideo());
+                },
                 onDownloadPressed: () {
                   unawaited(_downloadVideo());
+                },
+                onSharePressed: () {
+                  unawaited(_shareVideo());
                 },
               ),
               _ActionConfirmation(
@@ -16445,7 +16744,9 @@ final class _VideoViewerBottomOverlay extends StatelessWidget {
     required this.onSeekStart,
     required this.onSeekUpdate,
     required this.onSeekEnd,
+    required this.onEditPressed,
     required this.onDownloadPressed,
+    required this.onSharePressed,
   });
 
   static const double _fadeHeight = 44;
@@ -16456,7 +16757,7 @@ final class _VideoViewerBottomOverlay extends StatelessWidget {
   static const double _progressTopPaddingWithinActionBar =
       _progressCenterToDownloadButtonTop - _progressRowHeight / 2;
   static const double _downloadButtonTopToBottom =
-      _mediaViewerDownloadButtonDimension + _topBarTrailingSpacing;
+      _mediaViewerActionButtonDimension + _topBarTrailingSpacing;
   static const double _actionBarHeight =
       _progressCenterToDownloadButtonTop * 2 + _downloadButtonTopToBottom;
   static const double _fadeAboveActionBarHeight =
@@ -16474,7 +16775,9 @@ final class _VideoViewerBottomOverlay extends StatelessWidget {
   final ValueChanged<double> onSeekStart;
   final ValueChanged<double> onSeekUpdate;
   final ValueChanged<double> onSeekEnd;
+  final VoidCallback onEditPressed;
   final VoidCallback onDownloadPressed;
+  final VoidCallback onSharePressed;
 
   double get _progress {
     if (duration <= Duration.zero) {
@@ -16519,7 +16822,7 @@ final class _VideoViewerBottomOverlay extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const SizedBox(height: _fadeAboveActionBarHeight),
-                  _MediaViewerControlTapRegion(
+                  AppMediaViewerControlTapRegion(
                     child: SizedBox(
                       height: _actionBarHeight,
                       child: ColoredBox(
@@ -16573,9 +16876,11 @@ final class _VideoViewerBottomOverlay extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(height: _progressToActionBarGap),
-                            _MediaViewerDownloadBar(
+                            _MediaViewerActionBar(
                               keyPrefix: 'video-viewer',
+                              onEditPressed: onEditPressed,
                               onDownloadPressed: onDownloadPressed,
+                              onSharePressed: onSharePressed,
                             ),
                           ],
                         ),
@@ -17097,7 +17402,7 @@ final class _MediaViewerTopBar extends StatelessWidget {
           child: AnimatedOpacity(
             duration: _mediaViewerControlsAnimationDuration,
             opacity: visible ? 1 : 0,
-            child: _MediaViewerControlTapRegion(
+            child: AppMediaViewerControlTapRegion(
               child: Container(
                 height: height,
                 color: _mediaViewerChromeBarColor,
@@ -17106,11 +17411,10 @@ final class _MediaViewerTopBar extends StatelessWidget {
                     Positioned(
                       left: _topBarHorizontalMargin,
                       top: topPadding,
-                      child: _PhotoViewerChromeButton(
+                      child: AppMediaViewerChromeButton(
                         key: ValueKey<String>('$keyPrefix-back'),
-                        dimension: _topBarButtonDimension,
                         onPressed: onBackPressed,
-                        icon: const _TopBarBackIcon(color: Color(0xFFE8E8E8)),
+                        child: const AppTopBarBackIcon(),
                       ),
                     ),
                     Positioned(
@@ -17169,7 +17473,9 @@ final class _PhotoViewerBottomOverlay extends StatelessWidget {
     required this.thumbnailKeys,
     required this.onCreateMediaAssetAccessUrl,
     required this.onThumbnailPressed,
+    required this.onEditPressed,
     required this.onDownloadPressed,
+    required this.onSharePressed,
   });
 
   final bool visible;
@@ -17178,7 +17484,9 @@ final class _PhotoViewerBottomOverlay extends StatelessWidget {
   final List<GlobalKey> thumbnailKeys;
   final ChatMediaAssetAccessUrlCreator? onCreateMediaAssetAccessUrl;
   final ValueChanged<int> onThumbnailPressed;
+  final VoidCallback onEditPressed;
   final VoidCallback onDownloadPressed;
+  final VoidCallback onSharePressed;
 
   bool get _hasMultiplePhotos {
     return attachments.length > 1;
@@ -17200,26 +17508,45 @@ final class _PhotoViewerBottomOverlay extends StatelessWidget {
           child: AnimatedOpacity(
             duration: _mediaViewerControlsAnimationDuration,
             opacity: visible ? 1 : 0,
-            child: _MediaViewerControlTapRegion(
+            child: AppMediaViewerControlTapRegion(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (_hasMultiplePhotos)
                     SizedBox(
                       width: double.infinity,
-                      child: ColoredBox(
-                        color: _PhotoViewerScreenState._filmstripOverlayColor,
-                        child: _PhotoViewerThumbnailBar(
-                          attachments: attachments,
-                          currentIndex: currentIndex,
-                          thumbnailKeys: thumbnailKeys,
-                          onCreateMediaAssetAccessUrl:
-                              onCreateMediaAssetAccessUrl,
-                          onThumbnailPressed: onThumbnailPressed,
-                        ),
+                      child: Stack(
+                        fit: StackFit.passthrough,
+                        children: [
+                          const Positioned(
+                            left: 0,
+                            // 사진 상단 위로 하단 버튼의 아래 여백인 23pt만큼 확장해요.
+                            top: 15,
+                            right: 0,
+                            bottom: 0,
+                            child: ColoredBox(
+                              key: ValueKey<String>(
+                                'photo-viewer-filmstrip-chrome-extension',
+                              ),
+                              color: _mediaViewerChromeBarColor,
+                            ),
+                          ),
+                          _PhotoViewerThumbnailBar(
+                            attachments: attachments,
+                            currentIndex: currentIndex,
+                            thumbnailKeys: thumbnailKeys,
+                            onCreateMediaAssetAccessUrl:
+                                onCreateMediaAssetAccessUrl,
+                            onThumbnailPressed: onThumbnailPressed,
+                          ),
+                        ],
                       ),
                     ),
-                  _MediaViewerDownloadBar(onDownloadPressed: onDownloadPressed),
+                  _MediaViewerActionBar(
+                    onEditPressed: onEditPressed,
+                    onDownloadPressed: onDownloadPressed,
+                    onSharePressed: onSharePressed,
+                  ),
                 ],
               ),
             ),
@@ -17230,29 +17557,17 @@ final class _PhotoViewerBottomOverlay extends StatelessWidget {
   }
 }
 
-final class _MediaViewerControlTapRegion extends StatelessWidget {
-  const _MediaViewerControlTapRegion({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      excludeFromSemantics: true,
-      onTap: () {},
-      child: child,
-    );
-  }
-}
-
-final class _MediaViewerDownloadBar extends StatelessWidget {
-  const _MediaViewerDownloadBar({
+final class _MediaViewerActionBar extends StatelessWidget {
+  const _MediaViewerActionBar({
+    required this.onEditPressed,
     required this.onDownloadPressed,
+    required this.onSharePressed,
     this.keyPrefix = 'photo-viewer',
   });
 
+  final VoidCallback onEditPressed;
   final VoidCallback onDownloadPressed;
+  final VoidCallback onSharePressed;
   final String keyPrefix;
 
   @override
@@ -17260,137 +17575,44 @@ final class _MediaViewerDownloadBar extends StatelessWidget {
     return Container(
       height: _mediaViewerActionBarContentHeight,
       color: _mediaViewerChromeBarColor,
-      child: Center(
-        child: _PhotoViewerChromeButton(
-          key: ValueKey<String>('$keyPrefix-download'),
-          dimension: _mediaViewerDownloadButtonDimension,
-          onPressed: onDownloadPressed,
-          icon: const _PhotoViewerDownloadIcon(),
-        ),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Center(
+              child: AppMediaViewerChromeButton(
+                key: ValueKey<String>('$keyPrefix-edit'),
+                dimension: _mediaViewerActionButtonDimension,
+                onPressed: onEditPressed,
+                child: const AppMediaEditIcon(
+                  dimension: _mediaViewerActionIconDimension,
+                  color: AppColors.white,
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Center(
+              child: AppMediaViewerChromeButton(
+                key: ValueKey<String>('$keyPrefix-download'),
+                dimension: _mediaViewerActionButtonDimension,
+                onPressed: onDownloadPressed,
+                child: const _PhotoViewerDownloadIcon(),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Center(
+              child: AppMediaViewerChromeButton(
+                key: ValueKey<String>('$keyPrefix-share'),
+                dimension: _mediaViewerActionButtonDimension,
+                onPressed: onSharePressed,
+                child: const _MediaViewerShareIcon(),
+              ),
+            ),
+          ),
+        ],
       ),
     );
-  }
-}
-
-final class _PhotoViewerChromeButton extends StatelessWidget {
-  const _PhotoViewerChromeButton({
-    required this.dimension,
-    required this.onPressed,
-    required this.icon,
-    super.key,
-  });
-
-  final double dimension;
-  final VoidCallback onPressed;
-  final Widget icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return _TopBarButtonSurface(
-      width: dimension,
-      height: dimension,
-      color: const Color(0xFF272727),
-      borderColor: const Color(0xFF4E4E4E),
-      shape: BoxShape.circle,
-      child: InkWell(
-        onTap: onPressed,
-        customBorder: const CircleBorder(),
-        child: Center(child: icon),
-      ),
-    );
-  }
-}
-
-final class _TopBarBackIcon extends StatelessWidget {
-  const _TopBarBackIcon({required this.color});
-
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return _TopBarChevronIcon(
-      size: const Size.square(24),
-      start: const Offset(16, 3),
-      vertex: const Offset(6, 12),
-      end: const Offset(16, 21),
-      color: color,
-      strokeWidth: 2,
-    );
-  }
-}
-
-final class _TopBarChevronIcon extends StatelessWidget {
-  const _TopBarChevronIcon({
-    required this.size,
-    required this.start,
-    required this.vertex,
-    required this.end,
-    required this.color,
-    required this.strokeWidth,
-  });
-
-  final Size size;
-  final Offset start;
-  final Offset vertex;
-  final Offset end;
-  final Color color;
-  final double strokeWidth;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox.fromSize(
-      size: size,
-      child: CustomPaint(
-        painter: _TopBarChevronIconPainter(
-          start: start,
-          vertex: vertex,
-          end: end,
-          color: color,
-          strokeWidth: strokeWidth,
-        ),
-      ),
-    );
-  }
-}
-
-final class _TopBarChevronIconPainter extends CustomPainter {
-  const _TopBarChevronIconPainter({
-    required this.start,
-    required this.vertex,
-    required this.end,
-    required this.color,
-    required this.strokeWidth,
-  });
-
-  final Offset start;
-  final Offset vertex;
-  final Offset end;
-  final Color color;
-  final double strokeWidth;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final Paint paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    final Path path = Path()
-      ..moveTo(start.dx, start.dy)
-      ..lineTo(vertex.dx, vertex.dy)
-      ..lineTo(end.dx, end.dy);
-
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _TopBarChevronIconPainter oldDelegate) {
-    return start != oldDelegate.start ||
-        vertex != oldDelegate.vertex ||
-        end != oldDelegate.end ||
-        color != oldDelegate.color ||
-        strokeWidth != oldDelegate.strokeWidth;
   }
 }
 
@@ -17400,7 +17622,7 @@ final class _PhotoViewerDownloadIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const SizedBox.square(
-      dimension: 24,
+      dimension: _mediaViewerActionIconDimension,
       child: CustomPaint(painter: _PhotoViewerDownloadIconPainter()),
     );
   }
@@ -17411,12 +17633,7 @@ final class _PhotoViewerDownloadIconPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final Paint paint = Paint()
-      ..color = AppColors.white
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
+    final Paint paint = _mediaViewerActionIconPaint();
 
     canvas.drawLine(const Offset(12, 2), const Offset(12, 14), paint);
     canvas.drawPath(
@@ -17433,6 +17650,60 @@ final class _PhotoViewerDownloadIconPainter extends CustomPainter {
   bool shouldRepaint(covariant _PhotoViewerDownloadIconPainter oldDelegate) {
     return false;
   }
+}
+
+final class _MediaViewerShareIcon extends StatelessWidget {
+  const _MediaViewerShareIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox.square(
+      dimension: _mediaViewerActionIconDimension,
+      child: CustomPaint(painter: _MediaViewerShareIconPainter()),
+    );
+  }
+}
+
+final class _MediaViewerShareIconPainter extends CustomPainter {
+  const _MediaViewerShareIconPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Paint paint = _mediaViewerActionIconPaint();
+
+    canvas.drawLine(const Offset(12, 2), const Offset(12, 14), paint);
+    canvas.drawPath(
+      Path()
+        ..moveTo(6.5, 7.5)
+        ..lineTo(12, 2)
+        ..lineTo(17.5, 7.5),
+      paint,
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(3, 13.5)
+        ..lineTo(3, 20)
+        ..quadraticBezierTo(3, 21, 4, 21)
+        ..lineTo(20, 21)
+        ..quadraticBezierTo(21, 21, 21, 20)
+        ..lineTo(21, 13.5),
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _MediaViewerShareIconPainter oldDelegate) {
+    return false;
+  }
+}
+
+Paint _mediaViewerActionIconPaint() {
+  return Paint()
+    ..color = AppColors.white
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = _mediaViewerActionIconStrokeWidth
+    ..strokeCap = StrokeCap.round
+    ..strokeJoin = StrokeJoin.round;
 }
 
 final class _PhotoViewerThumbnailBar extends StatelessWidget {
@@ -17459,47 +17730,62 @@ final class _PhotoViewerThumbnailBar extends StatelessWidget {
         children: [
           SizedBox(
             height: 56,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (int index = 0; index < attachments.length; index++) ...[
-                    _PhotoViewerThumbnail(
-                      key: thumbnailKeys[index],
-                      attachment: attachments[index],
-                      selected: index == currentIndex,
-                      onCreateMediaAssetAccessUrl: onCreateMediaAssetAccessUrl,
-                      onPressed: () {
-                        onThumbnailPressed(index);
-                      },
-                    ),
-                    if (index != attachments.length - 1)
-                      const SizedBox(width: 7),
+            child: Transform.translate(
+              offset: const Offset(0, 19),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (
+                      int index = 0;
+                      index < attachments.length;
+                      index++
+                    ) ...[
+                      _PhotoViewerThumbnail(
+                        key: thumbnailKeys[index],
+                        attachment: attachments[index],
+                        selected: index == currentIndex,
+                        onCreateMediaAssetAccessUrl:
+                            onCreateMediaAssetAccessUrl,
+                        onPressed: () {
+                          onThumbnailPressed(index);
+                        },
+                      ),
+                      if (index != attachments.length - 1)
+                        const SizedBox(width: 5),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),
           const SizedBox(height: 7),
-          Row(
-            key: const ValueKey<String>('photo-viewer-counter'),
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.image_outlined,
-                color: AppColors.white,
-                size: 18,
+          SizedBox(
+            height: 24,
+            child: Transform.translate(
+              // 썸네일 하단과 실제 글리프 상단 사이를 레퍼런스의 15pt로 맞춰요.
+              offset: const Offset(0, 37 / 3),
+              child: Row(
+                key: const ValueKey<String>('photo-viewer-counter'),
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.image_outlined,
+                    color: AppColors.white,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    'Number ${currentIndex + 1} out of ${attachments.length}',
+                    style: AppTypography.subTypography13.copyWith(
+                      color: AppColors.white,
+                      fontWeight: AppTypography.medium,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 5),
-              Text(
-                'Number ${currentIndex + 1} out of ${attachments.length}',
-                style: AppTypography.subTypography10.copyWith(
-                  color: AppColors.white,
-                  fontWeight: AppTypography.medium,
-                ),
-              ),
-            ],
+            ),
           ),
         ],
       ),
@@ -17527,22 +17813,24 @@ final class _PhotoViewerThumbnail extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onPressed,
       child: AnimatedContainer(
+        key: ValueKey<String>(
+          'photo-viewer-thumbnail-frame-${attachment.assetId}',
+        ),
         duration: const Duration(milliseconds: 140),
         curve: Curves.easeOutCubic,
-        width: 54,
-        height: 54,
-        padding: const EdgeInsets.all(2),
+        width: selected ? 44 : 42,
+        height: selected ? 44 : 42,
         decoration: BoxDecoration(
-          borderRadius: const BorderRadius.all(Radius.circular(7)),
+          borderRadius: BorderRadius.all(Radius.circular(selected ? 5 : 7)),
           border: Border.all(
             color: selected
                 ? _PhotoViewerScreenState._thumbnailBorderColor
                 : Colors.transparent,
-            width: selected ? 3 : 0,
+            width: selected ? 2 : 0,
           ),
         ),
         child: ClipRRect(
-          borderRadius: const BorderRadius.all(Radius.circular(4)),
+          borderRadius: BorderRadius.all(Radius.circular(selected ? 3 : 4)),
           child: _PhotoMessageImage(
             attachment: attachment,
             itemIndex: 0,

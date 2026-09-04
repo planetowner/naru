@@ -2,6 +2,15 @@ import 'package:flutter/services.dart';
 
 import 'chat_photo_library.dart';
 
+final class ChatVideoTrimRange {
+  const ChatVideoTrimRange({required this.start, required this.end});
+
+  final Duration start;
+  final Duration end;
+
+  Duration get duration => end - start;
+}
+
 final class ChatVideoTranscodeResult {
   const ChatVideoTranscodeResult({
     required this.fileName,
@@ -12,6 +21,7 @@ final class ChatVideoTranscodeResult {
     required this.duration,
     this.localPath,
     this.uploadBytes,
+    this.previewBytes,
   });
 
   final String fileName;
@@ -22,6 +32,7 @@ final class ChatVideoTranscodeResult {
   final Duration duration;
   final String? localPath;
   final Uint8List? uploadBytes;
+  final Uint8List? previewBytes;
 }
 
 abstract interface class ChatVideoTranscoder {
@@ -30,6 +41,7 @@ abstract interface class ChatVideoTranscoder {
     required int width,
     required int height,
     required Duration duration,
+    ChatVideoTrimRange? trimRange,
   });
 }
 
@@ -42,6 +54,7 @@ final class OriginalChatVideoTranscoder implements ChatVideoTranscoder {
     required int width,
     required int height,
     required Duration duration,
+    ChatVideoTrimRange? trimRange,
   }) async {
     return ChatVideoTranscodeResult(
       fileName: source.fileName,
@@ -49,7 +62,7 @@ final class OriginalChatVideoTranscoder implements ChatVideoTranscoder {
       sizeBytes: source.sizeBytes,
       width: width,
       height: height,
-      duration: duration,
+      duration: trimRange?.duration ?? duration,
       localPath: source.localPath,
       uploadBytes: source.bytes,
     );
@@ -69,6 +82,7 @@ final class MethodChannelChatVideoTranscoder implements ChatVideoTranscoder {
     required int width,
     required int height,
     required Duration duration,
+    ChatVideoTrimRange? trimRange,
   }) async {
     final String? inputPath = source.localPath;
 
@@ -79,10 +93,18 @@ final class MethodChannelChatVideoTranscoder implements ChatVideoTranscoder {
       );
     }
 
+    final Map<String, Object> arguments = <String, Object>{
+      'input_path': inputPath,
+    };
+    if (trimRange case final ChatVideoTrimRange range) {
+      arguments.addAll(<String, Object>{
+        'trim_start_ms': range.start.inMilliseconds,
+        'trim_end_ms': range.end.inMilliseconds,
+      });
+    }
+
     final Map<Object?, Object?>? value = await _channel
-        .invokeMapMethod<Object?, Object?>('transcode', <String, Object>{
-          'input_path': inputPath,
-        });
+        .invokeMapMethod<Object?, Object?>('transcode', arguments);
 
     if (value == null) {
       throw PlatformException(
@@ -99,6 +121,7 @@ final class MethodChannelChatVideoTranscoder implements ChatVideoTranscoder {
       height: _requiredInt(value, 'height'),
       duration: Duration(milliseconds: _requiredInt(value, 'duration_ms')),
       localPath: _requiredString(value, 'local_path'),
+      previewBytes: value['preview_bytes'] as Uint8List?,
     );
   }
 

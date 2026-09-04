@@ -54,4 +54,45 @@ void main() {
     expect(result.duration, const Duration(milliseconds: 9398));
     expect(result.uploadBytes, isNull);
   });
+
+  test('passes the selected trim range to the iOS bridge', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (MethodCall call) async {
+          expect(call.method, 'transcode');
+          expect(call.arguments, <String, Object>{
+            'input_path': '/tmp/source.mov',
+            'trim_start_ms': 1250,
+            'trim_end_ms': 6750,
+          });
+          return <String, Object>{
+            'local_path': '/tmp/encoded.mp4',
+            'file_name': 'encoded.mp4',
+            'mime_type': 'video/mp4',
+            'size_bytes': 2200000,
+            'width': 1080,
+            'height': 1920,
+            'duration_ms': 5500,
+          };
+        });
+
+    final ChatVideoTranscodeResult result =
+        await const MethodChannelChatVideoTranscoder().transcode(
+          source: ChatPhotoFile(
+            bytes: Uint8List(0),
+            fileName: 'source.mov',
+            mimeType: 'video/quicktime',
+            sizeBytes: 10767102,
+            localPath: '/tmp/source.mov',
+          ),
+          width: 1080,
+          height: 1920,
+          duration: const Duration(seconds: 10),
+          trimRange: const ChatVideoTrimRange(
+            start: Duration(milliseconds: 1250),
+            end: Duration(milliseconds: 6750),
+          ),
+        );
+
+    expect(result.duration, const Duration(milliseconds: 5500));
+  });
 }

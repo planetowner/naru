@@ -104,6 +104,7 @@ final class _IdentityVideoTranscoder implements ChatVideoTranscoder {
     required int width,
     required int height,
     required Duration duration,
+    ChatVideoTrimRange? trimRange,
   }) async {
     return ChatVideoTranscodeResult(
       fileName: source.fileName,
@@ -111,7 +112,7 @@ final class _IdentityVideoTranscoder implements ChatVideoTranscoder {
       sizeBytes: source.sizeBytes,
       width: width,
       height: height,
-      duration: duration,
+      duration: trimRange?.duration ?? duration,
       localPath: source.localPath,
       uploadBytes: source.bytes,
     );

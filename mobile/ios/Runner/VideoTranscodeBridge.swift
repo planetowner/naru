@@ -2,6 +2,7 @@
 import CoreVideo
 import Flutter
 import Foundation
+import UIKit
 import VideoToolbox
 
 private enum VideoTranscodeError: LocalizedError {
@@ -16,6 +17,8 @@ private enum VideoTranscodeError: LocalizedError {
   case cannotStartWriter
   case encodingFailed
   case invalidOutput
+  case invalidTrimRange
+  case thumbnailGenerationFailed
 
   var errorDescription: String? {
     switch self {
@@ -37,6 +40,10 @@ private enum VideoTranscodeError: LocalizedError {
       return "The video could not be encoded."
     case .invalidOutput:
       return "The video encoder created an invalid file."
+    case .invalidTrimRange:
+      return "The selected video trim range is invalid."
+    case .thumbnailGenerationFailed:
+      return "The video timeline thumbnails could not be created."
     }
   }
 }
@@ -56,29 +63,69 @@ final class VideoTranscodeBridge: NSObject, FlutterPlugin {
   }
 
   func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-    guard call.method == "transcode" else {
-      result(FlutterMethodNotImplemented)
-      return
-    }
-    guard
-      let arguments = call.arguments as? [String: Any],
-      let inputPath = arguments["input_path"] as? String,
-      !inputPath.isEmpty
-    else {
-      result(Self.flutterError(VideoTranscodeError.invalidArguments))
-      return
-    }
-
-    Task { @MainActor in
-      do {
-        result(try await Self.transcode(inputPath: inputPath))
-      } catch {
-        result(Self.flutterError(error))
+    switch call.method {
+    case "transcode":
+      guard
+        let arguments = call.arguments as? [String: Any],
+        let inputPath = arguments["input_path"] as? String,
+        !inputPath.isEmpty
+      else {
+        result(Self.flutterError(VideoTranscodeError.invalidArguments))
+        return
       }
+      let trimStartMilliseconds = arguments["trim_start_ms"] as? Int
+      let trimEndMilliseconds = arguments["trim_end_ms"] as? Int
+
+      Task { @MainActor in
+        do {
+          result(
+            try await Self.transcode(
+              inputPath: inputPath,
+              trimStartMilliseconds: trimStartMilliseconds,
+              trimEndMilliseconds: trimEndMilliseconds
+            )
+          )
+        } catch {
+          result(Self.flutterError(error))
+        }
+      }
+    case "timeline-thumbnails":
+      guard
+        let arguments = call.arguments as? [String: Any],
+        let inputPath = arguments["input_path"] as? String,
+        !inputPath.isEmpty,
+        let count = arguments["count"] as? Int,
+        count > 0,
+        let maximumDimension = arguments["maximum_dimension"] as? Int,
+        maximumDimension > 0
+      else {
+        result(Self.flutterError(VideoTranscodeError.invalidArguments))
+        return
+      }
+
+      Task { @MainActor in
+        do {
+          result(
+            try await Self.timelineThumbnails(
+              inputPath: inputPath,
+              count: count,
+              maximumDimension: maximumDimension
+            )
+          )
+        } catch {
+          result(Self.flutterError(error))
+        }
+      }
+    default:
+      result(FlutterMethodNotImplemented)
     }
   }
 
-  private static func transcode(inputPath: String) async throws -> [String: Any] {
+  private static func transcode(
+    inputPath: String,
+    trimStartMilliseconds: Int?,
+    trimEndMilliseconds: Int?
+  ) async throws -> [String: Any] {
     let inputURL = URL(fileURLWithPath: inputPath)
 
     guard FileManager.default.fileExists(atPath: inputURL.path) else {
@@ -87,6 +134,7 @@ final class VideoTranscodeBridge: NSObject, FlutterPlugin {
 
     let asset = AVURLAsset(url: inputURL)
     let tracks = try await asset.load(.tracks)
+    let assetDuration = try await asset.load(.duration)
     guard let videoTrack = tracks.first(where: { $0.mediaType == .video }) else {
       throw VideoTranscodeError.missingVideoTrack
     }
@@ -98,6 +146,35 @@ final class VideoTranscodeBridge: NSObject, FlutterPlugin {
     let outputURL = try makeOutputURL()
     let reader = try AVAssetReader(asset: asset)
     let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mp4)
+    let trimStart: CMTime
+
+    if let trimStartMilliseconds, let trimEndMilliseconds {
+      let requestedStart = CMTime(
+        seconds: Double(trimStartMilliseconds) / 1_000,
+        preferredTimescale: 600
+      )
+      let requestedEnd = CMTime(
+        seconds: Double(trimEndMilliseconds) / 1_000,
+        preferredTimescale: 600
+      )
+      let end = CMTimeMinimum(requestedEnd, assetDuration)
+
+      guard
+        trimStartMilliseconds >= 0,
+        trimEndMilliseconds > trimStartMilliseconds,
+        requestedStart < end
+      else {
+        throw VideoTranscodeError.invalidTrimRange
+      }
+
+      trimStart = requestedStart
+      // 선택 구간만 기존 업로드 인코더가 읽도록 제한해 중복 변환을 피합니다.
+      reader.timeRange = CMTimeRange(start: requestedStart, end: end)
+    } else if trimStartMilliseconds != nil || trimEndMilliseconds != nil {
+      throw VideoTranscodeError.invalidTrimRange
+    } else {
+      trimStart = .zero
+    }
 
     let videoOutput = AVAssetReaderTrackOutput(
       track: videoTrack,
@@ -200,7 +277,7 @@ final class VideoTranscodeBridge: NSObject, FlutterPlugin {
       writer.cancelWriting()
       throw reader.error ?? VideoTranscodeError.cannotStartReader
     }
-    writer.startSession(atSourceTime: .zero)
+    writer.startSession(atSourceTime: trimStart)
 
     try await appendSamples(
       reader: reader,
@@ -223,7 +300,7 @@ final class VideoTranscodeBridge: NSObject, FlutterPlugin {
     let outputDuration = try await outputAsset.load(.duration)
     let transformedSize = naturalSize.applying(preferredTransform)
 
-    return [
+    var output: [String: Any] = [
       "local_path": outputURL.path,
       "file_name": outputURL.lastPathComponent,
       "mime_type": "video/mp4",
@@ -232,6 +309,78 @@ final class VideoTranscodeBridge: NSObject, FlutterPlugin {
       "height": Int(abs(transformedSize.height).rounded()),
       "duration_ms": Int((outputDuration.seconds * 1_000).rounded()),
     ]
+    if let previewData = try? videoPreviewData(asset: outputAsset) {
+      output["preview_bytes"] = FlutterStandardTypedData(bytes: previewData)
+    }
+
+    return output
+  }
+
+  private static func videoPreviewData(asset: AVAsset) throws -> Data {
+    let generator = AVAssetImageGenerator(asset: asset)
+    generator.appliesPreferredTrackTransform = true
+    generator.maximumSize = CGSize(width: 1_280, height: 1_280)
+    let image = try generator.copyCGImage(at: .zero, actualTime: nil)
+
+    guard
+      let data = UIImage(cgImage: image).jpegData(compressionQuality: 0.82)
+    else {
+      throw VideoTranscodeError.thumbnailGenerationFailed
+    }
+
+    return data
+  }
+
+  private static func timelineThumbnails(
+    inputPath: String,
+    count: Int,
+    maximumDimension: Int
+  ) async throws -> [FlutterStandardTypedData] {
+    let inputURL = URL(fileURLWithPath: inputPath)
+
+    guard FileManager.default.fileExists(atPath: inputURL.path) else {
+      throw VideoTranscodeError.missingInput
+    }
+
+    let asset = AVURLAsset(url: inputURL)
+    let duration = try await asset.load(.duration)
+    guard duration.seconds > 0 else {
+      throw VideoTranscodeError.thumbnailGenerationFailed
+    }
+
+    let generator = AVAssetImageGenerator(asset: asset)
+    generator.appliesPreferredTrackTransform = true
+    generator.maximumSize = CGSize(
+      width: maximumDimension,
+      height: maximumDimension
+    )
+    generator.requestedTimeToleranceBefore = .zero
+    generator.requestedTimeToleranceAfter = .zero
+
+    var thumbnails: [FlutterStandardTypedData] = []
+    thumbnails.reserveCapacity(count)
+
+    for index in 0..<count {
+      let fraction = (Double(index) + 0.5) / Double(count)
+      let requestedTime = CMTime(
+        seconds: duration.seconds * fraction,
+        preferredTimescale: 600
+      )
+      let image = try generator.copyCGImage(
+        at: requestedTime,
+        actualTime: nil
+      )
+
+      guard
+        let data = UIImage(cgImage: image).jpegData(compressionQuality: 0.74)
+      else {
+        throw VideoTranscodeError.thumbnailGenerationFailed
+      }
+
+      thumbnails.append(FlutterStandardTypedData(bytes: data))
+    }
+
+    return thumbnails
   }
 
   private static func makeOutputURL() throws -> URL {
