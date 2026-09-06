@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -5,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:juliatalk/core/notifications/notification_service.dart';
+import 'package:juliatalk/design_system/components/app_launch_screen.dart';
 import 'package:juliatalk/features/auth/domain/app_user.dart';
 import 'package:juliatalk/features/auth/domain/auth_session.dart';
 import 'package:juliatalk/features/chat/data/chat_api.dart';
@@ -63,11 +65,18 @@ Map<String, dynamic> _messageJson(int index, {int? replyToIndex}) {
 
 Future<ChatRealtimeService> _pumpConversationHome(
   WidgetTester tester, {
+  Future<http.Response> Function(http.Request request)? usersResponder,
   Future<http.Response> Function(http.Request request)? conversationResponder,
   Future<http.Response> Function(http.Request request)? messageResponder,
+  ValueNotifier<bool>? initialLoadComplete,
+  bool settle = true,
 }) async {
   final MockClient client = MockClient((http.Request request) async {
     if (request.method == 'GET' && request.url.path == '/users') {
+      if (usersResponder != null) {
+        return usersResponder(request);
+      }
+
       return http.Response(
         jsonEncode(<Map<String, dynamic>>[_otherUser.toJson()]),
         200,
@@ -142,18 +151,32 @@ Future<ChatRealtimeService> _pumpConversationHome(
     notificationService: NotificationService(),
   );
 
+  final Widget home = ChatConversationHomeScreen(
+    chatApi: chatApi,
+    realtimeService: realtimeService,
+    session: session,
+    controller: ChatConversationHomeController(),
+    messageCache: messageCache,
+    onInitialLoadComplete: () {
+      initialLoadComplete?.value = true;
+    },
+  );
   await tester.pumpWidget(
     MaterialApp(
-      home: ChatConversationHomeScreen(
-        chatApi: chatApi,
-        realtimeService: realtimeService,
-        session: session,
-        controller: ChatConversationHomeController(),
-        messageCache: messageCache,
-      ),
+      home: initialLoadComplete == null
+          ? home
+          : ValueListenableBuilder<bool>(
+              valueListenable: initialLoadComplete,
+              child: home,
+              builder: (BuildContext context, bool isReady, Widget? child) {
+                return AppLaunchGate(isReady: isReady, child: child!);
+              },
+            ),
     ),
   );
-  await tester.pumpAndSettle();
+  if (settle) {
+    await tester.pumpAndSettle();
+  }
 
   return realtimeService;
 }
@@ -194,6 +217,81 @@ Future<void> _moveRouteGestureSlowly(
 }
 
 void main() {
+  testWidgets(
+    'launch covers a slow initial chat list request until it is ready',
+    (WidgetTester tester) async {
+      final Completer<http.Response> response = Completer<http.Response>();
+      final ValueNotifier<bool> ready = ValueNotifier<bool>(false);
+      addTearDown(ready.dispose);
+      int requestCount = 0;
+      final ChatRealtimeService realtimeService = await _pumpConversationHome(
+        tester,
+        usersResponder: (_) {
+          requestCount++;
+          return response.future;
+        },
+        initialLoadComplete: ready,
+        settle: false,
+      );
+      addTearDown(realtimeService.dispose);
+
+      await tester.pump(const Duration(seconds: 3));
+      expect(requestCount, 1);
+      expect(ready.value, isFalse);
+      expect(find.byType(AppLaunchScreen), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.text('Chats'), findsNothing);
+
+      response.complete(
+        http.Response(
+          jsonEncode(<Map<String, dynamic>>[_otherUser.toJson()]),
+          200,
+        ),
+      );
+      await tester.pump();
+      expect(ready.value, isTrue);
+      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pumpAndSettle();
+      expect(find.byType(AppLaunchScreen), findsNothing);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.text(_otherUser.displayName), findsOneWidget);
+      expect(requestCount, 1);
+    },
+  );
+
+  testWidgets('failed initial list loading reveals the existing retry screen', (
+    WidgetTester tester,
+  ) async {
+    final ValueNotifier<bool> ready = ValueNotifier<bool>(false);
+    addTearDown(ready.dispose);
+    int requestCount = 0;
+    final ChatRealtimeService realtimeService = await _pumpConversationHome(
+      tester,
+      usersResponder: (_) async {
+        requestCount++;
+        return requestCount == 1
+            ? http.Response('{"detail":"Unavailable"}', 503)
+            : http.Response('[]', 200);
+      },
+      initialLoadComplete: ready,
+      settle: false,
+    );
+    addTearDown(realtimeService.dispose);
+
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(ready.value, isTrue);
+    expect(find.byType(AppLaunchScreen), findsNothing);
+    expect(find.text('Chat user loading failed.'), findsOneWidget);
+
+    await tester.tap(find.text('Retry'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AppLaunchScreen), findsNothing);
+    expect(find.text('No chat users yet.'), findsOneWidget);
+    expect(requestCount, 2);
+  });
+
   testWidgets(
     'a paginated conversation reenters with a bounded latest-message cache',
     (WidgetTester tester) async {

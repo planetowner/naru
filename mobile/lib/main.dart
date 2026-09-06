@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'core/config/app_config.dart';
 import 'core/notifications/notification_service.dart';
 import 'design_system/app_theme.dart';
+import 'design_system/components/app_launch_screen.dart';
 import 'features/auth/data/auth_api.dart';
 import 'features/auth/data/auth_login_exception.dart';
 import 'features/auth/data/auth_refresh_exception.dart';
@@ -51,6 +52,7 @@ final class _JuliaTalkAppState extends State<JuliaTalkApp>
   ChatApi? _chatApi;
   ChatRealtimeService? _chatRealtimeService;
   bool _isRestoringSession = true;
+  bool _hasLoadedInitialChatList = false;
   bool _isRefreshingSession = false;
 
   @override
@@ -353,7 +355,7 @@ final class _JuliaTalkAppState extends State<JuliaTalkApp>
 
   Widget _buildHome() {
     if (_isRestoringSession) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const SizedBox.expand();
     }
 
     final AuthSession? session = _session;
@@ -366,7 +368,7 @@ final class _JuliaTalkAppState extends State<JuliaTalkApp>
     final ChatRealtimeService? realtimeService = _chatRealtimeService;
 
     if (chatApi == null || realtimeService == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const SizedBox.expand();
     }
 
     return ChatConversationHomeScreen(
@@ -375,7 +377,18 @@ final class _JuliaTalkAppState extends State<JuliaTalkApp>
       realtimeService: realtimeService,
       session: session,
       controller: _chatController,
+      onInitialLoadComplete: _handleInitialChatListLoaded,
     );
+  }
+
+  void _handleInitialChatListLoaded() {
+    if (_hasLoadedInitialChatList) {
+      return;
+    }
+
+    setState(() {
+      _hasLoadedInitialChatList = true;
+    });
   }
 
   @override
@@ -384,6 +397,18 @@ final class _JuliaTalkAppState extends State<JuliaTalkApp>
       title: 'JuliaTalk',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
+      // 남색 시작 화면을 벗어나면 밝은 앱 화면에 맞는 상태 막대 색으로 돌아와요.
+      builder: (BuildContext context, Widget? child) {
+        return AppLaunchGate(
+          isReady:
+              !_isRestoringSession &&
+              (_session == null || _hasLoadedInitialChatList),
+          child: AnnotatedRegion<SystemUiOverlayStyle>(
+            value: SystemUiOverlayStyle.dark,
+            child: child!,
+          ),
+        );
+      },
       home: _buildHome(),
     );
   }

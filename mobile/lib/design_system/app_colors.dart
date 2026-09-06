@@ -51,6 +51,7 @@ final class AppColors {
   static const Color green900 = Color(0xFF027648);
 
   static const Color background = white;
+  static const Color launchBackground = Color(0xFF0D1E3C);
   static const Color backgroundSecondary = grey100;
   static const Color surface = white;
 

@@ -56,6 +56,7 @@ final class ChatConversationHomeScreen extends StatefulWidget {
     required this.session,
     required this.controller,
     this.messageCache,
+    this.onInitialLoadComplete,
     super.key,
   });
 
@@ -64,6 +65,7 @@ final class ChatConversationHomeScreen extends StatefulWidget {
   final AuthSession session;
   final ChatConversationHomeController controller;
   final ChatMessageCache? messageCache;
+  final VoidCallback? onInitialLoadComplete;
 
   @override
   State<ChatConversationHomeScreen> createState() {
@@ -123,7 +125,14 @@ final class _ChatConversationHomeScreenState
     widget.controller.addListener(_openPendingConversation);
     widget.realtimeService.addListener(_handleRealtimeStateChanged);
 
-    unawaited(_loadChatEntries(showInitialLoading: true));
+    unawaited(
+      _loadChatEntries(showInitialLoading: true).whenComplete(() {
+        // 실패해도 시작 화면을 끝내야 기존 오류 안내와 재시도 버튼을 볼 수 있어요.
+        if (mounted) {
+          widget.onInitialLoadComplete?.call();
+        }
+      }),
+    );
   }
 
   @override

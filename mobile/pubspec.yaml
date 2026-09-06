@@ -31,3 +31,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    # iOS 시작 화면과 세션 복원 화면에서 같은 로고 원본을 사용해요.
+    - ios/Runner/Assets.xcassets/LaunchImage.imageset/LaunchImage.png
