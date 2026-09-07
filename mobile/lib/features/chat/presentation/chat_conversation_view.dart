@@ -34,7 +34,7 @@ import '../domain/chat_message.dart';
 import '../domain/chat_message_group.dart';
 import '../domain/chat_message_grouper.dart';
 import 'chat_date_formatter.dart';
-import 'chat_media_share.dart';
+import 'chat_media_file.dart';
 import 'chat_photo_editor_screen.dart';
 import 'chat_photo_picker.dart';
 import 'chat_scrollbar_range_tracker.dart';
@@ -739,9 +739,9 @@ final class _ChatConversationViewState extends State<ChatConversationView>
       }
 
       return await createAccessUrl(mediaAssetId: mediaAssetId);
-    } catch (_) {
+    } finally {
+      // 접근 주소는 만료되므로 진행 중인 요청만 공유하고, 다음 요청에서는 새로 받아요.
       _mediaAssetAccessUrlFutures.remove(mediaAssetId);
-      rethrow;
     }
   }
 
@@ -1968,7 +1968,10 @@ final class _ChatConversationViewState extends State<ChatConversationView>
     FilePickerResult? result;
 
     try {
-      result = await FilePicker.platform.pickFiles(withData: true);
+      result = await FilePicker.platform.pickFiles(
+        allowMultiple: true,
+        withData: true,
+      );
     } on PlatformException catch (_) {
       if (!mounted) {
         return;
@@ -1987,58 +1990,57 @@ final class _ChatConversationViewState extends State<ChatConversationView>
       return;
     }
 
-    final ScaffoldMessengerState scaffoldMessenger = ScaffoldMessenger.of(
-      context,
-    );
-    final PlatformFile file = result.files.first;
-    Uint8List? fileBytes = file.bytes;
-
-    if (fileBytes == null && file.path != null) {
-      fileBytes = await File(file.path!).readAsBytes();
-    }
-
-    if (!mounted || fileBytes == null || fileBytes.isEmpty) {
-      scaffoldMessenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(content: Text('The selected file could not be read.')),
-        );
-
-      return;
-    }
-
     final _MessageListState? messageListState = _messageListKey.currentState;
 
     if (messageListState == null) {
       return;
     }
 
-    final ChatFileAttachment attachment = ChatFileAttachment(
-      name: file.name,
-      sizeBytes: fileBytes.length,
-      mimeType: mimeTypeForFileName(file.name),
-      uploadBytes: fileBytes,
-    );
-
     final ChatFileMessageSender? sender = widget.onSendFileMessage;
+    final ChatReplyReference? replyTo = _currentReplyReference();
 
-    if (sender == null) {
-      messageListState.addOutgoingFileMessage(
-        name: attachment.name,
-        sizeBytes: attachment.sizeBytes,
-      );
-    } else {
+    // 선택을 확정한 파일을 순서대로 보내고, 모두 같은 답장 대상을 사용해요.
+    for (final PlatformFile file in result.files) {
       try {
-        final ChatMessage message = await sender(
-          file: attachment,
-          replyTo: _currentReplyReference(),
-        );
+        Uint8List? fileBytes = file.bytes;
+
+        if (fileBytes == null && file.path != null) {
+          fileBytes = await File(file.path!).readAsBytes();
+        }
 
         if (!mounted) {
           return;
         }
 
-        messageListState.addMessage(message);
+        if (fileBytes == null || fileBytes.isEmpty) {
+          _showChatOperationFailure('The selected file could not be read.');
+          return;
+        }
+
+        final ChatFileAttachment attachment = ChatFileAttachment(
+          name: file.name,
+          sizeBytes: fileBytes.length,
+          mimeType: mimeTypeForFileName(file.name),
+          uploadBytes: fileBytes,
+        );
+
+        if (sender == null) {
+          messageListState.addOutgoingFileMessage(
+            name: attachment.name,
+            sizeBytes: attachment.sizeBytes,
+          );
+        } else {
+          final ChatMessage message = await sender(
+            file: attachment,
+            replyTo: replyTo,
+          );
+
+          if (!mounted) {
+            return;
+          }
+
+          messageListState.addMessage(message);
+        }
       } catch (_) {
         _showChatOperationFailure('File sending failed.');
         return;
@@ -10328,9 +10330,24 @@ final class _MessageListState extends State<_MessageList>
 
       final Directory temporaryDirectory = await getTemporaryDirectory();
       final String fileName = _safeLocalFileName(attachment.name);
-      final File file = File('${temporaryDirectory.path}/$fileName');
+      // 이름이 같은 첨부 파일도 서로 덮어쓰지 않도록 첨부 ID별로 보관해요.
+      final Directory attachmentDirectory = Directory(
+        '${temporaryDirectory.path}/juliatalk-files/$mediaAssetId',
+      );
+      await attachmentDirectory.create(recursive: true);
+      final File file = File('${attachmentDirectory.path}/$fileName');
 
       await file.writeAsBytes(response.bodyBytes, flush: true);
+
+      if (!mounted) {
+        return;
+      }
+
+      if (defaultTargetPlatform == TargetPlatform.iOS) {
+        await ChatMediaFile.previewFile(file.path);
+        return;
+      }
+
       await Clipboard.setData(ClipboardData(text: file.path));
 
       if (!mounted) {
@@ -10350,7 +10367,7 @@ final class _MessageListState extends State<_MessageList>
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
-          const SnackBar(content: Text('File download is not available.')),
+          const SnackBar(content: Text('The file could not be opened.')),
         );
     }
   }
@@ -15941,7 +15958,7 @@ final class _PhotoViewerScreenState extends State<_PhotoViewerScreen> {
         await shareFile.writeAsBytes(sourceFile.bytes, flush: true);
       }
 
-      await ChatMediaShare.shareFile(shareFile.path);
+      await ChatMediaFile.shareFile(shareFile.path);
     } on Object {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -16547,7 +16564,7 @@ final class _VideoViewerScreenState extends State<_VideoViewerScreen> {
       if (controller != null && controller.value.isInitialized) {
         await controller.pause();
       }
-      await ChatMediaShare.shareFile(widget.videoFile.path);
+      await ChatMediaFile.shareFile(widget.videoFile.path);
     } on Object {
       if (mounted) {
         ScaffoldMessenger.of(context)

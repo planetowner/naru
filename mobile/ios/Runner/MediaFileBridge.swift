@@ -1,19 +1,20 @@
 import Flutter
+import QuickLook
 import UIKit
 
-final class MediaShareBridge: NSObject, FlutterPlugin {
-  private static let channelName = "juliatalk/media-share"
+final class MediaFileBridge: NSObject, FlutterPlugin {
+  private static let channelName = "juliatalk/media-file"
 
   static func register(with registrar: FlutterPluginRegistrar) {
     let channel = FlutterMethodChannel(
       name: channelName,
       binaryMessenger: registrar.messenger()
     )
-    registrar.addMethodCallDelegate(MediaShareBridge(), channel: channel)
+    registrar.addMethodCallDelegate(MediaFileBridge(), channel: channel)
   }
 
   func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-    guard call.method == "share-file" else {
+    guard call.method == "share-file" || call.method == "preview-file" else {
       result(FlutterMethodNotImplemented)
       return
     }
@@ -39,15 +40,25 @@ final class MediaShareBridge: NSObject, FlutterPlugin {
         result(
           FlutterError(
             code: "presentation_unavailable",
-            message: "The share sheet could not be presented.",
+            message: "The file action could not be presented.",
             details: nil
           )
         )
         return
       }
 
+      let fileURL = URL(fileURLWithPath: path)
+      if call.method == "preview-file" {
+        let controller = FilePreviewController(fileURL: fileURL)
+        controller.modalPresentationStyle = .fullScreen
+        presenter.present(controller, animated: true) {
+          result(nil)
+        }
+        return
+      }
+
       let controller = UIActivityViewController(
-        activityItems: [URL(fileURLWithPath: path)],
+        activityItems: [fileURL],
         applicationActivities: nil
       )
       controller.completionWithItemsHandler = { _, _, _, error in
@@ -103,5 +114,32 @@ final class MediaShareBridge: NSObject, FlutterPlugin {
       return topViewController(from: tab.selectedViewController)
     }
     return root
+  }
+}
+
+private final class FilePreviewController: QLPreviewController, QLPreviewControllerDataSource {
+  private let fileURL: URL
+
+  init(fileURL: URL) {
+    self.fileURL = fileURL
+    super.init(nibName: nil, bundle: nil)
+    // 파일 형식별 보기와 재생 UI는 Quick Look이 제공해요.
+    dataSource = self
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) {
+    fatalError("init(coder:) has not been implemented")
+  }
+
+  func numberOfPreviewItems(in controller: QLPreviewController) -> Int {
+    return 1
+  }
+
+  func previewController(
+    _ controller: QLPreviewController,
+    previewItemAt index: Int
+  ) -> QLPreviewItem {
+    return fileURL as NSURL
   }
 }

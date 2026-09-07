@@ -19,7 +19,7 @@
 		A10000000000000000000001 /* NotificationBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000010 /* NotificationBridge.swift */; };
 		B10000000000000000000001 /* VideoTranscodeBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000010 /* VideoTranscodeBridge.swift */; };
 		C10000000000000000000001 /* PencilKitEditorBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000010 /* PencilKitEditorBridge.swift */; };
-		D10000000000000000000001 /* MediaShareBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10000000000000000000010 /* MediaShareBridge.swift */; };
+		D10000000000000000000001 /* MediaFileBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10000000000000000000010 /* MediaFileBridge.swift */; };
 		A10000000000000000000002 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000012 /* NotificationService.swift */; };
 		A10000000000000000000003 /* JuliaTalkNotificationService.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A10000000000000000000015 /* JuliaTalkNotificationService.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
@@ -86,7 +86,7 @@
 		A10000000000000000000010 /* NotificationBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationBridge.swift; sourceTree = "<group>"; };
 		B10000000000000000000010 /* VideoTranscodeBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoTranscodeBridge.swift; sourceTree = "<group>"; };
 		C10000000000000000000010 /* PencilKitEditorBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PencilKitEditorBridge.swift; sourceTree = "<group>"; };
-		D10000000000000000000010 /* MediaShareBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaShareBridge.swift; sourceTree = "<group>"; };
+		D10000000000000000000010 /* MediaFileBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaFileBridge.swift; sourceTree = "<group>"; };
 		A10000000000000000000011 /* Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
 		A10000000000000000000012 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		A10000000000000000000013 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -168,7 +168,7 @@
 				A10000000000000000000010 /* NotificationBridge.swift */,
 				B10000000000000000000010 /* VideoTranscodeBridge.swift */,
 				C10000000000000000000010 /* PencilKitEditorBridge.swift */,
-				D10000000000000000000010 /* MediaShareBridge.swift */,
+				D10000000000000000000010 /* MediaFileBridge.swift */,
 				A10000000000000000000011 /* Runner.entitlements */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
 			);
@@ -374,7 +374,7 @@
 				A10000000000000000000001 /* NotificationBridge.swift in Sources */,
 				B10000000000000000000001 /* VideoTranscodeBridge.swift in Sources */,
 				C10000000000000000000001 /* PencilKitEditorBridge.swift in Sources */,
-				D10000000000000000000001 /* MediaShareBridge.swift in Sources */,
+				D10000000000000000000001 /* MediaFileBridge.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

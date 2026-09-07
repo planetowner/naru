@@ -24,7 +24,7 @@ const MethodChannel _photoManagerChannel = MethodChannel(
   'com.fluttercandies/photo_manager',
 );
 
-const MethodChannel _mediaShareChannel = MethodChannel('juliatalk/media-share');
+const MethodChannel _mediaShareChannel = MethodChannel('juliatalk/media-file');
 
 void _setUpVideoSave() {
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger

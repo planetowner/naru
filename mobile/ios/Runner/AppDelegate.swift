@@ -28,9 +28,9 @@ import UIKit
       PencilKitEditorBridge.register(with: registrar)
     }
     if let registrar = engineBridge.pluginRegistry.registrar(
-      forPlugin: "JuliaTalkMediaShareBridge"
+      forPlugin: "JuliaTalkMediaFileBridge"
     ) {
-      MediaShareBridge.register(with: registrar)
+      MediaFileBridge.register(with: registrar)
     }
   }
 }
