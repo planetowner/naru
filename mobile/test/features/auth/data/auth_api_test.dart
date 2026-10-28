@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:naru/features/auth/data/auth_api.dart';
-import 'package:naru/features/auth/data/auth_login_exception.dart';
+import 'package:naru/features/auth/data/auth_exception.dart';
 import 'package:naru/features/auth/data/auth_refresh_exception.dart';
 
 void main() {
@@ -73,10 +73,113 @@ void main() {
     expect(
       () => authApi.login(username: username, password: password),
       throwsA(
-        isA<AuthLoginException>().having(
-          (AuthLoginException error) => error.message,
+        isA<AuthException>().having(
+          (AuthException error) => error.message,
           'message',
           'Invalid username or password',
+        ),
+      ),
+    );
+  });
+
+  test('registration sends confirmation and parses the same session', () async {
+    final client = MockClient((request) async {
+      expect(request.method, 'POST');
+      expect(request.url.path, '/auth/register');
+      expect(jsonDecode(request.body), {
+        'username': username,
+        'password': password,
+        'password_confirmation': password,
+      });
+      return http.Response(
+        jsonEncode({
+          'access_token': 'registered-token',
+          'refresh_token': 'registered-refresh',
+          'token_type': 'bearer',
+          'user': {
+            'id': userId,
+            'username': username,
+            'display_name': username,
+            'preferred_language': 'ko',
+          },
+        }),
+        201,
+      );
+    });
+    final api = AuthApi(
+      client: client,
+      baseUri: Uri.parse('http://localhost:8000'),
+    );
+    final session = await api.register(
+      username: username,
+      password: password,
+      passwordConfirmation: password,
+    );
+    expect(session.accessToken, 'registered-token');
+    expect(session.refreshToken, 'registered-refresh');
+    expect(session.user.displayName, username);
+  });
+
+  for (final entry in {
+    400: 'Passwords do not match',
+    409: 'This username is already taken',
+  }.entries) {
+    test(
+      'registration exposes ${entry.key} without creating a session',
+      () async {
+        final api = AuthApi(
+          client: MockClient(
+            (_) async =>
+                http.Response(jsonEncode({'detail': entry.value}), entry.key),
+          ),
+          baseUri: Uri.parse('http://localhost:8000'),
+        );
+        expect(
+          () => api.register(
+            username: username,
+            password: password,
+            passwordConfirmation: password,
+          ),
+          throwsA(
+            isA<AuthException>().having(
+              (e) => e.message,
+              'message',
+              entry.value,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  test('structured validation errors show a readable message', () async {
+    final api = AuthApi(
+      client: MockClient(
+        (_) async => http.Response(
+          jsonEncode({
+            'detail': [
+              {
+                'loc': ['body', 'username'],
+                'msg': 'String should have at most 50 characters',
+              },
+            ],
+          }),
+          422,
+        ),
+      ),
+      baseUri: Uri.parse('http://localhost:8000'),
+    );
+    expect(
+      () => api.register(
+        username: 'x' * 51,
+        password: password,
+        passwordConfirmation: password,
+      ),
+      throwsA(
+        isA<AuthException>().having(
+          (e) => e.message,
+          'message',
+          'Check your username and password.',
         ),
       ),
     );

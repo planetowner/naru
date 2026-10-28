@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../domain/auth_session.dart';
-import 'auth_login_exception.dart';
+import 'auth_exception.dart';
 import 'auth_refresh_exception.dart';
 
 final class AuthApi {
@@ -17,29 +17,49 @@ final class AuthApi {
   Future<AuthSession> login({
     required String username,
     required String password,
+  }) => _authenticate('/auth/login', {
+    'username': username,
+    'password': password,
+  }, successStatus: 200);
+
+  Future<AuthSession> register({
+    required String username,
+    required String password,
+    required String passwordConfirmation,
+  }) => _authenticate('/auth/register', {
+    'username': username,
+    'password': password,
+    'password_confirmation': passwordConfirmation,
+  }, successStatus: 201);
+
+  Future<AuthSession> _authenticate(
+    String path,
+    Map<String, String> credentials, {
+    required int successStatus,
   }) async {
     final http.Response response = await _client.post(
-      _baseUri.resolve('/auth/login'),
+      _baseUri.resolve(path),
       headers: const {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
       },
-      body: jsonEncode({'username': username, 'password': password}),
+      body: jsonEncode(credentials),
     );
 
     final Map<String, dynamic> responseJson =
         jsonDecode(response.body) as Map<String, dynamic>;
 
-    if (response.statusCode == 200) {
+    if (response.statusCode == successStatus) {
       return AuthSession.fromJson(responseJson);
     }
 
-    if (response.statusCode == 401) {
-      throw AuthLoginException(responseJson['detail'] as String);
-    }
-
-    throw AuthLoginException(
-      'Login failed with status code ${response.statusCode}.',
+    final Object? detail = responseJson['detail'];
+    throw AuthException(
+      detail is String
+          ? detail
+          : response.statusCode == 422
+          ? 'Check your username and password.'
+          : 'Could not sign in. Please try again.',
     );
   }
 

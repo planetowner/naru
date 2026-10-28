@@ -9,7 +9,7 @@ OpenAI.
 
 ## Current Features
 
-- Username and password authentication
+- Username and password registration and login
 - Argon2id password hashing
 - JWT access tokens with automatic refresh
 - Token invalidation after password changes
@@ -130,9 +130,20 @@ configured transcription model through its existing OpenAI API key.
 
 ## User Administration
 
-Initial users are not committed to the repository. Create or update users only
-from a trusted admin environment that has the hosted backend environment
-variables loaded and can reach the production database.
+Friends can sign up in the app with a username, password, and password
+confirmation. Both the app and `POST /auth/register` check that the passwords
+match. Usernames are trimmed, must contain 1–50 characters, and are unique
+without regard to case. Passwords must be nonempty; their whitespace is preserved.
+The display name initially uses the username. No email or nickname is required.
+
+Registration returns the same access/refresh-token session as `POST /auth/login`,
+so a new account enters the chat immediately. Duplicate usernames return `409`,
+and mismatched passwords return `400`. Existing accounts continue to log in with
+their current passwords. This uses the existing users table without a migration.
+
+Initial users are not committed to the repository. If an administrator needs to
+create an account manually, run the existing scripts from a trusted environment
+that has the backend variables loaded and can reach the intended database:
 
 ```bash
 python -m scripts.create_user julia password123 --display-name "Julia" --language ko
@@ -290,8 +301,8 @@ If translation fails, the original message remains stored and available.
 The repository does not include database dumps or production user accounts.
 
 The database schema is created automatically when the hosted backend starts
-with `DATABASE_URL` configured, but initial users must still be created
-separately before login and messaging can be used.
+with `DATABASE_URL` configured. Users can then create their accounts from the
+app's Sign up screen.
 
 ## Project Status
 

@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 LanguageCode = Literal[
@@ -76,6 +76,16 @@ class LoginRequest(BaseModel):
     password: str = Field(
         min_length=1,
     )
+
+    @field_validator("username", mode="before")
+    @classmethod
+    def trim_username(cls, value: Any) -> Any:
+        # 앱과 API가 같은 아이디로 로그인하고 가입하도록 앞뒤 공백을 제거해요.
+        return value.strip() if isinstance(value, str) else value
+
+
+class RegisterRequest(LoginRequest):
+    password_confirmation: str = Field(min_length=1)
 
 
 class RefreshTokenRequest(BaseModel):

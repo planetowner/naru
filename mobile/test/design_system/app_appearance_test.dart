@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:naru/design_system/app_theme.dart';
 import 'package:naru/design_system/components/app_launch_screen.dart';
-import 'package:naru/features/auth/presentation/login_screen.dart';
 import 'package:naru/features/chat/data/chat_photo_library.dart';
 import 'package:naru/features/chat/presentation/chat_photo_editor_screen.dart';
 import 'package:naru/features/chat/presentation/chat_photo_picker.dart';
@@ -50,15 +49,6 @@ void main() {
   ) async {
     await tester.binding.setSurfaceSize(const Size(420, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.light,
-        home: LoginScreen(
-          onLogin: ({required username, required password}) async {},
-        ),
-      ),
-    );
-    await capture(tester, 'login');
     await tester.pumpWidget(const NaruPreviewApp());
     await capture(tester, 'chat-latest');
     final scrollable = tester.state<ScrollableState>(

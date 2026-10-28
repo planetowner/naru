@@ -9,11 +9,11 @@ import 'core/notifications/notification_service.dart';
 import 'design_system/app_theme.dart';
 import 'design_system/components/app_launch_screen.dart';
 import 'features/auth/data/auth_api.dart';
-import 'features/auth/data/auth_login_exception.dart';
+import 'features/auth/data/auth_exception.dart';
 import 'features/auth/data/auth_refresh_exception.dart';
 import 'features/auth/data/auth_session_store.dart';
 import 'features/auth/domain/auth_session.dart';
-import 'features/auth/presentation/login_screen.dart';
+import 'features/auth/presentation/auth_screen.dart';
 import 'features/chat/data/chat_api.dart';
 import 'features/chat/data/chat_realtime_service.dart';
 import 'features/chat/presentation/chat_conversation_screen.dart';
@@ -171,21 +171,26 @@ final class _NaruAppState extends State<NaruApp>
     }
   }
 
-  Future<void> _login({
+  Future<void> _authenticate({
     required String username,
     required String password,
+    String? passwordConfirmation,
   }) async {
-    final AuthSession session = await _authApi.login(
-      username: username,
-      password: password,
-    );
+    final AuthSession session = passwordConfirmation == null
+        ? await _authApi.login(username: username, password: password)
+        : await _authApi.register(
+            username: username,
+            password: password,
+            passwordConfirmation: passwordConfirmation,
+          );
 
+    // 가입과 로그인은 보안 저장·채팅 연결·알림 등록을 같은 순서로 처리해요.
     try {
       await _authSessionStore.save(session);
     } on Exception catch (error) {
       debugPrint('Session persistence failed: $error');
-      throw const AuthLoginException(
-        'Login succeeded, but the session could not be saved securely.',
+      throw const AuthException(
+        'Could not save your session securely. Please sign in again.',
       );
     }
 
@@ -361,7 +366,7 @@ final class _NaruAppState extends State<NaruApp>
     final AuthSession? session = _session;
 
     if (session == null) {
-      return LoginScreen(onLogin: _login);
+      return AuthScreen(onSubmit: _authenticate);
     }
 
     final ChatApi? chatApi = _chatApi;

@@ -91,7 +91,7 @@
 | `AppButton` | 로그인·검색의 액션 버튼. Yeoul 규격으로 주요/보조 버튼, 로딩, 비활성화, 앞쪽 아이콘과 가로 확장을 공유해요. |
 | `AppIconButton` | 사진/영상·링크·파일 검색의 날짜 필터. Yeoul의 46px 사각 버튼 규격을 사용해요. |
 | `AppRoundIconButton` | 통화·검색 뒤로가기와 통화 컨트롤. `AppMediaViewerChromeButton`의 표면·터치·중앙 정렬을 재사용하는 44px 원형 버튼이에요. 아이콘·색상·콜백을 전달하고 툴팁과 접근성 설명을 더해요. |
-| `ChatNavigationBar` | 검색·통화 상단 56, 원형 뒤로가기 44, 제목은 상대방 이름과 같은 `AppTypography.navigationTitle`(18/27 Bold)을 공유해요. |
+| `AppNavigationBar` | 가입·검색·통화 상단 56, 원형 뒤로가기 44, 제목은 상대방 이름과 같은 `AppTypography.navigationTitle`(18/27 Bold)을 공유해요. |
 | `AppTextField` | 로그인·검색의 한 줄 입력. Yeoul 규격, 외부 라벨, 앞뒤 아이콘, 입력 이벤트를 공유해요. |
 | `AppProfileImage` | 채팅 목록·메시지·통화의 프로필 이미지. 이미지 로드와 기본 아이콘 처리는 공유하고 크기·모서리·아이콘 크기는 호출부에서 받아요. |
 | `AppTopBarButtonSurface` | 채팅 상단과 미디어 상단 버튼의 표면·테두리·클리핑을 공유해요. 밝은 채팅 화면과 어두운 미디어 화면은 색상을 전달해 구분해요. |
@@ -133,10 +133,10 @@
 
 | 위치 | 값과 사용 방식 | 현재 관리 방식 |
 | --- | --- | --- |
-| [로그인](../mobile/lib/features/auth/presentation/login_screen.dart#L95) | 폼 최대 폭 480 | 화면 전용 제약 |
+| [가입·로그인](../mobile/lib/features/auth/presentation/auth_screen.dart) | 폼 최대 폭 480, 로그인 로고 96 | 같은 폼·제출 상태·비밀번호 입력을 공유하며 가입에만 확인 칸을 표시 |
 | [채팅 목록](../mobile/lib/features/chat/presentation/chat_conversation_screen.dart#L23) | 아바타 48, 배지 최소 18×18·가로 패딩 5·위/오른쪽 -4, 오류 안내 간격 14 | 목록 전용 배치. 아바타 이미지는 공통 컴포넌트 사용 |
 | [채팅 상단바](../mobile/lib/features/chat/presentation/chat_conversation_view.dart#L4104) | 높이 56, 액션 묶음 폭 88, 읽지 않은 개수에 따른 뒤로 가기 묶음 폭 `52 + 글자 수 × 10` | 전용 상단바 + 공통 버튼 표면. 이름·아이콘·미읽음 수는 `textPrimary` 사용 |
-| [검색 상단](../mobile/lib/features/chat/presentation/chat_search_widgets.dart) | 제목 56·입력 46·탭 44·페이드 끝 여백 12·로딩/실패 상태 줄 32 | 현재 모양 유지로 검토 완료. `_ChatSearchTopBar`에서 전용 규격 관리. 제목은 `ChatNavigationBar`, 입력은 `AppTextField`, 페이드는 채팅 상단의 공통 구현 재사용. 입력·탭 전환·재시도 유지 |
+| [검색 상단](../mobile/lib/features/chat/presentation/chat_search_widgets.dart) | 제목 56·입력 46·탭 44·페이드 끝 여백 12·로딩/실패 상태 줄 32 | 현재 모양 유지로 검토 완료. `_ChatSearchTopBar`에서 전용 규격 관리. 제목은 `AppNavigationBar`, 입력은 `AppTextField`, 페이드는 채팅 상단의 공통 구현 재사용. 입력·탭 전환·재시도 유지 |
 | [검색 필터](../mobile/lib/features/chat/presentation/chat_search_widgets.dart) | 필터 줄 높이 56·좌우 여백 16·컨트롤 간격 8, 칩 안쪽 여백 12/8·닫기 아이콘 20, 선택한 날짜의 바깥 여백 16/8 | 현재 모양 유지로 검토 완료. `_SearchFilterChip`에서 전용 규격 관리. 종류·날짜는 같은 `_SearchFilterChip`, 달력은 공통 `AppIconButton` 재사용. 종류 선택·날짜 선택/해제·가로 스크롤 유지 |
 | [검색 결과 카드·격자](../mobile/lib/features/chat/presentation/chat_search_widgets.dart) | 미디어 3열·간격 8, 링크/파일 2열·간격 12, 카드 미리보기 104·설명 영역 128(글자 확대 적용), 미디어 모서리 12·카드 모서리 16 | 현재 모양 유지로 검토 완료. `_SearchResultCard`에서 전용 규격 관리. 링크·파일은 같은 `_SearchResultCard` 사용. 사진·영상 모서리, 미리보기·카드 높이 계산을 공유하며 검색·필터·자료 열기 유지 |
 | [메시지 검색 툴바](../mobile/lib/features/chat/presentation/chat_conversation_view.dart) | 입력창과 같은 높이 48·모서리 24·`grey50` 배경·흰 테두리·패딩 8·바깥 좌우 여백 10, 오른쪽 원형 버튼 32·아이콘 20·사이 간격 4 | `_ComposerSurface`와 `_ComposerCircleButton.neutral` 재사용. 왼쪽 달력은 투명 배경, 결과 숫자는 중앙. `ChatComposerStyle.keyboardBottomPadding`으로 입력창과 키보드 여백 계산 공유. 홈 인디케이터 아래로 내려갔다 튀지 않음. 날짜 이동·이전/다음 결과 동작 유지 |
@@ -207,7 +207,8 @@
 - 사진 뷰어 썸네일 전용 규격 정리 후 기존 사진 관련 테스트 23개와 변경 파일의 정적 분석이 통과했어요. 선택/미선택 크기·모서리·간격·중앙 정렬, 순서 표시·배경 위치와 좌우 넘기기·컨트롤 표시/숨김을 확인했어요. 코드 비교로 사진 선택·페이지 전환·자동 스크롤의 처리와 호출 시점은 그대로이고 전환 값만 규격 참조로 바뀐 것을 확인했어요.
 - 영상 길이 편집 전용 규격 정리 후 기존 트림·편집 화면 테스트 8개와 변경 파일·호출 화면의 정적 분석이 통과했어요. 재생 버튼 콜백·트랙 위치와 높이·시간 글자·선택 프레임 픽셀·최소 선택 길이·손잡이 드래그 중 표시·탐색 위치를 확인했어요. 코드 비교로 재생·탐색·프레임 조회·제스처 처리와 좌표 공식이 유지됨을 확인했으며, 구간 경계와 재생 위치의 중복 공식만 하나로 합쳤어요.
 - iOS 사진 편집기 전용 규격 정리 후 iOS 시뮬레이터 SDK를 사용한 Swift 5 타입 검사와 기존 편집 화면 테스트 3개가 통과했어요. 두 배경색과 사진 맞춤 임계값을 원래 값으로 치환한 코드 비교에서 배치·그림 변환·저장·도구 표시 로직이 동일했어요. Flutter 테스트는 상단 배치·사진 순서·표시/숨김 전환을 확인하며, 실기기의 펜 입력은 별도로 실행하지 않았어요.
-- [app_appearance_test.dart](../mobile/test/design_system/app_appearance_test.dart#L14)는 시작 화면, 로그인, 최근 채팅, 과거 채팅, 사진 선택기, 사진 편집 상단바를 비교해요. 시작 화면과 로그인 기준 이미지는 승인한 naru 브랜드를 반영했어요.
+- [app_appearance_test.dart](../mobile/test/design_system/app_appearance_test.dart#L14)는 시작 화면, 최근 채팅, 과거 채팅, 사진 선택기, 사진 편집 상단바를 비교해요.
+- [auth_screen_test.dart](../mobile/test/features/auth/presentation/auth_screen_test.dart)는 간단 가입·로그인 시안을 390×844 크기로 비교하고 입력·오류·제출·이동을 검사해요. 입력은 `AppTextField`, 제출은 `AppButton`, 가입 제목줄은 검색·통화와 같은 `AppNavigationBar`를 사용해요.
 - 비교 환경은 420×900 논리 픽셀의 Flutter 위젯 테스트예요. 앱에 포함된 Pretendard·아이콘 글꼴과 빈 사진 썸네일을 사용해요. 위젯 테스트에는 실기기 운영체제의 중국어 대체 글꼴이 없으므로 해당 글리프와 네이티브 PencilKit 화면 전체를 검증하지 않아요.
 - 시작 화면은 피그마와 같은 390×844 크기로 비교해요.
 

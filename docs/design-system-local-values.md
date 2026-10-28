@@ -87,13 +87,13 @@ UI 아이콘은 `AppIcons`의 Google Material Symbols Rounded로 통일했어요
 | `AppTheme` | 속성 보정 | [L172](../mobile/lib/design_system/app_theme.dart#L172) | `width: 1.5)` |
 | `AppTheme` | 속성 보정 | [L226](../mobile/lib/design_system/app_theme.dart#L226) | `thickness: 1` |
 
-## login_screen.dart
+## auth_screen.dart
 
-소스: [mobile/lib/features/auth/presentation/login_screen.dart](../mobile/lib/features/auth/presentation/login_screen.dart)
+소스: [mobile/lib/features/auth/presentation/auth_screen.dart](../mobile/lib/features/auth/presentation/auth_screen.dart)
 
 | 구간 | 종류 | 위치 | 직접 지정한 값·표현 |
 | --- | --- | --- | --- |
-| `_LoginScreenState` | 크기·좌표 | [L95](../mobile/lib/features/auth/presentation/login_screen.dart#L95) | `BoxConstraints(maxWidth: 480)` |
+| `_AuthScreenState` | 크기·좌표 | [가입·로그인](../mobile/lib/features/auth/presentation/auth_screen.dart) | 폼 최대 폭 `480`, 피그마 간단 버전의 로그인 로고 `96` |
 
 ## chat_conversation_screen.dart
 
@@ -205,7 +205,7 @@ UI 아이콘은 `AppIcons`의 Google Material Symbols Rounded로 통일했어요
 | `_ActiveVoiceCallBanner` | 속성 보정 | [L6376](../mobile/lib/features/chat/presentation/chat_conversation_view.dart#L6376) | `size: 28` |
 | `_ActiveVoiceCallBanner` | 속성 보정 | [L6379](../mobile/lib/features/chat/presentation/chat_conversation_view.dart#L6379) | `width: connected ? 14 : 18)` |
 | `_ActiveVoiceCallBanner` | 투명도 | [L6390](../mobile/lib/features/chat/presentation/chat_conversation_view.dart#L6390) | `AppColors.white.withAlpha(122)` |
-| `통화·검색 공통 상단` | 공통 규격 | [ChatNavigationBar](../mobile/lib/features/chat/presentation/chat_navigation_bar.dart) | 상단 56, 원형 버튼 44, 제목 18/27 Bold. 채팅 상대방 이름과 글자 규격 공유 |
+| `통화·검색 공통 상단` | 공통 규격 | [AppNavigationBar](../mobile/lib/design_system/components/app_navigation_bar.dart) | 상단 56, 원형 버튼 44, 제목 18/27 Bold. 채팅 상대방 이름과 글자 규격 공유 |
 | `통화 컨트롤` | 공통 규격 | [AppRoundIconButton](../mobile/lib/design_system/components/app_round_icon_button.dart) | 지름 44·아이콘 24·테두리 0.67. 음소거/출력은 검정·회색, 종료는 빨강. 세 버튼을 같은 컴포넌트로 관리 |
 | `통화 프로필·음소거 안내·출력 행` | 전용 규격 | [ChatVoiceCallScreen](../mobile/lib/features/chat/presentation/chat_voice_call_screen.dart) | 프로필 112·반경 32·아이콘 64, 안내 160×32, 출력 행 58·손잡이 44×5. 일반 간격과 모서리는 토큰 사용 |
 | `_MessageListState` | 로컬 수치 | [L7246](../mobile/lib/features/chat/presentation/chat_conversation_view.dart#L7246) | `static const double _replyOriginalAlignment = 0.28;` |
@@ -520,7 +520,7 @@ UI 아이콘은 `AppIcons`의 Google Material Symbols Rounded로 통일했어요
 
 | 구간 | 종류 | 관리하는 값·표현 |
 | --- | --- | --- |
-| `_ChatSearchTopBar` | 제목·입력 영역 | 흰 배경. 제목·뒤로 가기는 공통 `ChatNavigationBar`(높이 56), 입력은 `AppTextField`·공통 높이 46. 입력 여백 가로 `space16`·세로 `space12`, 검색/지우기 아이콘 20 |
+| `_ChatSearchTopBar` | 제목·입력 영역 | 흰 배경. 제목·뒤로 가기는 공통 `AppNavigationBar`(높이 56), 입력은 `AppTextField`·공통 높이 46. 입력 여백 가로 `space16`·세로 `space12`, 검색/지우기 아이콘 20 |
 | `_ChatSearchTopBar` | 탭 | 높이 44·좌우 여백 `space16`. 글자는 `body`, 선택 시 `primary`·Bold와 아래 선 2, 미선택 시 `textSecondary`·Regular와 투명한 선 |
 | `_ChatSearchTopBar` | 구분선·페이드 | 구분선 높이/두께 1·`divider`. 기존 채팅 상단의 `_TranslucentTopBarSurface`와 블러/페이드를 재사용하며 아래 여유 `space12` 유지 |
 | `_ChatSearchTopBar` | 로딩·실패 안내 | 높이 32·좌우 여백 `space16`, 글자 `caption`. 로딩 표시 12·선 두께 2·글자와 간격 `space8`. 실패 시 기존 `TextButton`의 Retry 사용 |
