@@ -3412,10 +3412,10 @@ final class _ChatConversationViewState extends State<ChatConversationView>
       return;
     }
 
-    unawaited(_updateActiveCallMessage(activeMessage, outcome, duration));
+    unawaited(_recordActiveCallOutcome(activeMessage, outcome, duration));
   }
 
-  Future<void> _updateActiveCallMessage(
+  Future<void> _recordActiveCallOutcome(
     Future<ChatMessage?> activeMessage,
     ChatCallOutcome outcome,
     Duration duration,
@@ -3432,22 +3432,24 @@ final class _ChatConversationViewState extends State<ChatConversationView>
 
     final ChatCallOutcomeUpdater? updater = widget.onUpdateCallOutcome;
     if (updater == null) {
-      messageListState.updateCallMessage(
-        messageId: startedMessage.id,
+      await _addCallMessage(
         outcome: outcome,
         duration: duration,
+        advanceClock: true,
       );
       return;
     }
 
     try {
-      final ChatMessage updatedMessage = await updater(
+      final ChatMessage resultMessage = await updater(
         messageId: startedMessage.id,
         outcome: outcome,
         duration: duration,
       );
       if (mounted) {
-        messageListState.addMessage(updatedMessage);
+        // 서버가 돌려준 새 결과 ID를 추가해 시작 기록도 그대로 남겨요.
+        messageListState.addMessage(resultMessage);
+        _scheduleScrollToBottom(animate: true);
       }
     } catch (_) {
       if (mounted) {
@@ -8317,35 +8319,6 @@ final class _MessageListState extends State<_MessageList>
     });
     _reconcileScrollbarRangeAfterMessageChange(previousMessageIds);
     return message;
-  }
-
-  bool updateCallMessage({
-    required String messageId,
-    required ChatCallOutcome outcome,
-    required Duration duration,
-  }) {
-    final int messageIndex = _messages.indexWhere(
-      (ChatMessage message) => message.id == messageId,
-    );
-    if (messageIndex == -1) {
-      return false;
-    }
-
-    final ChatCallAttachment? call = _messages[messageIndex].callAttachment;
-    if (call == null) {
-      return false;
-    }
-
-    setState(() {
-      _messages[messageIndex] = _messages[messageIndex].copyWith(
-        callAttachment: ChatCallAttachment(
-          kind: call.kind,
-          outcome: outcome,
-          duration: duration,
-        ),
-      );
-    });
-    return true;
   }
 
   bool updateMessageContent({

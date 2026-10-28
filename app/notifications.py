@@ -438,6 +438,9 @@ async def send_message_notification(message_id: UUID) -> None:
             and call_event is not None
             and call_event.outcome == CallOutcome.STARTED
         ):
+            # 시작 기록을 보존하므로, 이미 결과가 저장된 통화는 뒤늦게 울리지 않아요.
+            if message.metadata_json.get("call_result_message_id") is not None:
+                return
             await _send_voip_event(
                 session,
                 client=client,

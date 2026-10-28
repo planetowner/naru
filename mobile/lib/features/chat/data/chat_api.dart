@@ -1142,6 +1142,7 @@ final class ChatApi {
     required ChatCallOutcome outcome,
     required Duration duration,
   }) async {
+    // 요청은 시작 기록 ID로 보내고, 응답은 별도로 저장된 결과 메시지예요.
     final http.Response response = await _client.patch(
       _baseUri.resolve('/messages/$messageId/call-outcome'),
       headers: _jsonHeaders,

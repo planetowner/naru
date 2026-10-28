@@ -430,8 +430,37 @@ async def send_to_direct_participants(
         )
 
 
+async def update_conversation_latest_message(
+    session: AsyncSession,
+    message: Message,
+) -> None:
+    conversation = await session.get(Conversation, message.conversation_id)
+    if conversation is not None:
+        conversation.last_message_id = message.id
+        conversation.last_message_at = message.created_at
+        conversation.updated_at = datetime.now(timezone.utc)
 
 
+async def publish_created_message(
+    session: AsyncSession,
+    direct_conversation: DirectConversation,
+    message_read: MessageRead,
+) -> None:
+    event = {
+        "type": "message.created",
+        "message": message_read.model_dump(mode="json"),
+    }
+    await connection_manager.send_to_user(
+        user_id=message_read.sender_id,
+        data=event,
+    )
+    # 통화 결과도 새 메시지이므로 수신자의 읽지 않은 개수를 함께 갱신해요.
+    await unread_counts_event_publisher.send_event(
+        session,
+        user_id=direct_recipient_id(direct_conversation, message_read.sender_id),
+        event=event,
+        cause_message_id=message_read.id,
+    )
 
 
 async def get_direct_conversation(
@@ -738,11 +767,16 @@ def build_metadata(
         if call_event is None:
             return None
 
-        return {
+        metadata = {
             "kind": call_event.kind.value,
             "outcome": call_event.outcome.value,
             "duration_ms": call_event.duration_ms,
         }
+        if "call_start_message_id" in message.metadata_json:
+            metadata["call_start_message_id"] = message.metadata_json[
+                "call_start_message_id"
+            ]
+        return metadata
 
     return None
 
@@ -1395,15 +1429,7 @@ async def create_message(
             )
         )
 
-    conversation = await session.get(
-        Conversation,
-        direct_conversation.conversation_id,
-    )
-
-    if conversation is not None:
-        conversation.last_message_id = message.id
-        conversation.last_message_at = message.created_at
-        conversation.updated_at = datetime.now(timezone.utc)
+    await update_conversation_latest_message(session, message)
 
     await session.commit()
     await session.refresh(message)
@@ -1425,27 +1451,8 @@ async def create_message(
             photo_count,
         )
 
-    message_created_event = {
-        "type": "message.created",
-        "message": message_read.model_dump(mode="json"),
-    }
-
-    recipient_id = direct_recipient_id(
-        direct_conversation,
-        current_user.id,
-    )
-    # 수신자 이벤트에는 서버가 다시 계산한 읽지 않은 개수도 함께 보내요.
     realtime_started_at = perf_counter()
-    await connection_manager.send_to_user(
-        user_id=current_user.id,
-        data=message_created_event,
-    )
-    await unread_counts_event_publisher.send_event(
-        session,
-        user_id=recipient_id,
-        event=message_created_event,
-        cause_message_id=message.id,
-    )
+    await publish_created_message(session, direct_conversation, message_read)
 
     if photo_timing_started_at is not None:
         logger.info(
@@ -1480,7 +1487,8 @@ async def update_call_outcome(
     current_user: CurrentUserDependency,
     session: SessionDependency,
 ) -> MessageRead:
-    message = await session.get(Message, message_id)
+    # 시작 기록을 잠가 동시에 종료 요청이 와도 결과는 한 번만 만들어요.
+    message = await session.get(Message, message_id, with_for_update=True)
     call_event = await session.get(MessageCallEvent, message_id)
 
     if (
@@ -1528,37 +1536,79 @@ async def update_call_outcome(
             detail="This participant cannot set the requested call outcome",
         )
 
-    if (
-        call_event.outcome != CallOutcome.STARTED
-        and call_event.outcome != requested_outcome
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Call already has a different final outcome",
+    result_message_id = message.metadata_json.get("call_result_message_id")
+    result_message = None
+    result_event = None
+    if result_message_id is not None:
+        result_message = await session.get(Message, UUID(result_message_id))
+        result_event = await session.get(
+            MessageCallEvent, UUID(result_message_id),
+        )
+        assert result_message is not None and result_event is not None
+    elif call_event.outcome != CallOutcome.STARTED:
+        # 이전 버전에서 이미 끝난 기록은 새 시작 기록으로 취급하지 않아요.
+        result_message, result_event = message, call_event
+
+    if result_message is not None:
+        assert result_event is not None
+        if result_event.outcome != requested_outcome:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Call already has a different final outcome",
+            )
+        return await build_single_message_read(
+            session,
+            result_message,
+            direct_conversation=direct_conversation,
         )
 
-    call_event.outcome = requested_outcome
-    call_event.duration_ms = outcome_data.duration_ms
-    message.updated_at = datetime.now(timezone.utc)
+    # 수신자가 종료해도 원래 발신 방향을 유지하고 결과 시각으로 새 기록을 남겨요.
+    completed_at = max(
+        datetime.now(timezone.utc),
+        normalize_utc(message.created_at) + timedelta(microseconds=1),
+    )
+    result_message = Message(
+        conversation_id=message.conversation_id,
+        sender_id=message.sender_id,
+        kind=MessageKind.CALL,
+        body="",
+        metadata_json={"call_start_message_id": str(message.id)},
+        source_language=message.source_language,
+        created_at=completed_at,
+    )
+    session.add(result_message)
+    await session.flush()
+    await add_message_payload_records(
+        session,
+        message=result_message,
+        sender_id=message.sender_id,
+        message_type="call",
+        metadata={
+            "kind": call_event.kind.value,
+            "outcome": requested_outcome.value,
+            "duration_ms": outcome_data.duration_ms,
+        },
+    )
+    # 시작 상태는 보존하고, 저장된 결과 ID로 재시도 요청에 같은 기록을 돌려줘요.
+    message.metadata_json = {
+        **message.metadata_json,
+        "call_result_message_id": str(result_message.id),
+    }
+    message.updated_at = completed_at
+    await update_conversation_latest_message(session, result_message)
 
     await session.commit()
-    await session.refresh(message)
+    await session.refresh(result_message)
 
     message_read = await build_single_message_read(
         session,
-        message,
+        result_message,
         direct_conversation=direct_conversation,
     )
-    await send_to_direct_participants(
-        direct_conversation,
-        {
-            "type": "message.updated",
-            "message": message_read.model_dump(mode="json"),
-        },
-    )
+    await publish_created_message(session, direct_conversation, message_read)
 
-    if call_event.outcome in {CallOutcome.MISSED, CallOutcome.NO_ANSWER}:
-        background_tasks.add_task(send_message_notification, message.id)
+    if requested_outcome in {CallOutcome.MISSED, CallOutcome.NO_ANSWER}:
+        background_tasks.add_task(send_message_notification, result_message.id)
 
     return message_read
 

@@ -462,6 +462,24 @@ final class NotificationBridge: NSObject, FlutterPlugin, FlutterStreamHandler {
     receiveCallSignalingMessage(task: task, callUUID: callUUID)
   }
 
+  static func callOutcome(
+    from event: [String: Any],
+    callUUID: UUID
+  ) -> String? {
+    guard
+      let type = event["type"] as? String,
+      type == "message.created" || type == "message.updated",
+      let message = event["message"] as? [String: Any],
+      let metadata = message["metadata"] as? [String: Any],
+      let outcome = metadata["outcome"] as? String,
+      outcome != "started",
+      // 결과 메시지의 ID는 새로 생겨도 CallKit은 시작 기록의 UUID를 계속 사용해요.
+      let startId = metadata["call_start_message_id"] as? String ?? message["id"] as? String,
+      UUID(uuidString: startId) == callUUID
+    else { return nil }
+    return outcome
+  }
+
   private func receiveCallSignalingMessage(
     task: URLSessionWebSocketTask,
     callUUID: UUID
@@ -491,13 +509,7 @@ final class NotificationBridge: NSObject, FlutterPlugin, FlutterStreamHandler {
         if
           let data = data,
           let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-          event["type"] as? String == "message.updated",
-          let messagePayload = event["message"] as? [String: Any],
-          (messagePayload["id"] as? String)?.lowercased()
-            == callUUID.uuidString.lowercased(),
-          let metadata = messagePayload["metadata"] as? [String: Any],
-          let outcome = metadata["outcome"] as? String,
-          outcome != "started"
+          let outcome = Self.callOutcome(from: event, callUUID: callUUID)
         {
           let reason: CXCallEndedReason =
             outcome == "no_answer" || outcome == "missed"
