@@ -1,12 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'app_colors.dart';
+import 'app_control_style.dart';
 import 'app_radius.dart';
 import 'app_spacing.dart';
 import 'app_typography.dart';
 
 final class AppTheme {
   AppTheme._();
+
+  // 기본 dark 스타일은 Android 하단 바를 검게 칠하므로 흰 화면의 색을 함께 지정해요.
+  static const SystemUiOverlayStyle lightSystemUi = SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarBrightness: Brightness.light,
+    statusBarIconBrightness: Brightness.dark,
+    systemNavigationBarColor: AppColors.background,
+    systemNavigationBarIconBrightness: Brightness.dark,
+    systemNavigationBarContrastEnforced: false,
+  );
 
   static final ColorScheme _lightColorScheme =
       ColorScheme.fromSeed(
@@ -41,67 +53,39 @@ final class AppTheme {
       );
 
   static final TextTheme _textTheme = TextTheme(
-    displayLarge: AppTypography.typography1.copyWith(
-      color: AppColors.textPrimary,
-      fontWeight: AppTypography.bold,
-    ),
-    displayMedium: AppTypography.typography2.copyWith(
-      color: AppColors.textPrimary,
-      fontWeight: AppTypography.bold,
-    ),
-    displaySmall: AppTypography.typography3.copyWith(
-      color: AppColors.textPrimary,
-      fontWeight: AppTypography.bold,
-    ),
-    headlineLarge: AppTypography.subTypography5.copyWith(
-      color: AppColors.textPrimary,
-      fontWeight: AppTypography.bold,
-    ),
-    headlineMedium: AppTypography.typography3.copyWith(
-      color: AppColors.textPrimary,
-      fontWeight: AppTypography.semibold,
-    ),
-    headlineSmall: AppTypography.typography4.copyWith(
-      color: AppColors.textPrimary,
-      fontWeight: AppTypography.semibold,
-    ),
-    titleLarge: AppTypography.subTypography9.copyWith(
-      color: AppColors.textPrimary,
-      fontWeight: AppTypography.semibold,
-    ),
-    titleMedium: AppTypography.typography5.copyWith(
-      color: AppColors.textPrimary,
-      fontWeight: AppTypography.semibold,
-    ),
-    titleSmall: AppTypography.subTypography10.copyWith(
-      color: AppColors.textPrimary,
-      fontWeight: AppTypography.medium,
-    ),
-    bodyLarge: AppTypography.typography5.copyWith(color: AppColors.textPrimary),
-    bodyMedium: AppTypography.subTypography10.copyWith(
+    displayLarge: AppTypography.display.copyWith(color: AppColors.textPrimary),
+    displayMedium: AppTypography.heading.copyWith(color: AppColors.textPrimary),
+    displaySmall: AppTypography.subheading.copyWith(
       color: AppColors.textPrimary,
     ),
-    bodySmall: AppTypography.typography6.copyWith(
+    headlineLarge: AppTypography.heading.copyWith(color: AppColors.textPrimary),
+    headlineMedium: AppTypography.subheading.copyWith(
+      color: AppColors.textPrimary,
+    ),
+    headlineSmall: AppTypography.screenTitle.copyWith(
+      color: AppColors.textPrimary,
+    ),
+    titleLarge: AppTypography.screenTitle.copyWith(
+      color: AppColors.textPrimary,
+    ),
+    titleMedium: AppTypography.cardTitle.copyWith(color: AppColors.textPrimary),
+    titleSmall: AppTypography.sectionTitle.copyWith(
+      color: AppColors.textPrimary,
+    ),
+    bodyLarge: AppTypography.bodyLarge.copyWith(color: AppColors.textPrimary),
+    bodyMedium: AppTypography.body.copyWith(color: AppColors.textPrimary),
+    bodySmall: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
+    labelLarge: AppTypography.button.copyWith(color: AppColors.textPrimary),
+    labelMedium: AppTypography.fieldLabel.copyWith(
       color: AppColors.textSecondary,
     ),
-    labelLarge: AppTypography.typography6.copyWith(
-      color: AppColors.textPrimary,
-      fontWeight: AppTypography.semibold,
-    ),
-    labelMedium: AppTypography.subTypography11.copyWith(
-      color: AppColors.textSecondary,
-      fontWeight: AppTypography.medium,
-    ),
-    labelSmall: AppTypography.typography7.copyWith(
-      color: AppColors.textTertiary,
-      fontWeight: AppTypography.medium,
-    ),
+    labelSmall: AppTypography.caption.copyWith(color: AppColors.textSecondary),
   );
 
   static ThemeData get light {
     final ThemeData baseTheme = ThemeData.from(
       colorScheme: _lightColorScheme,
-      textTheme: _textTheme,
+      textTheme: _textTheme.apply(fontFamily: AppTypography.fontFamily),
       useMaterial3: true,
     );
 
@@ -117,91 +101,17 @@ final class AppTheme {
         scrolledUnderElevation: 0,
         centerTitle: false,
         titleSpacing: AppSpacing.space20,
-        titleTextStyle: AppTypography.typography4.copyWith(
+        titleTextStyle: AppTypography.screenTitle.copyWith(
           color: AppColors.textPrimary,
-          fontWeight: AppTypography.semibold,
+          fontWeight: AppTypography.bold,
         ),
         iconTheme: const IconThemeData(color: AppColors.textPrimary),
         actionsIconTheme: const IconThemeData(color: AppColors.textPrimary),
       ),
-      inputDecorationTheme: InputDecorationThemeData(
-        filled: true,
-        fillColor: AppColors.grey100,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.space16,
-          vertical: AppSpacing.space16,
-        ),
-        hintStyle: AppTypography.subTypography10.copyWith(
-          color: AppColors.textTertiary,
-        ),
-        labelStyle: AppTypography.subTypography10.copyWith(
-          color: AppColors.textSecondary,
-        ),
-        errorStyle: AppTypography.typography7.copyWith(color: AppColors.error),
-        prefixIconColor: AppColors.textSecondary,
-        suffixIconColor: AppColors.textSecondary,
-        border: const OutlineInputBorder(
-          borderRadius: AppRadius.borderRadius16,
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: const OutlineInputBorder(
-          borderRadius: AppRadius.borderRadius16,
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: const OutlineInputBorder(
-          borderRadius: AppRadius.borderRadius16,
-          borderSide: BorderSide(color: AppColors.primary, width: 1.5),
-        ),
-        errorBorder: const OutlineInputBorder(
-          borderRadius: AppRadius.borderRadius16,
-          borderSide: BorderSide(color: AppColors.error),
-        ),
-        focusedErrorBorder: const OutlineInputBorder(
-          borderRadius: AppRadius.borderRadius16,
-          borderSide: BorderSide(color: AppColors.error, width: 1.5),
-        ),
-        disabledBorder: const OutlineInputBorder(
-          borderRadius: AppRadius.borderRadius16,
-          borderSide: BorderSide.none,
-        ),
-      ),
-      filledButtonTheme: FilledButtonThemeData(
-        style: FilledButton.styleFrom(
-          backgroundColor: AppColors.primary,
-          foregroundColor: AppColors.textOnPrimary,
-          disabledBackgroundColor: AppColors.grey200,
-          disabledForegroundColor: AppColors.textDisabled,
-          minimumSize: const Size(0, 56),
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.space20,
-            vertical: AppSpacing.space16,
-          ),
-          elevation: 0,
-          textStyle: AppTypography.typography6.copyWith(
-            fontWeight: AppTypography.semibold,
-          ),
-          shape: const RoundedRectangleBorder(
-            borderRadius: AppRadius.borderRadius16,
-          ),
-        ),
-      ),
+      inputDecorationTheme: AppControlStyle.inputTheme,
+      filledButtonTheme: FilledButtonThemeData(style: AppControlStyle.button()),
       outlinedButtonTheme: OutlinedButtonThemeData(
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.textPrimary,
-          disabledForegroundColor: AppColors.textDisabled,
-          minimumSize: const Size(0, 56),
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.space20,
-            vertical: AppSpacing.space16,
-          ),
-          side: const BorderSide(color: AppColors.border),
-          textStyle: AppTypography.typography6.copyWith(
-            fontWeight: AppTypography.semibold,
-          ),
-          shape: const RoundedRectangleBorder(
-            borderRadius: AppRadius.borderRadius16,
-          ),
-        ),
+        style: AppControlStyle.button(secondary: true),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
@@ -211,9 +121,7 @@ final class AppTheme {
             horizontal: AppSpacing.space12,
             vertical: AppSpacing.space8,
           ),
-          textStyle: AppTypography.typography6.copyWith(
-            fontWeight: AppTypography.semibold,
-          ),
+          textStyle: AppControlStyle.buttonText,
           shape: const RoundedRectangleBorder(
             borderRadius: AppRadius.borderRadius12,
           ),

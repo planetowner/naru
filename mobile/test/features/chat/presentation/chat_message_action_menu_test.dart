@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:naru/design_system/app_colors.dart';
+import 'package:naru/design_system/app_icons.dart';
 import 'package:naru/features/chat/domain/chat_message.dart';
 import 'package:naru/features/chat/presentation/chat_conversation_view.dart';
 
@@ -221,7 +221,7 @@ void main() {
     );
     final Finder icon = find.descendant(
       of: confirmation,
-      matching: find.byType(CustomPaint),
+      matching: find.byIcon(AppIcons.checkCircle),
     );
     final Rect confirmationRect = tester.getRect(confirmation);
     final Rect composerRect = tester.getRect(composer);
@@ -326,9 +326,9 @@ void main() {
       greaterThan(originalBubbleRect.bottom),
     );
 
-    expect(find.byIcon(Icons.copy_outlined), findsOneWidget);
+    expect(find.byIcon(AppIcons.copy), findsOneWidget);
 
-    expect(find.byIcon(Icons.reply_rounded), findsOneWidget);
+    expect(find.byIcon(AppIcons.reply), findsOneWidget);
   });
 
   testWidgets('recent outgoing message menu shows all four actions', (
@@ -738,13 +738,13 @@ void main() {
       find.descendant(of: voiceFinder, matching: find.byType(Icon)),
     );
 
-    expect(attachmentIcon.icon, CupertinoIcons.add);
+    expect(attachmentIcon.icon, AppIcons.add);
     expect(attachmentIcon.size, 20);
-    expect(attachmentIcon.color, const Color(0xFF191919));
+    expect(attachmentIcon.color, AppColors.textPrimary);
 
-    expect(voiceIcon.icon, Icons.graphic_eq_rounded);
+    expect(voiceIcon.icon, AppIcons.graphicEq);
     expect(voiceIcon.size, 18);
-    expect(voiceIcon.color, const Color(0xFF191919));
+    expect(voiceIcon.color, AppColors.textPrimary);
 
     final TextField textField = tester.widget<TextField>(
       find.byKey(const ValueKey<String>('message-input')),
@@ -753,7 +753,7 @@ void main() {
         textField.decoration!.contentPadding! as EdgeInsets;
 
     expect(textField.style?.fontSize, 15);
-    expect(textField.style?.color, const Color(0xFF191919));
+    expect(textField.style?.color, AppColors.textPrimary);
     expect(textField.decoration?.hintStyle?.fontSize, 15);
     expect(textField.decoration?.hintStyle?.color, const Color(0xFF92989E));
     expect(contentPadding.horizontal, 8);

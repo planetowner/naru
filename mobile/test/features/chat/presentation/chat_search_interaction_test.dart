@@ -4,6 +4,12 @@ import 'package:naru/design_system/app_colors.dart';
 import 'package:naru/features/chat/domain/chat_message.dart';
 import 'package:naru/features/chat/presentation/chat_conversation_view.dart';
 
+InkWell _searchButton(WidgetTester tester, Finder finder) {
+  return tester.widget<InkWell>(
+    find.descendant(of: finder, matching: find.byType(InkWell)),
+  );
+}
+
 Color? _matchBackgroundColor(
   WidgetTester tester, {
   required String messageId,
@@ -102,22 +108,18 @@ void main() {
     await tester.pump(const Duration(milliseconds: 250));
 
     expect(find.text('1/4'), findsOneWidget);
+    expect(find.text('4 matches'), findsNothing);
+    expect(find.text('Newest first'), findsNothing);
 
-    final Finder olderButtonFinder = find.widgetWithIcon(
-      IconButton,
-      Icons.keyboard_arrow_up_rounded,
+    final Finder olderButtonFinder = find.byKey(
+      const ValueKey<String>('chat-search-older'),
     );
-    final Finder newerButtonFinder = find.widgetWithIcon(
-      IconButton,
-      Icons.keyboard_arrow_down_rounded,
-    );
-    final IconButton upAtNewest = tester.widget<IconButton>(olderButtonFinder);
-    final IconButton downAtNewest = tester.widget<IconButton>(
-      newerButtonFinder,
+    final Finder newerButtonFinder = find.byKey(
+      const ValueKey<String>('chat-search-newer'),
     );
 
-    expect(upAtNewest.onPressed, isNotNull);
-    expect(downAtNewest.onPressed, isNull);
+    expect(_searchButton(tester, olderButtonFinder).onTap, isNotNull);
+    expect(_searchButton(tester, newerButtonFinder).onTap, isNull);
 
     final double toolbarCenter = tester
         .getCenter(find.byKey(const ValueKey<String>('chat-search-toolbar')))
@@ -138,13 +140,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 250));
     expect(find.text('4/4'), findsOneWidget);
 
-    final IconButton upAtOldest = tester.widget<IconButton>(olderButtonFinder);
-    final IconButton downAtOldest = tester.widget<IconButton>(
-      newerButtonFinder,
-    );
-
-    expect(upAtOldest.onPressed, isNull);
-    expect(downAtOldest.onPressed, isNotNull);
+    expect(_searchButton(tester, olderButtonFinder).onTap, isNull);
+    expect(_searchButton(tester, newerButtonFinder).onTap, isNotNull);
 
     await tester.tap(newerButtonFinder);
     await tester.pump(const Duration(milliseconds: 250));
@@ -196,9 +193,7 @@ void main() {
       AppColors.primary.withAlpha(54),
     );
 
-    await tester.tap(
-      find.widgetWithIcon(IconButton, Icons.keyboard_arrow_up_rounded),
-    );
+    await tester.tap(find.byKey(const ValueKey<String>('chat-search-older')));
     await tester.pump(const Duration(milliseconds: 250));
 
     expect(

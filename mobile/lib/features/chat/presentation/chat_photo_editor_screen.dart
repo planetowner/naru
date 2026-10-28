@@ -215,9 +215,7 @@ final class ChatPhotoEditorScreen extends StatefulWidget {
 }
 
 final class _ChatPhotoEditorScreenState extends State<ChatPhotoEditorScreen> {
-  static const MethodChannel _channel = MethodChannel(
-    'naru/pencil-kit-editor',
-  );
+  static const MethodChannel _channel = MethodChannel('naru/pencil-kit-editor');
 
   late final PageController _pageController;
   final Map<String, ChatVideoTrimRange> _videoTrimRanges =
@@ -555,9 +553,6 @@ final class ChatPhotoEditorTopBar extends StatelessWidget {
     super.key,
   });
 
-  static const double _counterGap = 11;
-  static const double _sendHorizontalPadding = 15;
-
   final bool visible;
   final double height;
   final double topPadding;
@@ -569,113 +564,99 @@ final class ChatPhotoEditorTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle counterLabelStyle = AppTypography.subTypography9.copyWith(
-      color: AppMediaViewerChrome.foregroundColor,
-      height: 1,
-    );
-    final TextStyle sendLabelStyle = AppTypography.subTypography10.copyWith(
-      color: AppMediaViewerChrome.foregroundColor,
-      fontWeight: AppTypography.regular,
-      height: 1,
-    );
-
     return Positioned(
       key: const ValueKey<String>('photo-editor-top-bar'),
       left: 0,
       top: 0,
       right: 0,
       height: height,
-      child: AnimatedSlide(
-        key: const ValueKey<String>('photo-editor-top-bar-slide'),
-        duration: AppMediaViewerChrome.controlsAnimationDuration,
-        curve: AppMediaViewerChrome.controlsSlideCurve(visible),
-        offset: visible ? Offset.zero : const Offset(0, -1),
-        child: IgnorePointer(
-          ignoring: !visible,
-          child: AnimatedOpacity(
-            key: const ValueKey<String>('photo-editor-top-bar-opacity'),
-            duration: AppMediaViewerChrome.controlsAnimationDuration,
-            opacity: visible ? 1 : 0,
-            child: AppMediaViewerControlTapRegion(
-              child: ColoredBox(
-                color: AppMediaViewerChrome.backgroundColor,
-                child: Stack(
-                  children: [
-                    Positioned(
-                      key: const ValueKey<String>('photo-editor-back-position'),
-                      left: AppMediaViewerChrome.horizontalMargin,
-                      top: topPadding,
-                      child: AppMediaViewerChromeButton(
-                        key: const ValueKey<String>('photo-editor-back'),
-                        onPressed: onBackPressed,
-                        child: const AppTopBarBackIcon(),
-                      ),
-                    ),
-                    Positioned(
-                      key: const ValueKey<String>(
-                        'photo-editor-counter-position',
-                      ),
-                      left:
-                          AppMediaViewerChrome.horizontalMargin +
-                          AppMediaViewerChrome.buttonDimension +
-                          _counterGap,
-                      top: topPadding,
-                      height: AppMediaViewerChrome.buttonDimension,
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          '${currentIndex + 1} / $photoCount',
-                          key: const ValueKey<String>('photo-editor-counter'),
-                          maxLines: 1,
-                          style: counterLabelStyle.copyWith(
-                            fontWeight: AppTypography.semibold,
-                          ),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      right: AppMediaViewerChrome.horizontalMargin,
-                      top: topPadding,
-                      child: AppTopBarButtonSurface(
-                        key: const ValueKey<String>('photo-editor-send'),
-                        height: AppMediaViewerChrome.buttonDimension,
-                        color: AppMediaViewerChrome.buttonColor,
-                        borderColor: AppMediaViewerChrome.buttonBorderColor,
-                        child: InkWell(
-                          onTap: sending ? null : onSendPressed,
-                          borderRadius: const BorderRadius.all(
-                            Radius.circular(22),
-                          ),
-                          child: Padding(
-                            key: const ValueKey<String>(
-                              'photo-editor-send-padding',
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: _sendHorizontalPadding,
-                            ),
-                            child: Center(
-                              child: Text.rich(
-                                TextSpan(
-                                  children: <InlineSpan>[
-                                    TextSpan(text: '$photoCount'),
-                                    const TextSpan(text: ' Send'),
-                                  ],
-                                ),
-                                key: const ValueKey<String>(
-                                  'photo-editor-send-label',
-                                ),
-                                maxLines: 1,
-                                softWrap: false,
-                                style: sendLabelStyle,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+      child: AppMediaViewerControlsTransition(
+        slideKey: const ValueKey<String>('photo-editor-top-bar-slide'),
+        opacityKey: const ValueKey<String>('photo-editor-top-bar-opacity'),
+        visible: visible,
+        hiddenOffset: const Offset(0, -1),
+        child: AppMediaViewerControlTapRegion(
+          child: ColoredBox(
+            color: AppMediaViewerChrome.backgroundColor,
+            child: Stack(
+              children: [
+                Positioned(
+                  key: const ValueKey<String>('photo-editor-back-position'),
+                  left: AppMediaViewerChrome.horizontalMargin,
+                  top: topPadding,
+                  child: AppMediaViewerChromeButton(
+                    key: const ValueKey<String>('photo-editor-back'),
+                    onPressed: onBackPressed,
+                    child: const AppTopBarBackIcon(),
+                  ),
                 ),
-              ),
+                Positioned(
+                  key: const ValueKey<String>('photo-editor-counter-position'),
+                  left:
+                      AppMediaViewerChrome.horizontalMargin +
+                      AppMediaViewerChrome.buttonDimension +
+                      11.0,
+                  top: topPadding,
+                  height: AppMediaViewerChrome.buttonDimension,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '${currentIndex + 1} / $photoCount',
+                      key: const ValueKey<String>('photo-editor-counter'),
+                      maxLines: 1,
+                      // 기존 상단바의 한 줄 높이를 유지해 글자 위치가 바뀌지 않게 해요.
+                      style: AppTypography.subTypography9.copyWith(
+                        color: AppMediaViewerChrome.foregroundColor,
+                        fontWeight: AppTypography.bold,
+                        height: 1,
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  right: AppMediaViewerChrome.horizontalMargin,
+                  top: topPadding,
+                  child: AppTopBarButtonSurface(
+                    key: const ValueKey<String>('photo-editor-send'),
+                    height: AppMediaViewerChrome.buttonDimension,
+                    color: AppMediaViewerChrome.buttonColor,
+                    borderColor: AppMediaViewerChrome.buttonBorderColor,
+                    child: InkWell(
+                      onTap: sending ? null : onSendPressed,
+                      borderRadius:
+                          AppTopBarButtonSurface.borderRadiusForHeight(
+                            AppMediaViewerChrome.buttonDimension,
+                          ),
+                      child: Padding(
+                        key: const ValueKey<String>(
+                          'photo-editor-send-padding',
+                        ),
+                        padding: EdgeInsets.symmetric(horizontal: 15),
+                        child: Center(
+                          child: Text.rich(
+                            TextSpan(
+                              children: <InlineSpan>[
+                                TextSpan(text: '$photoCount'),
+                                const TextSpan(text: ' Send'),
+                              ],
+                            ),
+                            key: const ValueKey<String>(
+                              'photo-editor-send-label',
+                            ),
+                            maxLines: 1,
+                            softWrap: false,
+                            style: AppTypography.subTypography10.copyWith(
+                              color: AppMediaViewerChrome.foregroundColor,
+                              fontWeight: AppTypography.regular,
+                              height: 1,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),

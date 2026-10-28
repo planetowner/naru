@@ -4,6 +4,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../../design_system/app_colors.dart';
+import '../../../design_system/app_radius.dart';
+import '../../../design_system/app_spacing.dart';
 import '../../../design_system/app_typography.dart';
 import '../../../design_system/components/app_profile_image.dart';
 import '../../auth/domain/app_user.dart';
@@ -16,9 +18,9 @@ import '../domain/chat_message.dart';
 import 'chat_conversation_view.dart';
 import 'reply_navigation_diagnostics.dart';
 
-const double _chatListHorizontalPadding = 20;
+const double _chatListHorizontalPadding = AppSpacing.space20;
 const double _chatListAvatarSize = 48;
-const double _chatListTitleGap = 16;
+const double _chatListTitleGap = AppSpacing.space16;
 const double _chatListTextStartInset =
     _chatListHorizontalPadding + _chatListAvatarSize + _chatListTitleGap;
 const Duration _chatRouteOpenDuration = Duration(milliseconds: 190);
@@ -808,13 +810,13 @@ final class _ChatConversationHomeScreenState
               child: Text(
                 'No chat users yet.',
                 style: AppTypography.typography7.copyWith(
-                  color: AppColors.grey600,
-                  fontWeight: AppTypography.medium,
+                  color: AppColors.textSecondary,
+                  fontWeight: AppTypography.regular,
                 ),
               ),
             )
           : ListView.separated(
-              padding: const EdgeInsets.symmetric(vertical: 8),
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.space8),
               itemCount: entries.length,
               separatorBuilder: (BuildContext context, int index) {
                 return const Divider(
@@ -2108,7 +2110,7 @@ final class _ChatUserAvatar extends StatelessWidget {
             child: AppProfileImage(
               imageUrl: imageUrl,
               size: _chatListAvatarSize,
-              borderRadius: 16,
+              borderRadius: AppRadius.radius16,
               iconSize: 30,
             ),
           ),
@@ -2139,11 +2141,12 @@ final class _ChatUnreadBadge extends StatelessWidget {
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: AppColors.red500,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: AppRadius.borderRadiusFull,
       ),
       child: Text(
         label,
-        style: AppTypography.subTypography12.copyWith(
+        // 작은 배지 안에 숫자를 맞추기 위해 줄 높이는 1로 유지해요.
+        style: AppTypography.subTypography13.copyWith(
           color: AppColors.white,
           fontWeight: AppTypography.bold,
           height: 1,
@@ -2164,7 +2167,7 @@ final class _ChatLoadingError extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.space24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -2173,7 +2176,7 @@ final class _ChatLoadingError extends StatelessWidget {
               textAlign: TextAlign.center,
               style: AppTypography.typography7.copyWith(
                 color: AppColors.grey700,
-                fontWeight: AppTypography.medium,
+                fontWeight: AppTypography.regular,
               ),
             ),
             const SizedBox(height: 14),

@@ -1,0 +1,10 @@
+{
+  "name": "naru-brand-tools",
+  "private": true,
+  "scripts": {
+    "brand": "node generate_brand_assets.cjs"
+  },
+  "devDependencies": {
+    "sharp": "0.35.5"
+  }
+}

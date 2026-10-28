@@ -1,7 +1,7 @@
 name: naru
 description: Private Flutter chat client for naru.
 publish_to: none
-version: 1.0.0+10
+version: 1.0.0+11
 
 environment:
   sdk: ^3.11.4
@@ -9,6 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  # 앱 아이콘과 별개로 Flutter 기본 iOS UI가 빌드 중 참조하는 글꼴이에요.
   cupertino_icons: ^1.0.8
   file_picker: ^8.1.0
   flutter_secure_storage: 10.3.1
@@ -32,5 +33,20 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    # iOS 시작 화면과 세션 복원 화면에서 같은 로고 원본을 사용해요.
-    - ios/Runner/Assets.xcassets/LaunchImage.imageset/LaunchImage.png
+    # 네이티브 시작 화면과 같은 원본에서 만든 해상도별 로고를 사용해요.
+    - assets/brand/naru-symbol.png
+    - assets/fonts/OFL.txt
+    - assets/fonts/material_symbols/LICENSE.txt
+  fonts:
+    - family: Pretendard
+      fonts:
+        - asset: assets/fonts/Pretendard-Regular.otf
+          weight: 400
+        - asset: assets/fonts/Pretendard-Bold.otf
+          weight: 700
+    - family: NaruSymbolsRounded
+      fonts:
+        - asset: assets/fonts/material_symbols/MaterialSymbolsRounded.ttf
+    - family: NaruSymbolsRoundedFilled
+      fonts:
+        - asset: assets/fonts/material_symbols/MaterialSymbolsRoundedFilled.ttf

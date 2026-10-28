@@ -104,10 +104,27 @@ The existing message API starts an incoming voice call with:
 }
 ```
 
-The call message UUID is also the CallKit UUID. The sender may finish it with
+The start message UUID is also the CallKit UUID. The sender may finish it with
 `ended`, `cancelled`, or `no_answer`; the recipient may finish it with `ended`
 or `missed` through `PATCH /messages/{message_id}/call-outcome`. Conflicting
 final outcomes return HTTP 409.
+
+The start record remains `started`. Finishing creates a separate call message
+with a new UUID and the result timestamp, and returns that result from the PATCH
+request. The result metadata includes `call_start_message_id`, which the native
+CallKit handler uses to end the original call when receiving `message.created`.
+The same event updates both participants and the recipient's unread count.
+Legacy `message.updated` signaling remains supported by the native handler.
+
+The server locks the start record and stores `call_result_message_id` in its
+internal message metadata. Retrying the same outcome returns the saved result
+without another record, realtime event, or push. An already finished record
+from the previous implementation is returned as-is; existing history is not
+rewritten. These links use the existing JSON metadata column, so no schema
+migration is required. The server and app updates must both be released.
+
+A queued start notification is skipped if the call result is already saved.
+Missed/unanswered call notifications use the result message UUID.
 
 The notification layer implements system call presentation and signaling. The
 repository does not contain an RTC audio transport, media server, or audio

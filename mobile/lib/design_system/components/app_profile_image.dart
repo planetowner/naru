@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_colors.dart';
+import '../app_icons.dart';
 
 final class AppProfileImage extends StatelessWidget {
   const AppProfileImage({
@@ -24,7 +25,7 @@ final class AppProfileImage extends StatelessWidget {
     final BorderRadius radius = BorderRadius.circular(borderRadius);
     final Widget fallback = DecoratedBox(
       decoration: BoxDecoration(color: AppColors.blue100, borderRadius: radius),
-      child: Icon(Icons.person_rounded, color: iconColor, size: iconSize),
+      child: Icon(AppIcons.person, color: iconColor, size: iconSize),
     );
 
     return SizedBox.square(

@@ -397,14 +397,14 @@ final class _NaruAppState extends State<NaruApp>
       title: 'naru',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
-      // 남색 시작 화면을 벗어나면 밝은 앱 화면에 맞는 상태 막대 색으로 돌아와요.
+      // 시작 화면과 앱 화면 모두 흰 배경에 맞는 상태 막대 색을 사용해요.
       builder: (BuildContext context, Widget? child) {
         return AppLaunchGate(
           isReady:
               !_isRestoringSession &&
               (_session == null || _hasLoadedInitialChatList),
           child: AnnotatedRegion<SystemUiOverlayStyle>(
-            value: SystemUiOverlayStyle.dark,
+            value: AppTheme.lightSystemUi,
             child: child!,
           ),
         );

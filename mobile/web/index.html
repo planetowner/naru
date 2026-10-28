@@ -12,7 +12,8 @@
   <meta name="description" content="A new Flutter project.">
 
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="theme-color" content="#FFFFFF">
   <meta name="apple-mobile-web-app-title" content="naru">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
@@ -20,8 +21,21 @@
 
   <title>naru</title>
   <link rel="manifest" href="manifest.json">
+  <style>
+    body { margin: 0; background: #FFFFFF; }
+    #naru-launch { position: fixed; inset: 0; display: grid; place-items: center; }
+  </style>
 </head>
 <body>
+  <div id="naru-launch">
+    <img src="brand/naru-symbol.svg" width="144" height="144" alt="naru">
+  </div>
+  <script>
+    // 첫 프레임부터는 같은 모양의 AppLaunchGate가 준비 상태와 전환을 관리해요.
+    window.addEventListener('flutter-first-frame', () => {
+      document.getElementById('naru-launch').remove();
+    }, { once: true });
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

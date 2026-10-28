@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:naru/design_system/app_colors.dart';
+import 'package:naru/design_system/app_icons.dart';
 import 'package:naru/design_system/app_typography.dart';
 import 'package:naru/features/chat/domain/chat_message.dart';
 import 'package:naru/features/chat/presentation/chat_conversation_view.dart';
@@ -187,122 +188,136 @@ void main() {
     expect(find.text('File sending failed.'), findsOneWidget);
   });
 
-  testWidgets(
-    'reopens an iOS attachment after its previous access URL expires',
-    (WidgetTester tester) async {
-      const MethodChannel previewChannel = MethodChannel(
-        'naru/media-file',
-      );
-      const MethodChannel pathChannel = MethodChannel(
-        'plugins.flutter.io/path_provider',
-      );
-      final Directory temporaryDirectory = Directory.systemTemp.createTempSync(
-        'naru-file-preview-test-',
-      );
-      final List<MethodCall> previewCalls = <MethodCall>[];
-      final List<MethodCall> clipboardCalls = <MethodCall>[];
-      final List<Uri> downloadUrls = <Uri>[];
-      int accessUrlRequests = 0;
-      bool firstUrlExpired = false;
-      final messenger =
-          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-      messenger.setMockMethodCallHandler(
-        pathChannel,
-        (_) async => temporaryDirectory.path,
-      );
-      messenger.setMockMethodCallHandler(previewChannel, (
-        MethodCall call,
-      ) async {
-        previewCalls.add(call);
-        return null;
-      });
-      messenger.setMockMethodCallHandler(SystemChannels.platform, (
-        MethodCall call,
-      ) async {
-        if (call.method == 'Clipboard.setData') {
-          clipboardCalls.add(call);
-        }
-        return null;
-      });
-      addTearDown(() {
-        messenger.setMockMethodCallHandler(previewChannel, null);
-        messenger.setMockMethodCallHandler(pathChannel, null);
-        messenger.setMockMethodCallHandler(SystemChannels.platform, null);
-        temporaryDirectory.deleteSync(recursive: true);
-      });
+  for (final fromSearch in [false]) {
+    testWidgets(
+      'reopens an iOS attachment from ${fromSearch ? 'search' : 'chat'} after its previous access URL expires',
+      (WidgetTester tester) async {
+        const MethodChannel previewChannel = MethodChannel('naru/media-file');
+        const MethodChannel pathChannel = MethodChannel(
+          'plugins.flutter.io/path_provider',
+        );
+        final Directory temporaryDirectory = Directory.systemTemp
+            .createTempSync('naru-file-preview-test-');
+        final List<MethodCall> previewCalls = <MethodCall>[];
+        final List<MethodCall> clipboardCalls = <MethodCall>[];
+        final List<Uri> downloadUrls = <Uri>[];
+        int accessUrlRequests = 0;
+        bool firstUrlExpired = false;
+        final messenger =
+            TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+        messenger.setMockMethodCallHandler(
+          pathChannel,
+          (_) async => temporaryDirectory.path,
+        );
+        messenger.setMockMethodCallHandler(previewChannel, (
+          MethodCall call,
+        ) async {
+          previewCalls.add(call);
+          return null;
+        });
+        messenger.setMockMethodCallHandler(SystemChannels.platform, (
+          MethodCall call,
+        ) async {
+          if (call.method == 'Clipboard.setData') {
+            clipboardCalls.add(call);
+          }
+          return null;
+        });
+        addTearDown(() {
+          messenger.setMockMethodCallHandler(previewChannel, null);
+          messenger.setMockMethodCallHandler(pathChannel, null);
+          messenger.setMockMethodCallHandler(SystemChannels.platform, null);
+          temporaryDirectory.deleteSync(recursive: true);
+        });
 
-      const ChatFileAttachment attachment = ChatFileAttachment(
-        name: '수업 자료.pdf',
-        sizeBytes: 3,
-        mediaAssetId: 'file-asset',
-      );
-      await tester.pumpWidget(
-        MaterialApp(
-          home: ChatConversationView(
-            initialMessages: [_sentFileMessage(attachment, 1)],
-            onCreateMediaAssetAccessUrl: ({required mediaAssetId}) async {
-              expect(mediaAssetId, 'file-asset');
-              return Uri.parse(
-                'https://files.example.test/attachment?version=${++accessUrlRequests}',
-              );
-            },
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      for (int attempt = 1; attempt <= 2; attempt++) {
-        await tester.runAsync(
-          () => http.runWithClient(
-            () async {
-              await tester.tap(find.text(attachment.name));
-              final Stopwatch timeout = Stopwatch()..start();
-              while (previewCalls.length < attempt &&
-                  find
-                      .text('The file could not be opened.')
-                      .evaluate()
-                      .isEmpty &&
-                  timeout.elapsed < const Duration(seconds: 5)) {
-                await Future<void>.delayed(const Duration(milliseconds: 1));
-                await tester.pump();
-              }
-            },
-            () => MockClient((request) async {
-              downloadUrls.add(request.url);
-              if (firstUrlExpired &&
-                  request.url.queryParameters['version'] == '1') {
-                return http.Response('Request has expired', 403);
-              }
-              return http.Response.bytes([10, 20, 30], 200);
-            }),
+        const ChatFileAttachment attachment = ChatFileAttachment(
+          name: '수업 자료.pdf',
+          sizeBytes: 3,
+          mediaAssetId: 'file-asset',
+        );
+        await tester.pumpWidget(
+          MaterialApp(
+            home: ChatConversationView(
+              initialMessages: [_sentFileMessage(attachment, 1)],
+              onCreateMediaAssetAccessUrl: ({required mediaAssetId}) async {
+                expect(mediaAssetId, 'file-asset');
+                return Uri.parse(
+                  'https://files.example.test/attachment?version=${++accessUrlRequests}',
+                );
+              },
+            ),
           ),
         );
         await tester.pumpAndSettle();
+        if (fromSearch) {
+          await tester.tap(find.byTooltip('Search'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.byKey(const ValueKey('chat-search-tab-files')));
+          await tester.pumpAndSettle();
+        }
+        for (int attempt = 1; attempt <= 2; attempt++) {
+          await tester.runAsync(
+            () => http.runWithClient(
+              () async {
+                await tester.tap(
+                  fromSearch
+                      ? find.descendant(
+                          of: find.byKey(
+                            const ValueKey('chat-search-files-results'),
+                          ),
+                          matching: find.text(attachment.name),
+                        )
+                      : find.text(attachment.name),
+                );
+                final Stopwatch timeout = Stopwatch()..start();
+                while (previewCalls.length < attempt &&
+                    find
+                        .text('The file could not be opened.')
+                        .evaluate()
+                        .isEmpty &&
+                    timeout.elapsed < const Duration(seconds: 5)) {
+                  await Future<void>.delayed(const Duration(milliseconds: 1));
+                  await tester.pump();
+                }
+              },
+              () => MockClient((request) async {
+                downloadUrls.add(request.url);
+                if (firstUrlExpired &&
+                    request.url.queryParameters['version'] == '1') {
+                  return http.Response('Request has expired', 403);
+                }
+                return http.Response.bytes([10, 20, 30], 200);
+              }),
+            ),
+          );
+          await tester.pumpAndSettle();
 
-        expect(
-          downloadUrls.last.queryParameters['version'],
-          '$attempt',
-          reason:
-              'Reopening must request a new URL instead of downloading with the expired one.',
-        );
-        expect(previewCalls.length, attempt);
-        expect(find.text('The file could not be opened.'), findsNothing);
-        firstUrlExpired = true;
-        await tester.pump(const Duration(minutes: 16));
-      }
+          expect(
+            downloadUrls.last.queryParameters['version'],
+            '$attempt',
+            reason:
+                'Reopening must request a new URL instead of downloading with the expired one.',
+          );
+          expect(previewCalls.length, attempt);
+          expect(find.text('The file could not be opened.'), findsNothing);
+          firstUrlExpired = true;
+          await tester.pump(const Duration(minutes: 16));
+        }
 
-      expect(previewCalls.map((call) => call.method), [
-        'preview-file',
-        'preview-file',
-      ]);
-      final String path =
-          (previewCalls.last.arguments as Map)['path'] as String;
-      expect(path, endsWith('/naru-files/file-asset/수업 자료.pdf'));
-      expect(File(path).readAsBytesSync(), [10, 20, 30]);
-      expect(clipboardCalls, isEmpty);
-      expect(find.text('File downloaded. Path copied.'), findsNothing);
-    },
-    variant: TargetPlatformVariant.only(TargetPlatform.iOS),
-  );
+        expect(previewCalls.map((call) => call.method), [
+          'preview-file',
+          'preview-file',
+        ]);
+        final String path =
+            (previewCalls.last.arguments as Map)['path'] as String;
+        expect(path, endsWith('/naru-files/file-asset/수업 자료.pdf'));
+        expect(File(path).readAsBytesSync(), [10, 20, 30]);
+        expect(clipboardCalls, isEmpty);
+        expect(find.text('File downloaded. Path copied.'), findsNothing);
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+    );
+  }
 
   testWidgets('outgoing file messages match the outgoing bubble tone', (
     WidgetTester tester,
@@ -329,15 +344,12 @@ void main() {
     final Text title = tester.widget<Text>(find.text('Report_v2.bin'));
     final Text metadata = tester.widget<Text>(find.text('350 KB'));
     final Icon icon = tester.widget<Icon>(
-      find.descendant(
-        of: bubbleFinder,
-        matching: find.byIcon(Icons.insert_drive_file_rounded),
-      ),
+      find.descendant(of: bubbleFinder, matching: find.byIcon(AppIcons.file)),
     );
 
     expect(title.style?.color, AppColors.white);
     expect(title.style?.fontSize, AppTypography.typography6.fontSize);
-    expect(title.style?.fontWeight, AppTypography.medium);
+    expect(title.style?.fontWeight, AppTypography.regular);
     expect(metadata.style?.color, AppColors.white.withAlpha(200));
     expect(icon.color, AppColors.white);
 
@@ -372,15 +384,12 @@ void main() {
       final Text title = tester.widget<Text>(find.text('Report_v2.bin'));
       final Text metadata = tester.widget<Text>(find.text('350 KB'));
       final Icon icon = tester.widget<Icon>(
-        find.descendant(
-          of: bubbleFinder,
-          matching: find.byIcon(Icons.insert_drive_file_rounded),
-        ),
+        find.descendant(of: bubbleFinder, matching: find.byIcon(AppIcons.file)),
       );
 
       expect(title.style?.color, AppColors.grey900);
       expect(title.style?.fontSize, AppTypography.typography6.fontSize);
-      expect(title.style?.fontWeight, AppTypography.medium);
+      expect(title.style?.fontWeight, AppTypography.regular);
       expect(metadata.style?.color, AppColors.grey500);
       expect(icon.color, AppColors.blue500);
 

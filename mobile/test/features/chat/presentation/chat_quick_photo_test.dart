@@ -110,10 +110,13 @@ void main() {
     WidgetTester tester,
   ) async {
     final _QuickPhotoLibrary photoLibrary = _QuickPhotoLibrary(
-      latestPhoto: _photoCreated(const Duration(seconds: 14)),
+      latestPhoto: null,
     );
 
     await tester.pumpWidget(_buildScreen(photoLibrary));
+
+    // 화면 준비 시간이 15초 제한에 포함되지 않도록 누르기 직전에 사진을 만들어요.
+    photoLibrary.latestPhoto = _photoCreated(const Duration(seconds: 14));
     await _tapAttachmentButton(tester);
 
     final Finder prompt = find.byKey(

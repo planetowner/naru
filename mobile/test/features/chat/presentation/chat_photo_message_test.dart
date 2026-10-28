@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:naru/design_system/app_colors.dart';
+import 'package:naru/design_system/app_icons.dart';
 import 'package:naru/features/chat/domain/chat_message.dart';
 import 'package:naru/features/chat/presentation/chat_conversation_view.dart';
 
@@ -337,38 +339,158 @@ final class _PhotoMessageIdentityHarnessState
 
   @override
   Widget build(BuildContext context) {
-    return ChatConversationView(initialMessages: <ChatMessage>[_message]);
+    return ChatConversationView(
+      initialMessages: <ChatMessage>[
+        _message,
+        ChatMessage(
+          id: 'photo-reply',
+          senderId: '2',
+          recipientId: '1',
+          content: 'Photo reply',
+          createdAt: DateTime(2026, 7, 1, 12, 53),
+          replyTo: ChatReplyReference(
+            messageId: _message.id,
+            senderId: _message.senderId,
+            content: 'Photo',
+          ),
+        ),
+      ],
+    );
   }
 }
 
 void main() {
-  testWidgets(
-    'photo element stays mounted when the server id replaces the local id',
-    (WidgetTester tester) async {
-      final GlobalKey<_PhotoMessageIdentityHarnessState> harnessKey =
-          GlobalKey<_PhotoMessageIdentityHarnessState>();
+  testWidgets('photo stays mounted and replies use the replacement server id', (
+    WidgetTester tester,
+  ) async {
+    final GlobalKey<_PhotoMessageIdentityHarnessState> harnessKey =
+        GlobalKey<_PhotoMessageIdentityHarnessState>();
 
-      await tester.pumpWidget(
-        MaterialApp(home: _PhotoMessageIdentityHarness(key: harnessKey)),
-      );
-      await tester.pumpAndSettle();
+    await tester.pumpWidget(
+      MaterialApp(home: _PhotoMessageIdentityHarness(key: harnessKey)),
+    );
+    await tester.pumpAndSettle();
 
-      const ValueKey<String> photoKey = ValueKey<String>(
-        'photo-message-stable-photo-preview-0',
-      );
-      final Element photoElementBeforeCompletion = tester.element(
-        find.byKey(photoKey),
-      );
+    const ValueKey<String> photoKey = ValueKey<String>(
+      'photo-message-stable-photo-preview-0',
+    );
+    final Element photoElementBeforeCompletion = tester.element(
+      find.byKey(photoKey),
+    );
 
-      harnessKey.currentState!.replaceWithServerMessage();
+    harnessKey.currentState!.replaceWithServerMessage();
+    await tester.pump();
+
+    expect(tester.element(find.byKey(photoKey)), photoElementBeforeCompletion);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey<String>('reply-quote-area-photo-reply')),
+    );
+    final Finder highlight = find.byKey(
+      const ValueKey<String>('message-highlight-photo-stable-photo-preview'),
+    );
+    for (int frame = 0; frame < 30 && highlight.evaluate().isEmpty; frame++) {
       await tester.pump();
+    }
+    expect(highlight, findsOneWidget);
+    expect(tester.element(find.byKey(photoKey)), photoElementBeforeCompletion);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey<String>('back-to-reply-message')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('back-to-reply-message')),
+      findsNothing,
+    );
+  });
 
-      expect(
-        tester.element(find.byKey(photoKey)),
-        photoElementBeforeCompletion,
-      );
-    },
-  );
+  for (final isOutgoing in [false, true]) {
+    testWidgets(
+      'reply finds a distant ${isOutgoing ? 'outgoing' : 'incoming'} photo by message id and returns',
+      (WidgetTester tester) async {
+        await tester.binding.setSurfaceSize(const Size(420, 900));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        final String photoSender = isOutgoing ? '1' : '2';
+        final List<ChatMessage> messages = List.generate(80, (int index) {
+          final bool isPhoto = index == 5;
+          final String sender = isPhoto
+              ? photoSender
+              : index.isEven
+              ? '1'
+              : '2';
+          return ChatMessage(
+            id: 'message-$index',
+            senderId: sender,
+            recipientId: sender == '1' ? '2' : '1',
+            content: isPhoto ? '' : 'Message $index',
+            createdAt: DateTime(2026, 7, 1, 12, index),
+            photoAttachments: isPhoto
+                ? [
+                    ChatPhotoAttachment(
+                      assetId: 'distant-photo',
+                      previewBytes: _testPng,
+                      width: 1200,
+                      height: 900,
+                    ),
+                  ]
+                : const [],
+            replyTo: index == 79
+                ? ChatReplyReference(
+                    messageId: 'message-5',
+                    senderId: photoSender,
+                    content: 'Photo',
+                  )
+                : null,
+          );
+        });
+        await tester.pumpWidget(
+          MaterialApp(home: ChatConversationView(initialMessages: messages)),
+        );
+        await tester.pumpAndSettle();
+        final Finder quote = find.byKey(
+          const ValueKey<String>('reply-quote-area-message-79'),
+        );
+        final Finder photo = find.byKey(
+          const ValueKey<String>('photo-message-distant-photo-0'),
+        );
+        final Finder backButton = find.byKey(
+          const ValueKey<String>('back-to-reply-message'),
+        );
+        final double initialReplyTop = tester.getTopLeft(quote).dy;
+        expect(photo.hitTestable(), findsNothing);
+
+        await tester.tap(quote);
+        for (
+          int frame = 0;
+          frame < 80 && backButton.evaluate().isEmpty;
+          frame++
+        ) {
+          await tester.pump(const Duration(milliseconds: 40));
+        }
+        expect(backButton, findsOneWidget);
+        expect(photo.hitTestable(), findsOneWidget);
+        final Rect listRect = tester.getRect(
+          find.byKey(const ValueKey<String>('message-list')),
+        );
+        final Rect photoRect = tester.getRect(photo);
+        expect(photoRect.top, greaterThanOrEqualTo(listRect.top));
+        expect(photoRect.bottom, lessThanOrEqualTo(listRect.bottom));
+
+        await tester.tap(backButton);
+        for (
+          int frame = 0;
+          frame < 80 && backButton.evaluate().isNotEmpty;
+          frame++
+        ) {
+          await tester.pump(const Duration(milliseconds: 40));
+        }
+        expect(backButton, findsNothing);
+        await tester.pumpAndSettle();
+        expect(tester.getTopLeft(quote).dy, closeTo(initialReplyTop, 1));
+      },
+    );
+  }
 
   testWidgets('new incoming photo row fades in at its final position', (
     WidgetTester tester,
@@ -440,10 +562,7 @@ void main() {
     );
 
     expect(
-      find.descendant(
-        of: bubbleFinder,
-        matching: find.byIcon(Icons.image_outlined),
-      ),
+      find.descendant(of: bubbleFinder, matching: find.byIcon(AppIcons.image)),
       findsNothing,
     );
   });
@@ -565,116 +684,145 @@ void main() {
     );
   });
 
-  testWidgets('photo viewer reuses a prefetched original file', (
-    WidgetTester tester,
-  ) async {
-    final Directory cacheDirectory = _setUpPhotoCacheDirectory(
-      'naru-photo-original-cache-test-',
-    );
+  for (final failFirstSave in [false, true]) {
+    testWidgets(
+      'photo viewer ${failFirstSave ? 'retries a failed save of' : 'reuses'} a prefetched original file',
+      (WidgetTester tester) async {
+        final Directory cacheDirectory = _setUpPhotoCacheDirectory(
+          'naru-photo-original-cache-test-',
+        );
 
-    const String mediaAssetId = 'prefetched-original-media';
-    final Directory originalDirectory = Directory(
-      '${cacheDirectory.path}/chat-photo-originals',
-    );
-    originalDirectory.createSync(recursive: true);
-    final File originalFile = File(
-      '${originalDirectory.path}/$mediaAssetId.image',
-    )..writeAsBytesSync(_testPng);
-    int originalAccessUrlRequests = 0;
-    MethodCall? photoSaveCall;
-    Uint8List? photoSaveInputBytes;
-    _setUpPhotoSave(
-      onCall: (MethodCall call) {
-        if (call.method == 'saveImage' || call.method == 'saveImageWithPath') {
-          photoSaveCall = call;
-          final Object? path =
-              (call.arguments as Map<Object?, Object?>?)?['path'];
-          if (path is String) {
-            photoSaveInputBytes = File(path).readAsBytesSync();
-          }
+        final String mediaAssetId = 'prefetched-original-media-$failFirstSave';
+        final Directory originalDirectory = Directory(
+          '${cacheDirectory.path}/chat-photo-originals',
+        );
+        originalDirectory.createSync(recursive: true);
+        final File originalFile = File(
+          '${originalDirectory.path}/$mediaAssetId.image',
+        )..writeAsBytesSync(_testPng);
+        int originalAccessUrlRequests = 0;
+        int saveRequests = 0;
+        MethodCall? photoSaveCall;
+        Uint8List? photoSaveInputBytes;
+        _setUpPhotoSave(
+          onCall: (MethodCall call) {
+            if (call.method == 'saveImage' ||
+                call.method == 'saveImageWithPath') {
+              saveRequests++;
+              photoSaveCall = call;
+              final Object? path =
+                  (call.arguments as Map<Object?, Object?>?)?['path'];
+              if (path is String) {
+                photoSaveInputBytes = File(path).readAsBytesSync();
+              }
+              if (failFirstSave && saveRequests == 1) {
+                throw PlatformException(code: 'save-failed');
+              }
+            }
+          },
+        );
+        final ChatMessage message = ChatMessage(
+          id: 'prefetched-original-message',
+          senderId: '2',
+          recipientId: '1',
+          content: '',
+          createdAt: DateTime(2026, 7, 1, 12, 52),
+          photoAttachments: <ChatPhotoAttachment>[
+            ChatPhotoAttachment(
+              assetId: 'prefetched-original-photo',
+              mediaAssetId: mediaAssetId,
+              previewBytes: _testPng,
+              width: 1200,
+              height: 900,
+              fileName: 'prefetched-original.png',
+              mimeType: 'image/png',
+            ),
+          ],
+        );
+
+        await tester.runAsync(() async {
+          await tester.pumpWidget(
+            MaterialApp(
+              home: ChatConversationView(
+                initialMessages: <ChatMessage>[message],
+                onCreateMediaAssetAccessUrl:
+                    ({required String mediaAssetId}) async {
+                      originalAccessUrlRequests++;
+                      throw StateError(
+                        'The prefetched original must be reused.',
+                      );
+                    },
+              ),
+            ),
+          );
+          await tester.pump();
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+          await tester.pumpAndSettle();
+        });
+
+        await tester.tap(
+          find.byKey(
+            const ValueKey<String>('photo-message-prefetched-original-photo-0'),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final Image originalImage = tester.widget<Image>(
+          find.byKey(
+            const ValueKey<String>(
+              'photo-viewer-original-prefetched-original-photo',
+            ),
+          ),
+        );
+        final ResizeImage resizedImage = originalImage.image as ResizeImage;
+        final FileImage fileImage = resizedImage.imageProvider as FileImage;
+
+        expect(fileImage.file.path, originalFile.path);
+        expect(originalAccessUrlRequests, 0);
+
+        await tester.tap(
+          find.byKey(const ValueKey<String>('photo-viewer-download')),
+        );
+        await tester.pump();
+        if (failFirstSave) {
+          await _pumpRealAsyncUntil(
+            tester,
+            () => find.text('Photo could not be saved.').evaluate().isNotEmpty,
+            failureReason: '저장 실패 안내가 표시되지 않았습니다.',
+          );
+          expect(find.text('Photo saved'), findsNothing);
+          final failedPath =
+              (photoSaveCall!.arguments as Map<Object?, Object?>)['path']
+                  as String;
+          expect(File(failedPath).existsSync(), isFalse);
+          expect(originalFile.existsSync(), isTrue);
+          await tester.tap(
+            find.byKey(const ValueKey<String>('photo-viewer-download')),
+          );
+          await tester.pump();
         }
+        await _pumpRealAsyncUntil(
+          tester,
+          () => find.text('Photo saved').evaluate().isNotEmpty,
+          failureReason: '사진 저장 완료 안내가 표시되지 않았습니다.',
+        );
+
+        expect(saveRequests, failFirstSave ? 2 : 1);
+        expect(photoSaveCall?.method, 'saveImageWithPath');
+        final Map<Object?, Object?> photoSaveArguments =
+            photoSaveCall?.arguments as Map<Object?, Object?>;
+        final String photoSaveInputPath = photoSaveArguments['path']! as String;
+        expect(photoSaveInputPath, isNot(originalFile.path));
+        expect(photoSaveInputPath, endsWith('.png'));
+        expect(photoSaveArguments['title'], endsWith('.png'));
+        expect(photoSaveInputBytes, _testPng);
+        expect(File(photoSaveInputPath).existsSync(), isFalse);
+        expect(originalFile.existsSync(), isTrue);
+        expect(find.text('Photo saved'), findsOneWidget);
+        expect(originalAccessUrlRequests, 0);
       },
     );
-    final ChatMessage message = ChatMessage(
-      id: 'prefetched-original-message',
-      senderId: '2',
-      recipientId: '1',
-      content: '',
-      createdAt: DateTime(2026, 7, 1, 12, 52),
-      photoAttachments: <ChatPhotoAttachment>[
-        ChatPhotoAttachment(
-          assetId: 'prefetched-original-photo',
-          mediaAssetId: mediaAssetId,
-          previewBytes: _testPng,
-          width: 1200,
-          height: 900,
-          fileName: 'prefetched-original.png',
-          mimeType: 'image/png',
-        ),
-      ],
-    );
-
-    await tester.runAsync(() async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: ChatConversationView(
-            initialMessages: <ChatMessage>[message],
-            onCreateMediaAssetAccessUrl:
-                ({required String mediaAssetId}) async {
-                  originalAccessUrlRequests++;
-                  throw StateError('The prefetched original must be reused.');
-                },
-          ),
-        ),
-      );
-      await tester.pump();
-      await Future<void>.delayed(const Duration(milliseconds: 10));
-      await tester.pumpAndSettle();
-    });
-
-    await tester.tap(
-      find.byKey(
-        const ValueKey<String>('photo-message-prefetched-original-photo-0'),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    final Image originalImage = tester.widget<Image>(
-      find.byKey(
-        const ValueKey<String>(
-          'photo-viewer-original-prefetched-original-photo',
-        ),
-      ),
-    );
-    final ResizeImage resizedImage = originalImage.image as ResizeImage;
-    final FileImage fileImage = resizedImage.imageProvider as FileImage;
-
-    expect(fileImage.file.path, originalFile.path);
-    expect(originalAccessUrlRequests, 0);
-
-    await tester.tap(
-      find.byKey(const ValueKey<String>('photo-viewer-download')),
-    );
-    await tester.pump();
-    await _pumpRealAsyncUntil(
-      tester,
-      () => find.text('Photo saved').evaluate().isNotEmpty,
-      failureReason: '사진 저장 완료 안내가 표시되지 않았습니다.',
-    );
-
-    expect(photoSaveCall?.method, 'saveImageWithPath');
-    final Map<Object?, Object?> photoSaveArguments =
-        photoSaveCall?.arguments as Map<Object?, Object?>;
-    final String photoSaveInputPath = photoSaveArguments['path']! as String;
-    expect(photoSaveInputPath, isNot(originalFile.path));
-    expect(photoSaveInputPath, endsWith('.png'));
-    expect(photoSaveArguments['title'], endsWith('.png'));
-    expect(photoSaveInputBytes, _testPng);
-    expect(File(photoSaveInputPath).existsSync(), isFalse);
-    expect(originalFile.existsSync(), isTrue);
-    expect(find.text('Photo saved'), findsOneWidget);
-    expect(originalAccessUrlRequests, 0);
-  });
+  }
 
   testWidgets('photo viewer keeps the cached thumbnail while original loads', (
     WidgetTester tester,
@@ -845,9 +993,12 @@ void main() {
       harnessKey.currentState!.completeWithLocalPreview();
       await tester.pump();
 
+      // 파일 생성과 바이트 저장은 별개이므로 내용이 저장될 때까지 기다려요.
       for (
         int attempt = 0;
-        attempt < 20 && !cachedPreview.existsSync();
+        attempt < 20 &&
+            (!cachedPreview.existsSync() ||
+                cachedPreview.lengthSync() != _testPng.length);
         attempt++
       ) {
         await Future<void>.delayed(const Duration(milliseconds: 5));
@@ -965,7 +1116,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.byIcon(Icons.close_rounded), findsOneWidget);
+    expect(find.byIcon(AppIcons.close), findsOneWidget);
     expect(find.text('0.5 / 1.2 MB'), findsOneWidget);
     final CircularProgressIndicator progressIndicator = tester.widget(
       find.byType(CircularProgressIndicator),
@@ -1089,11 +1240,11 @@ void main() {
     expect(backGroupBorder.top.width, 0.67);
     expect(participantNameText.style?.fontSize, 18);
     expect(participantNameText.style?.fontWeight, FontWeight.w700);
-    expect(participantNameText.style?.color, const Color(0xFF191919));
+    expect(participantNameText.style?.color, AppColors.textPrimary);
     expect(searchIcon.size, 25);
-    expect(searchIcon.color, const Color(0xFF1B3243));
+    expect(searchIcon.color, AppColors.textPrimary);
     expect(callIcon.size, 25);
-    expect(callIcon.color, const Color(0xFF1B3243));
+    expect(callIcon.color, AppColors.textPrimary);
     expect(find.text('67'), findsOneWidget);
 
     await tester.tap(_photoFinder(0));
@@ -1301,7 +1452,7 @@ void main() {
     );
     final Finder icon = find.descendant(
       of: confirmation,
-      matching: find.byType(CustomPaint),
+      matching: find.byIcon(AppIcons.checkCircle),
     );
     final Finder label = find.text('Photo saved');
     final Rect confirmationRect = tester.getRect(confirmation);

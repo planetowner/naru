@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../design_system/app_colors.dart';
+import '../../../design_system/app_icons.dart';
 import '../../../design_system/app_spacing.dart';
+import '../../../design_system/app_typography.dart';
 import '../../../design_system/components/components.dart';
 import '../data/auth_login_exception.dart';
 
@@ -98,13 +100,18 @@ final class _LoginScreenState extends State<LoginScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const SizedBox(height: AppSpacing.space40),
-                    Text('naru', style: textTheme.displayMedium),
-                    const SizedBox(height: AppSpacing.space12),
-                    Text(
-                      'Talk naturally, in each other’s language.',
-                      style: textTheme.bodyLarge?.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
+                    Column(
+                      children: [
+                        const ExcludeSemantics(child: AppLogo()),
+                        const SizedBox(height: AppSpacing.space16),
+                        Text(
+                          'naru',
+                          style: AppTypography.typography1.copyWith(
+                            fontWeight: AppTypography.bold,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: AppSpacing.space48),
                     AppTextField(
@@ -145,8 +152,8 @@ final class _LoginScreenState extends State<LoginScreen> {
                         },
                         icon: Icon(
                           _obscurePassword
-                              ? Icons.visibility_outlined
-                              : Icons.visibility_off_outlined,
+                              ? AppIcons.visibility
+                              : AppIcons.visibilityOff,
                         ),
                       ),
                     ),

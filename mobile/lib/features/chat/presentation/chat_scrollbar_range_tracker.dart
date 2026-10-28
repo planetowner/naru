@@ -201,9 +201,6 @@ final class ChatScrollbarRangeSnapshot {
 
 abstract final class ChatScrollbarThumbLengthResolver {
   // 같은 크기의 대화 구간이 늘면 thumb를 144, 72, 48 순으로 줄이고 36에서 멈춰요.
-  static const double minimumLength = 36;
-  static const double initialPageLength = 144;
-
   static double resolve({
     required double trackExtent,
     required double proportionalLength,
@@ -213,7 +210,7 @@ abstract final class ChatScrollbarThumbLengthResolver {
       return 0;
     }
 
-    final double resolvedMinimum = math.min(minimumLength, trackExtent);
+    final double resolvedMinimum = math.min(36.0, trackExtent);
     final double resolvedProportional = proportionalLength
         .clamp(resolvedMinimum, trackExtent)
         .toDouble();
@@ -221,7 +218,7 @@ abstract final class ChatScrollbarThumbLengthResolver {
         messageCountScale.isFinite && messageCountScale > 1
         ? messageCountScale
         : 1;
-    final double pageScaledLength = (initialPageLength / resolvedScale)
+    final double pageScaledLength = (144.0 / resolvedScale)
         .clamp(resolvedMinimum, trackExtent)
         .toDouble();
 

@@ -2,6 +2,12 @@
 
 Flutter client for naru.
 
+## Design System
+
+- [Design system structure and usage](../docs/design-system.md)
+- [Screen-specific values and source locations](../docs/design-system-local-values.md)
+- [Brand assets and regeneration](assets/brand/README.md)
+
 ## Run Against Deployed Backend
 
 Install Flutter dependencies from this directory:

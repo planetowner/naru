@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 
+import '../app_icons.dart';
+import '../app_spacing.dart';
+
 abstract final class AppMediaViewerChrome {
   static const Color backgroundColor = Color(0xFF202020);
   static const Color buttonColor = Color(0xFF272727);
   static const Color buttonBorderColor = Color(0xFF4E4E4E);
   static const Color foregroundColor = Color(0xFFE8E8E8);
+  // 미디어 제목과 재생 시간은 아이콘보다 밝은 기존 글자색을 사용해요.
+  static const Color labelColor = Color(0xFFF2F2F2);
   static const double buttonDimension = 44;
-  static const double horizontalMargin = 16;
+  static const double horizontalMargin = AppSpacing.space16;
   static const double trailingSpacing = 23;
   static const Duration controlsAnimationDuration = Duration(milliseconds: 200);
 
@@ -17,6 +22,41 @@ abstract final class AppMediaViewerChrome {
   static Curve controlsSlideCurve(bool visible) {
     return visible ? Curves.easeOutCubic : Curves.linear;
   }
+}
+
+// 뷰어와 편집 컨트롤은 같은 속도로 이동·페이드하고 숨겨진 동안 터치를 막아요.
+final class AppMediaViewerControlsTransition extends StatelessWidget {
+  const AppMediaViewerControlsTransition({
+    required this.visible,
+    required this.hiddenOffset,
+    required this.child,
+    this.slideKey,
+    this.opacityKey,
+    super.key,
+  });
+
+  final bool visible;
+  final Offset hiddenOffset;
+  final Widget child;
+  final Key? slideKey;
+  final Key? opacityKey;
+
+  @override
+  Widget build(BuildContext context) => AnimatedSlide(
+    key: slideKey,
+    duration: AppMediaViewerChrome.controlsAnimationDuration,
+    curve: AppMediaViewerChrome.controlsSlideCurve(visible),
+    offset: visible ? Offset.zero : hiddenOffset,
+    child: IgnorePointer(
+      ignoring: !visible,
+      child: AnimatedOpacity(
+        key: opacityKey,
+        duration: AppMediaViewerChrome.controlsAnimationDuration,
+        opacity: visible ? 1 : 0,
+        child: child,
+      ),
+    ),
+  );
 }
 
 final class AppMediaViewerControlTapRegion extends StatelessWidget {
@@ -53,9 +93,14 @@ final class AppTopBarButtonSurface extends StatelessWidget {
   final Widget child;
   final BoxShape shape;
 
+  // 버튼 표면과 터치 영역의 모서리를 같은 높이 기준으로 계산해요.
+  static BorderRadius borderRadiusForHeight(double height) {
+    return BorderRadius.circular(height / 2);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final BorderRadius borderRadius = BorderRadius.circular(height / 2);
+    final BorderRadius borderRadius = borderRadiusForHeight(height);
 
     return SizedBox(
       width: width,
@@ -85,6 +130,7 @@ final class AppTopBarButtonSurface extends StatelessWidget {
   }
 }
 
+// 일반·미디어 버튼은 같은 표면과 터치 처리를 쓰고 크기·색상·내용만 바꿔요.
 final class AppMediaViewerChromeButton extends StatelessWidget {
   const AppMediaViewerChromeButton({
     required this.onPressed,
@@ -92,6 +138,8 @@ final class AppMediaViewerChromeButton extends StatelessWidget {
     this.dimension = AppMediaViewerChrome.buttonDimension,
     this.width,
     this.shape = BoxShape.circle,
+    this.backgroundColor = AppMediaViewerChrome.buttonColor,
+    this.borderColor = AppMediaViewerChrome.buttonBorderColor,
     super.key,
   });
 
@@ -100,14 +148,16 @@ final class AppMediaViewerChromeButton extends StatelessWidget {
   final double dimension;
   final double? width;
   final BoxShape shape;
+  final Color backgroundColor;
+  final Color borderColor;
 
   @override
   Widget build(BuildContext context) {
     return AppTopBarButtonSurface(
       width: width ?? dimension,
       height: dimension,
-      color: AppMediaViewerChrome.buttonColor,
-      borderColor: AppMediaViewerChrome.buttonBorderColor,
+      color: backgroundColor,
+      borderColor: borderColor,
       shape: shape,
       child: InkWell(
         onTap: onPressed,
@@ -130,7 +180,13 @@ final class AppTopBarBackIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox.fromSize(
       size: const Size.square(24),
-      child: CustomPaint(painter: _AppTopBarBackIconPainter(color: color)),
+      // 직접 그리던 상단 화살표의 고정 방향을 유지해요.
+      child: Icon(
+        AppIcons.back,
+        size: 24,
+        color: color,
+        textDirection: TextDirection.ltr,
+      ),
     );
   }
 }
@@ -144,7 +200,6 @@ final class AppMediaEditIcon extends StatelessWidget {
 
   static const double referenceButtonDimension = 48;
   static const double referenceDimension = 24;
-  static const double referenceStrokeWidth = 1.5;
   static const double iconToButtonRatio =
       referenceDimension / referenceButtonDimension;
 
@@ -155,80 +210,7 @@ final class AppMediaEditIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox.square(
       dimension: dimension,
-      child: CustomPaint(painter: _AppMediaEditIconPainter(color: color)),
+      child: Icon(AppIcons.edit, size: dimension, color: color),
     );
-  }
-}
-
-final class _AppMediaEditIconPainter extends CustomPainter {
-  const _AppMediaEditIconPainter({required this.color});
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final double scale =
-        size.shortestSide / AppMediaEditIcon.referenceDimension;
-    final Paint paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = AppMediaEditIcon.referenceStrokeWidth
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    final Path pencil = Path()
-      ..moveTo(2.25, 17)
-      ..lineTo(15.5, 3.75)
-      ..quadraticBezierTo(17.25, 2, 19, 3.75)
-      ..lineTo(20.5, 5.25)
-      ..quadraticBezierTo(22.25, 7, 20.5, 8.75)
-      ..lineTo(7.25, 22)
-      ..lineTo(2.25, 22)
-      ..close();
-
-    // 원 크기가 달라도 펜슬의 외곽과 선 굵기를 같은 비율로 줄여요.
-    canvas
-      ..save()
-      ..translate(
-        (size.width - AppMediaEditIcon.referenceDimension * scale) / 2,
-        (size.height - AppMediaEditIcon.referenceDimension * scale) / 2,
-      )
-      ..scale(scale);
-    canvas.drawPath(pencil, paint);
-    canvas.drawLine(const Offset(14, 5.25), const Offset(19, 10.25), paint);
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(covariant _AppMediaEditIconPainter oldDelegate) {
-    return color != oldDelegate.color;
-  }
-}
-
-final class _AppTopBarBackIconPainter extends CustomPainter {
-  const _AppTopBarBackIconPainter({required this.color});
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final Paint paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
-    canvas.drawPath(
-      Path()
-        ..moveTo(16, 3)
-        ..lineTo(6, 12)
-        ..lineTo(16, 21),
-      paint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _AppTopBarBackIconPainter oldDelegate) {
-    return color != oldDelegate.color;
   }
 }

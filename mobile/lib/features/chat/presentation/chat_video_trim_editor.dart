@@ -7,10 +7,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../../design_system/app_icons.dart';
 import '../../../design_system/app_colors.dart';
+import '../../../design_system/app_radius.dart';
 import '../../../design_system/app_typography.dart';
 import '../../../design_system/components/app_media_viewer_chrome.dart';
 import '../data/chat_video_transcoder.dart';
+import 'chat_duration_formatter.dart';
 
 final class ChatVideoTrimEditor extends StatefulWidget {
   const ChatVideoTrimEditor({
@@ -36,9 +39,7 @@ final class ChatVideoTrimEditor extends StatefulWidget {
 
 final class _ChatVideoTrimEditorState extends State<ChatVideoTrimEditor>
     with AutomaticKeepAliveClientMixin {
-  static const MethodChannel _channel = MethodChannel(
-    'naru/video-transcoder',
-  );
+  static const MethodChannel _channel = MethodChannel('naru/video-transcoder');
 
   VideoPlayerController? _controller;
   List<Uint8List> _thumbnails = const <Uint8List>[];
@@ -282,8 +283,7 @@ final class _ChatVideoTrimEditorState extends State<ChatVideoTrimEditor>
             constraints.maxWidth / constraints.maxHeight;
         final bool sameOrientation = (videoRatio >= 1) == (viewportRatio >= 1);
         final BoxFit fit =
-            sameOrientation &&
-                (math.log(videoRatio / viewportRatio)).abs() < 0.45
+            sameOrientation && math.log(videoRatio / viewportRatio).abs() < 0.45
             ? BoxFit.cover
             : BoxFit.contain;
 
@@ -308,13 +308,16 @@ final class _ChatVideoTrimEditorState extends State<ChatVideoTrimEditor>
       fit: StackFit.expand,
       children: [
         _buildVideo(),
-        const IgnorePointer(
+        IgnorePointer(
           child: DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                begin: Alignment(0, 0.45),
+                begin: const Alignment(0, 0.45),
                 end: Alignment.bottomCenter,
-                colors: <Color>[Color(0x00000000), Color(0xD9000000)],
+                colors: <Color>[
+                  AppColors.black.withAlpha(0),
+                  AppColors.black.withAlpha(217),
+                ],
               ),
             ),
           ),
@@ -325,43 +328,33 @@ final class _ChatVideoTrimEditorState extends State<ChatVideoTrimEditor>
           bottom:
               widget.controlCenterFromBottom -
               ChatVideoTrimTimeline.trackHeight / 2,
-          child: AnimatedSlide(
-            key: const ValueKey<String>('video-trim-timeline-slide'),
-            duration: AppMediaViewerChrome.controlsAnimationDuration,
-            curve: AppMediaViewerChrome.controlsSlideCurve(
-              widget.controlsVisible,
-            ),
-            offset: widget.controlsVisible ? Offset.zero : const Offset(0, 1),
-            child: IgnorePointer(
-              ignoring: !widget.controlsVisible,
-              child: AnimatedOpacity(
-                key: const ValueKey<String>('video-trim-timeline-opacity'),
-                duration: AppMediaViewerChrome.controlsAnimationDuration,
-                opacity: widget.controlsVisible ? 1 : 0,
-                child: AppMediaViewerControlTapRegion(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      ChatVideoTrimPlaybackControl(
-                        isPlaying: _isPlaying,
-                        onPressed: () {
-                          unawaited(_togglePlayback());
-                        },
-                      ),
-                      Expanded(
-                        child: ChatVideoTrimTimeline(
-                          duration: _resolvedDuration,
-                          trimRange: _trimRange,
-                          position: _position,
-                          thumbnails: _thumbnails,
-                          onTrimChanged: _handleTrimChanged,
-                          onPositionChanged: _handleScrubChanged,
-                          onInteractionEnd: _handleTimelineInteractionEnd,
-                        ),
-                      ),
-                    ],
+          child: AppMediaViewerControlsTransition(
+            slideKey: const ValueKey<String>('video-trim-timeline-slide'),
+            opacityKey: const ValueKey<String>('video-trim-timeline-opacity'),
+            visible: widget.controlsVisible,
+            hiddenOffset: const Offset(0, 1),
+            child: AppMediaViewerControlTapRegion(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  ChatVideoTrimPlaybackControl(
+                    isPlaying: _isPlaying,
+                    onPressed: () {
+                      unawaited(_togglePlayback());
+                    },
                   ),
-                ),
+                  Expanded(
+                    child: ChatVideoTrimTimeline(
+                      duration: _resolvedDuration,
+                      trimRange: _trimRange,
+                      position: _position,
+                      thumbnails: _thumbnails,
+                      onTrimChanged: _handleTrimChanged,
+                      onPositionChanged: _handleScrubChanged,
+                      onInteractionEnd: _handleTimelineInteractionEnd,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -378,11 +371,9 @@ final class ChatVideoTrimPlaybackControl extends StatelessWidget {
     super.key,
   });
 
-  static const double width = 48;
+  static const double width = 48.0;
   static const double height = ChatVideoTrimTimeline.trackHeight;
   static const double cornerRadius = ChatVideoTrimTimeline.cornerRadius;
-  // iOS 사진 편집기의 3× 캡처에서 재생 아이콘 모서리 곡면을 8px로 측정했어요.
-  static const double playIconCornerInset = 2.75;
 
   final bool isPlaying;
   final VoidCallback onPressed;
@@ -398,15 +389,17 @@ final class ChatVideoTrimPlaybackControl extends StatelessWidget {
         height: height,
         child: DecoratedBox(
           key: const ValueKey<String>('video-trim-playback-background'),
-          decoration: const BoxDecoration(
-            color: AppColors.incomingMessageBubble,
+          decoration: BoxDecoration(
+            color: AppColors.grey100,
             borderRadius: BorderRadius.horizontal(
               left: Radius.circular(cornerRadius),
             ),
             border: Border(right: BorderSide(color: AppColors.white, width: 1)),
           ),
-          child: CustomPaint(
-            painter: _VideoTrimPlaybackIconPainter(isPlaying: isPlaying),
+          child: Icon(
+            AppIcons.playback(isPlaying),
+            size: 24.0,
+            color: AppColors.grey900,
           ),
         ),
       ),
@@ -417,6 +410,19 @@ final class ChatVideoTrimPlaybackControl extends StatelessWidget {
 enum _VideoTrimInteraction { start, end, position }
 
 final class ChatVideoTrimTimeline extends StatefulWidget {
+  static final TextStyle _timeLabel = AppTypography.subTypography12.copyWith(
+    color: AppColors.white,
+    height: 1,
+    fontFeatures: const <ui.FontFeature>[ui.FontFeature.tabularFigures()],
+  );
+
+  // 배경과 클리핑의 오른쪽 모서리를 같은 규격으로 맞춰요.
+  static const BorderRadius _trackBorderRadius = BorderRadius.horizontal(
+    right: Radius.circular(cornerRadius),
+  );
+
+  static final Color _excludedRangeColor = AppColors.black.withAlpha(150);
+
   const ChatVideoTrimTimeline({
     required this.duration,
     required this.trimRange,
@@ -428,21 +434,22 @@ final class ChatVideoTrimTimeline extends StatefulWidget {
     super.key,
   });
 
-  // iOS 사진 편집기의 3× 캡처에서 트랙 높이가 153px로 측정됐어요.
-  static const double trackHeight = 51;
-  static const double horizontalMargin = 15;
-  static const double cornerRadius = 8;
-  static const double frameThickness = 5;
-  static const double textHeight = 12;
-  static const double textToTrackGap = 11;
+  // 편집 화면·트랙 배치·그리기·탐색이 같은 치수를 사용해요.
+  static const double trackHeight = 51.0;
+  static const double horizontalMargin = 15.0;
+  static const double cornerRadius = AppRadius.radius8;
+  static const double frameThickness = 5.0;
+  static const double textHeight = 12.0;
+  static const double textToTrackGap = 11.0;
   static const double totalHeight = textHeight + textToTrackGap + trackHeight;
-  static const double handleWidth = 18;
-  static const double playheadWidth = 4;
-  static const double playheadVerticalInset = 3;
+  static const double handleWidth = 18.0;
+  static const double playheadWidth = 4.0;
+  static const double playheadVerticalInset = 3.0;
+  // 프레임 요청 개수와 화면의 칸 수를 함께 유지해요.
   // iOS 편집기의 3× 캡처에서 279pt 프레임 영역이 13칸으로 나뉘었어요.
   static const int thumbnailCount = 13;
   // 사진 편집 캡처에서 PencilKit 툴바 중앙은 화면 하단에서 52pt였어요.
-  static const double referenceControlCenterFromBottom = 52;
+  static const double referenceControlCenterFromBottom = 52.0;
   static const Duration minimumTrimDuration = Duration(seconds: 1);
 
   final Duration duration;
@@ -459,7 +466,7 @@ final class ChatVideoTrimTimeline extends StatefulWidget {
 }
 
 final class _ChatVideoTrimTimelineState extends State<ChatVideoTrimTimeline> {
-  static const double _handleHitRadius = 24;
+  static const double _handleHitRadius = 24.0;
 
   _VideoTrimInteraction _interaction = _VideoTrimInteraction.position;
   _VideoTrimInteraction? _lastHandleInteraction;
@@ -494,21 +501,16 @@ final class _ChatVideoTrimTimelineState extends State<ChatVideoTrimTimeline> {
     );
   }
 
-  double _trimBoundaryX(Duration value, double width) {
-    final double contentWidth = width - ChatVideoTrimTimeline.handleWidth * 2;
-
-    return ChatVideoTrimTimeline.handleWidth + contentWidth * _fraction(value);
-  }
-
-  double _positionX(Duration value, double width) {
+  // 구간 경계와 재생 위치는 같은 시간→좌표 계산을 사용해요.
+  double _timelineX(Duration value, double width) {
     final double contentWidth = width - ChatVideoTrimTimeline.handleWidth * 2;
 
     return ChatVideoTrimTimeline.handleWidth + contentWidth * _fraction(value);
   }
 
   _VideoTrimInteraction _interactionFor(double x, double width) {
-    final double startX = _trimBoundaryX(_workingRange.start, width);
-    final double endX = _trimBoundaryX(_workingRange.end, width);
+    final double startX = _timelineX(_workingRange.start, width);
+    final double endX = _timelineX(_workingRange.end, width);
     final double startDistance = (x - startX).abs();
     final double endDistance = (x - endX).abs();
 
@@ -612,12 +614,6 @@ final class _ChatVideoTrimTimelineState extends State<ChatVideoTrimTimeline> {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle timeStyle = AppTypography.subTypography12.copyWith(
-      color: AppColors.white,
-      height: 1,
-      fontFeatures: const <ui.FontFeature>[ui.FontFeature.tabularFigures()],
-    );
-
     return SizedBox(
       key: const ValueKey<String>('video-trim-timeline'),
       height: ChatVideoTrimTimeline.totalHeight,
@@ -629,10 +625,10 @@ final class _ChatVideoTrimTimelineState extends State<ChatVideoTrimTimeline> {
               builder: (BuildContext context, BoxConstraints constraints) {
                 final double width = constraints.maxWidth;
                 final double startCenter =
-                    _trimBoundaryX(widget.trimRange.start, width) -
+                    _timelineX(widget.trimRange.start, width) -
                     ChatVideoTrimTimeline.handleWidth / 2;
                 final double endCenter =
-                    _trimBoundaryX(widget.trimRange.end, width) +
+                    _timelineX(widget.trimRange.end, width) +
                     ChatVideoTrimTimeline.handleWidth / 2;
 
                 return Stack(
@@ -645,11 +641,11 @@ final class _ChatVideoTrimTimelineState extends State<ChatVideoTrimTimeline> {
                             centerX: startCenter,
                           ),
                           child: Text(
-                            _formatVideoTrimTime(widget.trimRange.start),
+                            formatChatVideoDuration(widget.trimRange.start),
                             key: const ValueKey<String>(
                               'video-trim-start-label',
                             ),
-                            style: timeStyle,
+                            style: ChatVideoTrimTimeline._timeLabel,
                           ),
                         ),
                       ),
@@ -660,9 +656,9 @@ final class _ChatVideoTrimTimelineState extends State<ChatVideoTrimTimeline> {
                             centerX: endCenter,
                           ),
                           child: Text(
-                            _formatVideoTrimTime(widget.trimRange.end),
+                            formatChatVideoDuration(widget.trimRange.end),
                             key: const ValueKey<String>('video-trim-end-label'),
-                            style: timeStyle,
+                            style: ChatVideoTrimTimeline._timeLabel,
                           ),
                         ),
                       ),
@@ -680,12 +676,9 @@ final class _ChatVideoTrimTimelineState extends State<ChatVideoTrimTimeline> {
                 final double width = constraints.maxWidth;
                 final double contentWidth =
                     width - ChatVideoTrimTimeline.handleWidth * 2;
-                final double startX = _trimBoundaryX(
-                  widget.trimRange.start,
-                  width,
-                );
-                final double endX = _trimBoundaryX(widget.trimRange.end, width);
-                final double positionX = _positionX(widget.position, width);
+                final double startX = _timelineX(widget.trimRange.start, width);
+                final double endX = _timelineX(widget.trimRange.end, width);
+                final double positionX = _timelineX(widget.position, width);
                 final double playheadLeft =
                     (positionX - ChatVideoTrimTimeline.playheadWidth / 2)
                         .clamp(
@@ -728,11 +721,7 @@ final class _ChatVideoTrimTimelineState extends State<ChatVideoTrimTimeline> {
                   },
                   onHorizontalDragCancel: _endInteraction,
                   child: ClipRRect(
-                    borderRadius: const BorderRadius.horizontal(
-                      right: Radius.circular(
-                        ChatVideoTrimTimeline.cornerRadius,
-                      ),
-                    ),
+                    borderRadius: ChatVideoTrimTimeline._trackBorderRadius,
                     child: Stack(
                       children: [
                         Positioned.fill(
@@ -743,13 +732,10 @@ final class _ChatVideoTrimTimelineState extends State<ChatVideoTrimTimeline> {
                             decoration: BoxDecoration(
                               // 실제 프레임 전에는 아래의 동영상 화면을 그대로 보여줘요.
                               color: thumbnailsReady
-                                  ? AppColors.incomingMessageBubble
+                                  ? AppColors.grey100
                                   : Colors.transparent,
-                              borderRadius: const BorderRadius.horizontal(
-                                right: Radius.circular(
-                                  ChatVideoTrimTimeline.cornerRadius,
-                                ),
-                              ),
+                              borderRadius:
+                                  ChatVideoTrimTimeline._trackBorderRadius,
                             ),
                           ),
                         ),
@@ -790,7 +776,7 @@ final class _ChatVideoTrimTimelineState extends State<ChatVideoTrimTimeline> {
                           ),
                           bottom: ChatVideoTrimTimeline.frameThickness,
                           child: ColoredBox(
-                            color: AppColors.black.withAlpha(150),
+                            color: ChatVideoTrimTimeline._excludedRangeColor,
                           ),
                         ),
                         Positioned(
@@ -799,7 +785,7 @@ final class _ChatVideoTrimTimelineState extends State<ChatVideoTrimTimeline> {
                           top: ChatVideoTrimTimeline.frameThickness,
                           bottom: ChatVideoTrimTimeline.frameThickness,
                           child: ColoredBox(
-                            color: AppColors.black.withAlpha(150),
+                            color: ChatVideoTrimTimeline._excludedRangeColor,
                           ),
                         ),
                         Positioned.fill(
@@ -809,8 +795,8 @@ final class _ChatVideoTrimTimelineState extends State<ChatVideoTrimTimeline> {
                               startX: startX,
                               endX: endX,
                               color: isTrimmed
-                                  ? AppColors.outgoingMessageBubble
-                                  : AppColors.incomingMessageBubble,
+                                  ? AppColors.primary
+                                  : AppColors.grey100,
                             ),
                           ),
                         ),
@@ -879,9 +865,9 @@ final class _VideoTrimSelectionPainter extends CustomPainter {
     required this.color,
   });
 
-  static const double _handleMarkWidth = 3;
-  static const double _handleMarkHeight = 20;
-  static const double _radius = 3;
+  static const double _handleMarkWidth = 3.0;
+  static const double _handleMarkHeight = 20.0;
+  static const double _radius = 3.0;
 
   final double startX;
   final double endX;
@@ -959,98 +945,4 @@ final class _VideoTrimSelectionPainter extends CustomPainter {
         endX != oldDelegate.endX ||
         color != oldDelegate.color;
   }
-}
-
-final class _VideoTrimPlaybackIconPainter extends CustomPainter {
-  const _VideoTrimPlaybackIconPainter({required this.isPlaying});
-
-  final bool isPlaying;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final Paint paint = Paint()..color = AppColors.grey900;
-
-    if (isPlaying) {
-      const double barWidth = 5;
-      const double barHeight = 17;
-      final double top = (size.height - barHeight) / 2;
-      for (final double centerX in <double>[
-        size.width / 2 - 4,
-        size.width / 2 + 4,
-      ]) {
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(
-            Rect.fromCenter(
-              center: Offset(centerX, top + barHeight / 2),
-              width: barWidth,
-              height: barHeight,
-            ),
-            const Radius.circular(2.5),
-          ),
-          paint,
-        );
-      }
-      return;
-    }
-
-    final Offset center = size.center(const Offset(1, 0));
-    canvas.drawPath(
-      _roundedTrianglePath(<Offset>[
-        center + const Offset(-9, -9),
-        center + const Offset(9, 0),
-        center + const Offset(-9, 9),
-      ], ChatVideoTrimPlaybackControl.playIconCornerInset),
-      paint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _VideoTrimPlaybackIconPainter oldDelegate) {
-    return isPlaying != oldDelegate.isPlaying;
-  }
-}
-
-Path _roundedTrianglePath(List<Offset> vertices, double cornerInset) {
-  Offset pointToward(Offset from, Offset to) {
-    final Offset delta = to - from;
-
-    return from + delta / delta.distance * cornerInset;
-  }
-
-  final Path path = Path();
-  for (int index = 0; index < vertices.length; index += 1) {
-    final Offset vertex = vertices[index];
-    final Offset previous = vertices[(index - 1) % vertices.length];
-    final Offset next = vertices[(index + 1) % vertices.length];
-    final Offset beforeCorner = pointToward(vertex, previous);
-    final Offset afterCorner = pointToward(vertex, next);
-
-    if (index == 0) {
-      path.moveTo(beforeCorner.dx, beforeCorner.dy);
-    } else {
-      path.lineTo(beforeCorner.dx, beforeCorner.dy);
-    }
-    path.quadraticBezierTo(
-      vertex.dx,
-      vertex.dy,
-      afterCorner.dx,
-      afterCorner.dy,
-    );
-  }
-
-  return path..close();
-}
-
-String _formatVideoTrimTime(Duration duration) {
-  final int totalSeconds = duration.inSeconds;
-  final int hours = totalSeconds ~/ 3600;
-  final int minutes = (totalSeconds % 3600) ~/ 60;
-  final int seconds = totalSeconds % 60;
-  final String secondText = seconds.toString().padLeft(2, '0');
-
-  if (hours > 0) {
-    return '$hours:${minutes.toString().padLeft(2, '0')}:$secondText';
-  }
-
-  return '$minutes:$secondText';
 }

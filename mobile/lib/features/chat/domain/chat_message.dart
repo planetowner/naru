@@ -135,12 +135,6 @@ final class ChatVoiceMemoAttachment {
   final String? localPath;
   final String? mediaAssetId;
   final List<double> waveformSamples;
-
-  bool get hasPlayableAudio {
-    return localPath != null ||
-        mediaAssetId != null ||
-        (audioBytes != null && audioBytes!.isNotEmpty);
-  }
 }
 
 final class ChatLinkPreview {

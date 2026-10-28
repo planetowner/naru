@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:naru/design_system/app_colors.dart';
+import 'package:naru/design_system/app_icons.dart';
 import 'package:naru/design_system/components/app_media_viewer_chrome.dart';
 import 'package:naru/features/chat/data/chat_photo_library.dart';
 import 'package:naru/features/chat/presentation/chat_photo_picker.dart';
@@ -797,7 +798,7 @@ void main() {
     final Icon closeIcon = tester.widget<Icon>(
       find.descendant(
         of: find.byKey(const ValueKey<String>('photo-picker-close')),
-        matching: find.byIcon(Icons.close_rounded),
+        matching: find.byIcon(AppIcons.close),
       ),
     );
     final Text photoTitle = tester.widget<Text>(find.text('Photo'));
@@ -806,7 +807,7 @@ void main() {
     final Icon collageCheck = tester.widget<Icon>(
       find.descendant(
         of: find.byKey(const ValueKey<String>('photo-collage-check')),
-        matching: find.byIcon(Icons.check_rounded),
+        matching: find.byIcon(AppIcons.check),
       ),
     );
 

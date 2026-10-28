@@ -2,6 +2,20 @@ import Flutter
 import PencilKit
 import UIKit
 
+private enum PencilKitEditorStyle {
+  // Flutter의 AppMediaViewerChrome.backgroundColor와 같은 #202020을 유지해요.
+  static let backgroundColor = UIColor(
+    red: 32 / 255,
+    green: 32 / 255,
+    blue: 32 / 255,
+    alpha: 1
+  )
+
+  // 사진과 화면의 방향이 같고 로그 비율 차이가 이 값보다 작으면 화면을 채워요.
+  // Flutter 사진 뷰어의 _photoViewerFit과 같은 기준을 유지해요.
+  static let aspectFillLogRatioThreshold: CGFloat = 0.45
+}
+
 private enum PencilKitEditorError: LocalizedError {
   case invalidArguments
   case unreadableImage
@@ -271,12 +285,7 @@ private final class PencilKitEditorErrorPlatformView: NSObject,
 {
   init(frame: CGRect) {
     errorView = UIView(frame: frame)
-    errorView.backgroundColor = UIColor(
-      red: 32 / 255,
-      green: 32 / 255,
-      blue: 32 / 255,
-      alpha: 1
-    )
+    errorView.backgroundColor = PencilKitEditorStyle.backgroundColor
     super.init()
   }
 
@@ -376,12 +385,7 @@ private final class PencilKitEditorCanvasView: UIView, PKToolPickerObserver {
     self.controlsVisible = controlsVisible
     super.init(frame: frame)
 
-    backgroundColor = UIColor(
-      red: 32 / 255,
-      green: 32 / 255,
-      blue: 32 / 255,
-      alpha: 1
-    )
+    backgroundColor = PencilKitEditorStyle.backgroundColor
     clipsToBounds = true
 
     imageView.image = session.sourceImage
@@ -442,7 +446,8 @@ private final class PencilKitEditorCanvasView: UIView, PKToolPickerObserver {
     let viewportAspectRatio = bounds.width / bounds.height
     let sameOrientation = (imageAspectRatio >= 1) == (viewportAspectRatio >= 1)
     let useAspectFill = sameOrientation &&
-      abs(log(imageAspectRatio / viewportAspectRatio)) < 0.45
+      abs(log(imageAspectRatio / viewportAspectRatio)) <
+        PencilKitEditorStyle.aspectFillLogRatioThreshold
     let widthScale = bounds.width / imageSize.width
     let heightScale = bounds.height / imageSize.height
     let scale = useAspectFill

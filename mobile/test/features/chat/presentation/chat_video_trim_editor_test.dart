@@ -106,8 +106,6 @@ void main() {
           .width,
       1,
     );
-    expect(ChatVideoTrimPlaybackControl.playIconCornerInset, 2.75);
-
     await tester.tap(playback);
     expect(pressed, isTrue);
   });

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_colors.dart';
+import '../app_control_style.dart';
 import '../app_spacing.dart';
 
 final class AppButton extends StatelessWidget {
@@ -10,6 +11,7 @@ final class AppButton extends StatelessWidget {
     this.leading,
     this.isLoading = false,
     this.expand = true,
+    this.secondary = false,
     super.key,
   });
 
@@ -18,6 +20,7 @@ final class AppButton extends StatelessWidget {
   final Widget? leading;
   final bool isLoading;
   final bool expand;
+  final bool secondary;
 
   @override
   Widget build(BuildContext context) {
@@ -29,6 +32,7 @@ final class AppButton extends StatelessWidget {
       child: SizedBox(
         width: expand ? double.infinity : null,
         child: FilledButton(
+          style: AppControlStyle.button(secondary: secondary),
           onPressed: isEnabled ? onPressed : null,
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 150),
@@ -49,7 +53,14 @@ final class AppButton extends StatelessWidget {
                         leading!,
                         const SizedBox(width: AppSpacing.space8),
                       ],
-                      Text(label),
+                      Text(
+                        label,
+                        style: TextStyle(
+                          fontFamily: Theme.of(
+                            context,
+                          ).textTheme.labelLarge?.fontFamily,
+                        ),
+                      ),
                     ],
                   ),
           ),

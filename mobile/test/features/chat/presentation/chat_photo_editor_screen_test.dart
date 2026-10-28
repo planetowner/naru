@@ -68,7 +68,7 @@ void main() {
       );
 
       expect(counterText.style?.fontSize, 18);
-      expect(counterText.style?.fontWeight, FontWeight.w600);
+      expect(counterText.style?.fontWeight, FontWeight.w700);
       expect(sendText.style?.fontSize, 16);
       expect(sendText.style?.fontWeight, FontWeight.w400);
 

@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:naru/design_system/app_icons.dart';
 import 'package:naru/features/chat/domain/chat_message.dart';
 import 'package:naru/features/chat/presentation/chat_conversation_view.dart';
 import 'package:video_player/video_player.dart';
@@ -26,9 +27,10 @@ const MethodChannel _photoManagerChannel = MethodChannel(
 
 const MethodChannel _mediaShareChannel = MethodChannel('naru/media-file');
 
-void _setUpVideoSave() {
+void _setUpVideoSave({ValueChanged<MethodCall>? onCall}) {
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
       .setMockMethodCallHandler(_photoManagerChannel, (MethodCall call) async {
+        onCall?.call(call);
         if (call.method == 'saveVideo') {
           return <String, Object>{
             'id': 'saved-video',
@@ -487,6 +489,39 @@ void main() {
     expect(copiedDiagnostics, isNull);
   });
 
+  testWidgets('failed video save keeps the original file and can retry', (
+    WidgetTester tester,
+  ) async {
+    int saveRequests = 0;
+    _setUpVideoSave(
+      onCall: (MethodCall call) {
+        if (call.method == 'saveVideo') {
+          saveRequests++;
+          if (saveRequests == 1) {
+            throw PlatformException(code: 'save-failed');
+          }
+        }
+      },
+    );
+    await tester.pumpWidget(_buildVideoMessageScreen(videoFile));
+    await tester.pumpAndSettle();
+    await _openVideoViewer(tester);
+    final Finder saveButton = find.byKey(
+      const ValueKey<String>('video-viewer-download'),
+    );
+    await tester.tap(saveButton);
+    await tester.pump();
+    expect(find.text('Video could not be saved.'), findsOneWidget);
+    expect(find.text('Video saved'), findsNothing);
+    expect(videoFile.existsSync(), isTrue);
+
+    await tester.tap(saveButton);
+    await tester.pump();
+    expect(saveRequests, 2);
+    expect(find.text('Video saved'), findsOneWidget);
+    expect(videoFile.existsSync(), isTrue);
+  });
+
   testWidgets('a server video reuses its disk cache after restart', (
     WidgetTester tester,
   ) async {
@@ -512,11 +547,11 @@ void main() {
     );
     await _pumpRealAsyncUntil(
       tester,
-      () => find.byIcon(Icons.play_arrow_rounded).evaluate().isNotEmpty,
+      () => find.byIcon(AppIcons.play).evaluate().isNotEmpty,
     );
 
     expect(accessUrlRequests, 0);
-    expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget);
+    expect(find.byIcon(AppIcons.play), findsOneWidget);
 
     await _openVideoViewer(tester, assetId: 'remote-video-preview');
 
@@ -550,7 +585,7 @@ void main() {
     );
     await _pumpRealAsyncUntil(
       tester,
-      () => find.byIcon(Icons.play_arrow_rounded).evaluate().isNotEmpty,
+      () => find.byIcon(AppIcons.play).evaluate().isNotEmpty,
     );
 
     await _openVideoViewer(
@@ -598,23 +633,17 @@ void main() {
       () =>
           accessUrlRequests == 1 &&
           find
-              .descendant(
-                of: bubble,
-                matching: find.byIcon(Icons.refresh_rounded),
-              )
+              .descendant(of: bubble, matching: find.byIcon(AppIcons.refresh))
               .evaluate()
               .isNotEmpty,
     );
     expect(accessUrlRequests, 1);
     expect(
-      find.descendant(of: bubble, matching: find.byIcon(Icons.refresh_rounded)),
+      find.descendant(of: bubble, matching: find.byIcon(AppIcons.refresh)),
       findsOneWidget,
     );
     expect(
-      find.descendant(
-        of: bubble,
-        matching: find.byIcon(Icons.play_arrow_rounded),
-      ),
+      find.descendant(of: bubble, matching: find.byIcon(AppIcons.play)),
       findsNothing,
     );
 
@@ -637,20 +666,14 @@ void main() {
     await _pumpRealAsyncUntil(
       tester,
       () => find
-          .descendant(
-            of: bubble,
-            matching: find.byIcon(Icons.play_arrow_rounded),
-          )
+          .descendant(of: bubble, matching: find.byIcon(AppIcons.play))
           .evaluate()
           .isNotEmpty,
     );
 
     expect(accessUrlRequests, 2);
     expect(
-      find.descendant(
-        of: bubble,
-        matching: find.byIcon(Icons.play_arrow_rounded),
-      ),
+      find.descendant(of: bubble, matching: find.byIcon(AppIcons.play)),
       findsOneWidget,
     );
 

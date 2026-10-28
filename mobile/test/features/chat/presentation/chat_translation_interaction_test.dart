@@ -6,6 +6,7 @@ import 'package:naru/features/chat/domain/chat_message.dart';
 import 'package:naru/features/chat/presentation/chat_conversation_view.dart';
 
 import '../../../support/naru_preview_app.dart';
+import '../../../support/load_app_fonts.dart';
 
 Future<void> _scrollConversationToStart(WidgetTester tester) async {
   final Finder messageListFinder = find.byKey(
@@ -27,6 +28,8 @@ Future<void> _scrollConversationToStart(WidgetTester tester) async {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(loadAppFonts);
   testWidgets('target-language incoming text does not request translation', (
     WidgetTester tester,
   ) async {

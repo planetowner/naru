@@ -13,22 +13,22 @@ import UIKit
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     if let registrar = engineBridge.pluginRegistry.registrar(
-      forPlugin: "naruNotificationBridge"
+      forPlugin: "NaruNotificationBridge"
     ) {
       NotificationBridge.register(with: registrar)
     }
     if let registrar = engineBridge.pluginRegistry.registrar(
-      forPlugin: "naruVideoTranscodeBridge"
+      forPlugin: "NaruVideoTranscodeBridge"
     ) {
       VideoTranscodeBridge.register(with: registrar)
     }
     if let registrar = engineBridge.pluginRegistry.registrar(
-      forPlugin: "naruPencilKitEditorBridge"
+      forPlugin: "NaruPencilKitEditorBridge"
     ) {
       PencilKitEditorBridge.register(with: registrar)
     }
     if let registrar = engineBridge.pluginRegistry.registrar(
-      forPlugin: "naruMediaFileBridge"
+      forPlugin: "NaruMediaFileBridge"
     ) {
       MediaFileBridge.register(with: registrar)
     }

@@ -55,8 +55,6 @@ final class ChatRealtimeService extends ChangeNotifier
 
   Stream<Map<String, dynamic>> get events => _eventController.stream;
 
-  String? get activeConversationUserId => _activeConversationUserId;
-
   int get totalUnreadCount {
     return _unreadCountByUserId.values.fold<int>(
       0,

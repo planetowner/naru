@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../app_colors.dart';
-import '../app_typography.dart';
+import '../app_control_style.dart';
 
 final class AppTextField extends StatelessWidget {
   const AppTextField({
@@ -22,6 +21,8 @@ final class AppTextField extends StatelessWidget {
     this.onChanged,
     this.onFieldSubmitted,
     this.validator,
+    this.autofocus = false,
+    this.inputKey,
     super.key,
   });
 
@@ -42,10 +43,26 @@ final class AppTextField extends StatelessWidget {
   final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onFieldSubmitted;
   final FormFieldValidator<String>? validator;
+  final bool autofocus;
+  final Key? inputKey;
 
   @override
   Widget build(BuildContext context) {
-    return TextFormField(
+    final TextPainter metrics = TextPainter(
+      text: const TextSpan(text: ' ', style: AppControlStyle.inputText),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+    );
+    // dense 입력은 최소 제약보다 글자·패딩으로 테두리 높이를 정하므로 Auto 행간에 맞춰 계산해요.
+    final double verticalPadding =
+        ((AppControlStyle.height - metrics.preferredLineHeight) / 2).clamp(
+          0.0,
+          AppControlStyle.height,
+        );
+    metrics.dispose();
+    final Widget input = TextFormField(
+      key: inputKey,
+      autofocus: autofocus,
       controller: controller,
       focusNode: focusNode,
       keyboardType: keyboardType,
@@ -59,15 +76,34 @@ final class AppTextField extends StatelessWidget {
       onChanged: onChanged,
       onFieldSubmitted: onFieldSubmitted,
       validator: validator,
-      style: AppTypography.subTypography10.copyWith(
-        color: AppColors.textPrimary,
-      ),
+      style: AppControlStyle.inputText,
+      textAlignVertical: TextAlignVertical.center,
       decoration: InputDecoration(
-        labelText: labelText,
+        // 여러 줄 메시지 입력에는 이 높이를 강제하지 않아요.
+        constraints: const BoxConstraints(minHeight: AppControlStyle.height),
+        contentPadding: EdgeInsets.symmetric(
+          horizontal: AppControlStyle.horizontalInset,
+          vertical: verticalPadding,
+        ),
         hintText: hintText,
-        prefixIcon: prefixIcon,
-        suffixIcon: suffixIcon,
-      ),
+        prefixIcon: _icon(prefixIcon),
+        suffixIcon: _icon(suffixIcon),
+      ).applyDefaults(AppControlStyle.inputTheme),
+    );
+    if (labelText == null) return input;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(labelText!, style: AppControlStyle.inputLabel),
+        const SizedBox(height: 10),
+        input,
+      ],
     );
   }
+
+  // Material 아이콘 버튼의 기본 48 높이가 입력 규격 46을 늘리지 않게 해요.
+  Widget? _icon(Widget? icon) => icon == null
+      ? null
+      : SizedBox.square(dimension: AppControlStyle.height, child: icon);
 }

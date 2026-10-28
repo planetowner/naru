@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:naru/design_system/app_colors.dart';
+import 'package:naru/design_system/app_icons.dart';
 import 'package:naru/features/chat/domain/chat_message.dart';
 import 'package:naru/features/chat/presentation/chat_conversation_view.dart';
 
@@ -284,7 +285,7 @@ void main() {
       find.descendant(of: bubbleFinder, matching: find.byType(Icon)),
     );
 
-    expect(icon.icon, Icons.phone_missed_rounded);
+    expect(icon.icon, AppIcons.phoneMissed);
     expect(icon.color, AppColors.red500);
 
     await tester.pumpWidget(
@@ -297,7 +298,7 @@ void main() {
       find.descendant(of: bubbleFinder, matching: find.byType(Icon)),
     );
 
-    expect(icon.icon, Icons.phone_disabled_rounded);
+    expect(icon.icon, AppIcons.phoneDisabled);
     expect(icon.color, AppColors.grey500);
   });
 
@@ -330,7 +331,7 @@ void main() {
       find.descendant(of: bubbleFinder, matching: find.byType(Icon)),
     );
 
-    expect(icon.icon, Icons.phone_missed_rounded);
+    expect(icon.icon, AppIcons.phoneMissed);
     expect(icon.color, AppColors.red500);
 
     await tester.pumpWidget(
@@ -359,7 +360,7 @@ void main() {
       find.descendant(of: bubbleFinder, matching: find.byType(Icon)),
     );
 
-    expect(icon.icon, Icons.phone_missed_rounded);
+    expect(icon.icon, AppIcons.phoneMissed);
     expect(icon.color, AppColors.red500);
   });
 

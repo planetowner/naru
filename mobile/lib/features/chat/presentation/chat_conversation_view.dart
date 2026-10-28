@@ -20,7 +20,10 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../../design_system/app_colors.dart';
+import '../../../design_system/app_icons.dart';
+import '../../../design_system/components/app_button.dart';
 import '../../../design_system/app_radius.dart';
+import '../../../design_system/app_spacing.dart';
 import '../../../design_system/app_typography.dart';
 import '../../../design_system/components/app_media_viewer_chrome.dart';
 import '../../../design_system/components/app_profile_image.dart';
@@ -33,80 +36,33 @@ import '../domain/chat_message_action.dart';
 import '../domain/chat_message.dart';
 import '../domain/chat_message_group.dart';
 import '../domain/chat_message_grouper.dart';
+import 'chat_action_sheet_style.dart';
+import 'chat_composer_style.dart';
 import 'chat_date_formatter.dart';
+import 'chat_duration_formatter.dart';
 import 'chat_media_file.dart';
+import 'chat_media_viewer_scaffold.dart';
+import 'chat_message_style.dart';
+import '../../../design_system/components/app_navigation_bar.dart';
+import 'chat_voice_call_screen.dart';
 import 'chat_photo_editor_screen.dart';
 import 'chat_photo_picker.dart';
 import 'chat_scrollbar_range_tracker.dart';
 import 'read_receipt_formatter.dart';
 import 'reply_navigation_diagnostics.dart';
 
-const double _messageHorizontalPadding = 11;
 
-const double _messageListHorizontalPadding = 8;
-
-const double _composerHorizontalPadding = 10;
-
-const double _replyMessageMinimumWidthRatio = 0.36;
-
-const double _replyMessageMaximumWidthRatio = 0.70;
-
-const double _messageToComposerGap = 12;
-
-const double _composerRaisedBottomPadding = 10;
-
-const double _topBarButtonDimension = AppMediaViewerChrome.buttonDimension;
-
-const double _topBarHorizontalMargin = AppMediaViewerChrome.horizontalMargin;
-
-const double _topBarTrailingSpacing = AppMediaViewerChrome.trailingSpacing;
-
-const Duration _mediaViewerControlsAnimationDuration =
-    AppMediaViewerChrome.controlsAnimationDuration;
-
-const Duration _mediaSaveConfirmationDuration = Duration(milliseconds: 2950);
-
-const Duration _messageCopyConfirmationDuration = Duration(milliseconds: 3300);
-
-const double _actionConfirmationHeight = 56;
-
-const double _messageCopyConfirmationGap = 8;
-
-const double _messageCopyConfirmationOvershoot = 13 / 3;
+const double _messageListHorizontalPadding = AppSpacing.space8;
 
 // TODO: 사진·영상 저장과 메시지 복사를 제외한 스낵바도 새 피드백 버튼으로 바꿔요.
 
-Curve _mediaViewerControlsSlideCurve(bool visible) {
-  return AppMediaViewerChrome.controlsSlideCurve(visible);
-}
-
-const Color _mediaViewerChromeBarColor = AppMediaViewerChrome.backgroundColor;
-
-const double _mediaViewerActionButtonDimension =
-    AppMediaEditIcon.referenceButtonDimension;
-
-const double _mediaViewerActionIconDimension =
-    AppMediaEditIcon.referenceDimension;
-
-const double _mediaViewerActionIconStrokeWidth =
-    AppMediaEditIcon.referenceStrokeWidth;
-
 const double _mediaViewerActionBarContentHeight =
-    _topBarTrailingSpacing * 2 + _mediaViewerActionButtonDimension;
-
-double _mediaViewerTopBarHeight(double topPadding) {
-  return AppMediaViewerChrome.topBarHeight(topPadding);
-}
+    AppMediaViewerChrome.trailingSpacing * 2 +
+    AppMediaEditIcon.referenceButtonDimension;
 
 const double _attachmentPanelFallbackHeight = 302;
 
 const Duration _quickPhotoEligibilityDuration = Duration(seconds: 15);
-
-const Duration _quickPhotoDisplayDuration = Duration(seconds: 10);
-
-const Duration _quickPhotoDismissAnimationDuration = Duration(
-  milliseconds: 180,
-);
 
 const Duration _incomingPhotoRevealDuration = Duration(milliseconds: 120);
 
@@ -119,7 +75,7 @@ const Duration _outgoingCallNoAnswerTimeout = Duration(seconds: 30);
 typedef _MessageLongPressCallback =
     Future<void> Function(ChatMessage message, GlobalKey bubbleKey);
 
-typedef _MessageBubbleKeyFor = GlobalKey Function(String messageId);
+typedef _MessageBubbleKeyFor = GlobalKey Function(ChatMessage message);
 
 String _messagePresentationId(ChatMessage message) {
   if (message.isVideoMessage) {
@@ -346,8 +302,6 @@ final class _ChatLinkOpenerScope extends InheritedWidget {
 }
 
 enum _CallNowAction { voice, video }
-
-enum _AudioOutputRoute { phone, speaker, bluetooth }
 
 enum _VoiceMemoSheetMode { idle, recording, recorded, playing }
 
@@ -612,7 +566,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
   bool _postSendBottomSettlePending = false;
   bool _textMessageSending = false;
 
-  double _messageCopyComposerHeight = _MessageComposer._defaultComposerHeight;
+  double _messageCopyComposerHeight = ChatComposerStyle.defaultMinimumHeight;
 
   bool _attachmentPanelOpen = false;
   bool _photoPickerOpen = false;
@@ -633,7 +587,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
   Future<ChatMessage?>? _activeVoiceCallMessage;
   bool _voiceCallScreenVisible = false;
   bool _voiceCallMuted = false;
-  _AudioOutputRoute _audioOutputRoute = _AudioOutputRoute.speaker;
+  ChatAudioOutputRoute _audioOutputRoute = ChatAudioOutputRoute.speaker;
 
   bool _searchModeActive = false;
   bool _searchDateSheetOpen = false;
@@ -823,7 +777,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
         composerRenderObject.hasSize) {
       final double additionalPanelPadding = keyboardHeight > 0.5
           ? 0
-          : _composerRaisedBottomPadding;
+          : ChatComposerStyle.raisedBottomPadding;
 
       _quickPhotoComposerHeight =
           composerRenderObject.size.height + additionalPanelPadding;
@@ -913,7 +867,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
       });
 
       _quickPhotoDismissTimer?.cancel();
-      _quickPhotoDismissTimer = Timer(_quickPhotoDisplayDuration, () {
+      _quickPhotoDismissTimer = Timer(Duration(seconds: 10), () {
         _quickPhotoDismissTimer = null;
 
         if (!mounted || _quickPhotoAsset?.id != asset.id) {
@@ -925,7 +879,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
         });
 
         _quickPhotoDismissTimer = Timer(
-          _quickPhotoDismissAnimationDuration,
+          _QuickPhotoPrompt._transitionDuration,
           () {
             _quickPhotoDismissTimer = null;
 
@@ -1767,8 +1721,8 @@ final class _ChatConversationViewState extends State<ChatConversationView>
   }) {
     return Navigator.of(context).push<bool>(
       PageRouteBuilder<bool>(
-        transitionDuration: const Duration(milliseconds: 180),
-        reverseTransitionDuration: const Duration(milliseconds: 160),
+        transitionDuration: Duration(milliseconds: 180),
+        reverseTransitionDuration: Duration(milliseconds: 160),
         pageBuilder:
             (
               BuildContext context,
@@ -3210,7 +3164,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
       _voiceCallConnectedAt = null;
       _voiceCallScreenVisible = true;
       _voiceCallMuted = false;
-      _audioOutputRoute = _AudioOutputRoute.speaker;
+      _audioOutputRoute = ChatAudioOutputRoute.speaker;
     });
 
     _voiceCallConnectionTimer = Timer(
@@ -3233,7 +3187,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
       _voiceCallConnectedAt = null;
       _voiceCallScreenVisible = false;
       _voiceCallMuted = false;
-      _audioOutputRoute = _AudioOutputRoute.speaker;
+      _audioOutputRoute = ChatAudioOutputRoute.speaker;
     });
 
     _finishActiveCallMessage(
@@ -3376,13 +3330,13 @@ final class _ChatConversationViewState extends State<ChatConversationView>
       return;
     }
 
-    final _AudioOutputRoute? route =
-        await showModalBottomSheet<_AudioOutputRoute>(
+    final ChatAudioOutputRoute? route =
+        await showModalBottomSheet<ChatAudioOutputRoute>(
           context: context,
           backgroundColor: Colors.transparent,
-          barrierColor: AppColors.black.withAlpha(112),
+          barrierColor: AppColors.textPrimary.withAlpha(61),
           builder: (BuildContext context) {
-            return _AudioOutputSheet(selectedRoute: _audioOutputRoute);
+            return ChatAudioOutputSheet(selectedRoute: _audioOutputRoute);
           },
         );
 
@@ -3411,7 +3365,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
       _voiceCallConnectedAt = null;
       _voiceCallScreenVisible = false;
       _voiceCallMuted = false;
-      _audioOutputRoute = _AudioOutputRoute.speaker;
+      _audioOutputRoute = ChatAudioOutputRoute.speaker;
     });
 
     _finishActiveCallMessage(
@@ -3450,21 +3404,12 @@ final class _ChatConversationViewState extends State<ChatConversationView>
     final bool showingVoiceCallScreen =
         _voiceCallScreenVisible && _hasActiveVoiceCall;
 
-    final SystemUiOverlayStyle overlayStyle =
-        (showingVoiceCallScreen
-                ? SystemUiOverlayStyle.light
-                : SystemUiOverlayStyle.dark)
-            .copyWith(
-              statusBarColor: showingVoiceCallScreen
-                  ? AppColors.black
-                  : Colors.transparent,
-              systemNavigationBarColor: showingVoiceCallScreen
-                  ? AppColors.black
-                  : ChatConversationView._chatBackgroundColor,
-              systemNavigationBarIconBrightness: showingVoiceCallScreen
-                  ? Brightness.light
-                  : Brightness.dark,
-            );
+    final SystemUiOverlayStyle overlayStyle = SystemUiOverlayStyle.dark
+        .copyWith(
+          statusBarColor: Colors.transparent,
+          systemNavigationBarColor: ChatConversationView._chatBackgroundColor,
+          systemNavigationBarIconBrightness: Brightness.dark,
+        );
 
     final MediaQueryData mediaQuery = MediaQuery.of(context);
 
@@ -3506,26 +3451,23 @@ final class _ChatConversationViewState extends State<ChatConversationView>
         ? attachmentPanelHeight
         : math.max(passiveBottomHeight, _heldBottomSurfaceHeight ?? 0);
 
-    final double searchToolbarBottom = keyboardHeight > 0.5
-        ? keyboardHeight + 10
-        : systemBottomPadding + 10;
+    final double searchToolbarBottom =
+        passiveBottomHeight +
+        ChatComposerStyle.keyboardBottomPadding(
+          keyboardHeight: keyboardHeight,
+          systemBottomPadding: systemBottomPadding,
+        );
 
     final double messageCopyConfirmationBottom = _searchModeActive
-        ? searchToolbarBottom +
-              _ChatSearchToolbar.height +
-              _messageCopyConfirmationGap
-        : bottomSurfaceHeight +
-              _messageCopyComposerHeight +
-              _messageCopyConfirmationGap;
+        ? searchToolbarBottom + _ChatSearchToolbar.height + AppSpacing.space8
+        : bottomSurfaceHeight + _messageCopyComposerHeight + AppSpacing.space8;
 
     final bool showActiveVoiceCallBanner =
         !_searchModeActive && _hasActiveVoiceCall && !showingVoiceCallScreen;
 
     final double messageListBottomPadding = _searchModeActive
-        ? searchToolbarBottom +
-              _ChatSearchToolbar.height +
-              _messageToComposerGap
-        : _messageToComposerGap;
+        ? searchToolbarBottom + _ChatSearchToolbar.height + AppSpacing.space12
+        : AppSpacing.space12;
 
     final double messageListHeaderInset = showingVoiceCallScreen
         ? 0
@@ -3556,9 +3498,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
     final Widget content = AnnotatedRegion<SystemUiOverlayStyle>(
       value: overlayStyle,
       child: Scaffold(
-        backgroundColor: showingVoiceCallScreen
-            ? AppColors.black
-            : ChatConversationView._chatBackgroundColor,
+        backgroundColor: ChatConversationView._chatBackgroundColor,
         resizeToAvoidBottomInset: false,
         body: SafeArea(
           top: false,
@@ -3709,7 +3649,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
                   bottom:
                       bottomSurfaceHeight +
                       _quickPhotoComposerHeight +
-                      _messageToComposerGap,
+                      AppSpacing.space12,
                   child: _QuickPhotoPrompt(
                     asset: _quickPhotoAsset!,
                     thumbnailBytes: _quickPhotoThumbnailBytes!,
@@ -3722,8 +3662,8 @@ final class _ChatConversationViewState extends State<ChatConversationView>
 
               if (!showingVoiceCallScreen)
                 Positioned(
-                  left: _composerHorizontalPadding,
-                  right: _composerHorizontalPadding,
+                  left: ChatComposerStyle.horizontalPadding,
+                  right: ChatComposerStyle.horizontalPadding,
                   bottom: messageCopyConfirmationBottom,
                   child: _ActionConfirmation(
                     key: _messageCopyConfirmationKey,
@@ -3732,7 +3672,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
                     motion: _ActionConfirmationMotion.slideFromBottom,
                     hiddenOffsetY:
                         messageCopyConfirmationBottom +
-                        _actionConfirmationHeight,
+                        _ActionConfirmation._height,
                   ),
                 ),
 
@@ -3785,7 +3725,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
                 ),
               if (showingVoiceCallScreen)
                 Positioned.fill(
-                  child: _VoiceCallScreen(
+                  child: ChatVoiceCallScreen(
                     participantName: widget.otherParticipantName,
                     participantProfileImageUrl:
                         widget.otherParticipantProfileImageUrl,
@@ -3801,8 +3741,8 @@ final class _ChatConversationViewState extends State<ChatConversationView>
                 ),
               if (_searchModeActive && !showingVoiceCallScreen)
                 Positioned(
-                  left: 20,
-                  right: 20,
+                  left: ChatComposerStyle.horizontalPadding,
+                  right: ChatComposerStyle.horizontalPadding,
                   bottom: searchToolbarBottom,
                   child: _ChatSearchToolbar(
                     counterText: _searchCounterText(),
@@ -3832,6 +3772,13 @@ String _quickPhotoHeroTag(String assetId) {
 }
 
 final class _QuickPhotoPrompt extends StatelessWidget {
+  static const BorderRadius _borderRadius = BorderRadius.all(
+    Radius.circular(17),
+  );
+
+  // 숨김 타이머도 같은 전환 시간을 써서 페이드가 끝난 뒤 카드를 제거해요.
+  static const Duration _transitionDuration = Duration(milliseconds: 180);
+
   const _QuickPhotoPrompt({
     required this.asset,
     required this.thumbnailBytes,
@@ -3846,20 +3793,26 @@ final class _QuickPhotoPrompt extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 정사각형 사진 아래에 버튼 영역을 더하는 기존 비율을 유지해요.
     final double cardWidth = (MediaQuery.sizeOf(context).width * 0.172)
-        .clamp(68, 76)
+        .clamp(68.0, 76.0)
         .toDouble();
-    final double cardHeight = cardWidth + 50;
+    final double cardHeight = cardWidth + 50.0;
+
+    void openPreview() {
+      Feedback.forTap(context);
+      onPressed();
+    }
 
     return IgnorePointer(
       ignoring: !visible,
       child: AnimatedOpacity(
         opacity: visible ? 1 : 0,
-        duration: _quickPhotoDismissAnimationDuration,
+        duration: _transitionDuration,
         curve: Curves.linear,
         child: TweenAnimationBuilder<double>(
           tween: Tween<double>(begin: 0, end: 1),
-          duration: const Duration(milliseconds: 180),
+          duration: _transitionDuration,
           curve: Curves.easeOutCubic,
           builder: (BuildContext context, double value, Widget? child) {
             return Opacity(
@@ -3880,29 +3833,26 @@ final class _QuickPhotoPrompt extends StatelessWidget {
               height: cardHeight,
               child: DecoratedBox(
                 key: const ValueKey<String>('quick-photo-card-surface'),
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   color: AppColors.white,
-                  borderRadius: BorderRadius.all(Radius.circular(17)),
+                  borderRadius: _borderRadius,
                   boxShadow: [
                     BoxShadow(
-                      color: Color(0x1A000000),
-                      offset: Offset(0, 6),
+                      color: AppColors.black.withAlpha(26),
+                      offset: const Offset(0, 6),
                       blurRadius: 18,
                     ),
                   ],
                 ),
                 child: ClipRRect(
-                  borderRadius: const BorderRadius.all(Radius.circular(17)),
+                  borderRadius: _borderRadius,
                   child: ColoredBox(
                     color: AppColors.white,
                     child: Column(
                       children: [
                         GestureDetector(
                           behavior: HitTestBehavior.opaque,
-                          onTap: () {
-                            Feedback.forTap(context);
-                            onPressed();
-                          },
+                          onTap: openPreview,
                           child: Hero(
                             tag: _quickPhotoHeroTag(asset.id),
                             child: Image.memory(
@@ -3919,22 +3869,19 @@ final class _QuickPhotoPrompt extends StatelessWidget {
                         ),
                         Expanded(
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(
+                            padding: EdgeInsets.symmetric(
                               horizontal: 6,
                               vertical: 9,
                             ),
                             child: Material(
                               key: const ValueKey<String>('quick-photo-send'),
                               color: AppColors.blue500,
-                              borderRadius: const BorderRadius.all(
+                              borderRadius: BorderRadius.all(
                                 Radius.circular(22),
                               ),
                               clipBehavior: Clip.antiAlias,
                               child: InkWell(
-                                onTap: () {
-                                  Feedback.forTap(context);
-                                  onPressed();
-                                },
+                                onTap: openPreview,
                                 child: Center(
                                   child: Text(
                                     'Send',
@@ -3942,7 +3889,7 @@ final class _QuickPhotoPrompt extends StatelessWidget {
                                     style: AppTypography.subTypography11
                                         .copyWith(
                                           color: AppColors.white,
-                                          fontWeight: AppTypography.semibold,
+                                          fontWeight: AppTypography.bold,
                                         ),
                                   ),
                                 ),
@@ -4018,6 +3965,7 @@ final class _QuickPhotoPreviewScreenState
     final SystemUiOverlayStyle overlayStyle = SystemUiOverlayStyle.light
         .copyWith(
           statusBarColor: Colors.transparent,
+          // 화면과 시스템 하단 영역에 같은 검정 배경을 사용해요.
           systemNavigationBarColor: AppColors.black,
           systemNavigationBarIconBrightness: Brightness.light,
         );
@@ -4031,7 +3979,8 @@ final class _QuickPhotoPreviewScreenState
           children: [
             Positioned.fill(
               child: SafeArea(
-                minimum: const EdgeInsets.fromLTRB(0, 52, 0, 76),
+                // 실제 안전 영역이 더 크면 SafeArea가 그만큼 여백을 확보해요.
+                minimum: EdgeInsets.fromLTRB(0, 52, 0, 76),
                 child: Center(
                   child: Hero(
                     tag: _quickPhotoHeroTag(widget.asset.id),
@@ -4047,7 +3996,7 @@ final class _QuickPhotoPreviewScreenState
               ),
             ),
             Positioned(
-              left: 8,
+              left: AppSpacing.space8,
               top: 0,
               child: SafeArea(
                 bottom: false,
@@ -4061,7 +4010,7 @@ final class _QuickPhotoPreviewScreenState
                     'Cancel',
                     style: AppTypography.subTypography10.copyWith(
                       color: AppColors.white,
-                      fontWeight: AppTypography.medium,
+                      fontWeight: AppTypography.regular,
                     ),
                   ),
                 ),
@@ -4072,15 +4021,18 @@ final class _QuickPhotoPreviewScreenState
               right: 0,
               bottom: 0,
               child: ColoredBox(
-                color: const Color(0xD9000000),
+                color: AppColors.black.withAlpha(217),
                 child: SafeArea(
                   top: false,
-                  minimum: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                  minimum: EdgeInsets.symmetric(
+                    horizontal: AppSpacing.space16,
+                    vertical: AppSpacing.space12,
+                  ),
                   child: Align(
                     alignment: Alignment.centerRight,
                     child: SizedBox(
-                      width: 72,
-                      height: 42,
+                      width: 72.0,
+                      height: 42.0,
                       child: Material(
                         color: AppColors.blue500,
                         borderRadius: AppRadius.borderRadiusFull,
@@ -4098,7 +4050,7 @@ final class _QuickPhotoPreviewScreenState
                               'Send',
                               style: AppTypography.typography6.copyWith(
                                 color: AppColors.white,
-                                fontWeight: AppTypography.semibold,
+                                fontWeight: AppTypography.bold,
                               ),
                             ),
                           ),
@@ -4125,7 +4077,7 @@ final class _ChatTopBar extends StatelessWidget {
     required this.onCallPressed,
   });
 
-  static const double height = 56;
+  static const double height = AppNavigationBar.height;
 
   static const double _actionsWidth = 88;
 
@@ -4133,9 +4085,9 @@ final class _ChatTopBar extends StatelessWidget {
 
   static const Color _buttonBorderColor = AppColors.grey200;
 
-  static const Color _iconColor = Color(0xFF1B3243);
+  static const Color _iconColor = AppColors.textPrimary;
 
-  static const Color _participantNameColor = Color(0xFF191919);
+  static const Color _participantNameColor = AppColors.textPrimary;
 
   final String participantName;
   final int unreadOtherConversationCount;
@@ -4150,7 +4102,7 @@ final class _ChatTopBar extends StatelessWidget {
         ? _formatUnreadCount(unreadOtherConversationCount)
         : null;
     final double backGroupWidth = unreadCount == null
-        ? _topBarButtonDimension
+        ? AppMediaViewerChrome.buttonDimension
         : 52 + unreadCount.length * 10;
 
     return _TranslucentTopBarSurface(
@@ -4166,7 +4118,7 @@ final class _ChatTopBar extends StatelessWidget {
                 left: 112,
                 top: 0,
                 right: 112,
-                height: _topBarButtonDimension,
+                height: AppMediaViewerChrome.buttonDimension,
                 child: IgnorePointer(
                   child: Center(
                     child: Text(
@@ -4175,9 +4127,8 @@ final class _ChatTopBar extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
-                      style: AppTypography.subTypography9.copyWith(
+                      style: AppTypography.navigationTitle.copyWith(
                         color: _participantNameColor,
-                        fontWeight: AppTypography.bold,
                       ),
                     ),
                   ),
@@ -4185,24 +4136,24 @@ final class _ChatTopBar extends StatelessWidget {
               ),
               if (onBackPressed != null)
                 Positioned(
-                  left: _topBarHorizontalMargin,
+                  left: AppMediaViewerChrome.horizontalMargin,
                   top: 0,
                   child: Tooltip(
                     message: 'Back',
                     child: AppTopBarButtonSurface(
                       key: const ValueKey<String>('chat-back-group'),
-                      height: _topBarButtonDimension,
+                      height: AppMediaViewerChrome.buttonDimension,
                       width: backGroupWidth,
                       color: _buttonColor,
                       borderColor: _buttonBorderColor,
                       child: InkWell(
                         onTap: onBackPressed,
                         borderRadius: BorderRadius.circular(
-                          _topBarButtonDimension / 2,
+                          AppMediaViewerChrome.buttonDimension / 2,
                         ),
                         child: SizedBox(
                           width: backGroupWidth,
-                          height: _topBarButtonDimension,
+                          height: AppMediaViewerChrome.buttonDimension,
                           child: Stack(
                             children: [
                               if (unreadCount != null)
@@ -4221,7 +4172,7 @@ final class _ChatTopBar extends StatelessWidget {
                                         style: AppTypography.typography5
                                             .copyWith(
                                               color: _iconColor,
-                                              fontWeight: AppTypography.medium,
+                                              fontWeight: AppTypography.regular,
                                             ),
                                       ),
                                     ),
@@ -4232,8 +4183,8 @@ final class _ChatTopBar extends StatelessWidget {
                                 top: 0,
                                 child: SizedBox(
                                   key: ValueKey<String>('chat-back-button'),
-                                  width: _topBarButtonDimension,
-                                  height: _topBarButtonDimension,
+                                  width: AppMediaViewerChrome.buttonDimension,
+                                  height: AppMediaViewerChrome.buttonDimension,
                                   child: Center(
                                     child: AppTopBarBackIcon(color: _iconColor),
                                   ),
@@ -4248,15 +4199,17 @@ final class _ChatTopBar extends StatelessWidget {
                 ),
               Positioned(
                 top: 0,
-                right: _topBarHorizontalMargin,
+                right: AppMediaViewerChrome.horizontalMargin,
                 child: AppTopBarButtonSurface(
                   key: const ValueKey<String>('chat-actions-group'),
                   width: _actionsWidth,
-                  height: _topBarButtonDimension,
+                  height: AppMediaViewerChrome.buttonDimension,
                   color: _buttonColor,
                   borderColor: _buttonBorderColor,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.space4,
+                    ),
                     child: Row(
                       children: [
                         _ChatTopBarActionButton(
@@ -4264,7 +4217,7 @@ final class _ChatTopBar extends StatelessWidget {
                           tooltip: 'Search',
                           onPressed: onSearchPressed,
                           icon: const Icon(
-                            CupertinoIcons.search,
+                            AppIcons.search,
                             key: ValueKey<String>('chat-search-icon'),
                             size: 25,
                             color: _iconColor,
@@ -4275,7 +4228,7 @@ final class _ChatTopBar extends StatelessWidget {
                           tooltip: 'Call',
                           onPressed: onCallPressed,
                           icon: const Icon(
-                            CupertinoIcons.phone,
+                            AppIcons.call,
                             key: ValueKey<String>('chat-call-icon'),
                             size: 25,
                             color: _iconColor,
@@ -4320,10 +4273,12 @@ final class _ChatTopBarActionButton extends StatelessWidget {
       message: tooltip,
       child: InkWell(
         onTap: onPressed,
-        borderRadius: BorderRadius.circular(_topBarButtonDimension / 2),
+        borderRadius: BorderRadius.circular(
+          AppMediaViewerChrome.buttonDimension / 2,
+        ),
         child: SizedBox(
           width: 40,
-          height: _topBarButtonDimension,
+          height: AppMediaViewerChrome.buttonDimension,
           child: Center(child: icon),
         ),
       ),
@@ -4495,7 +4450,7 @@ final class _ChatSearchTopBar extends StatelessWidget {
                     cursorColor: AppColors.primary,
                     style: AppTypography.typography4.copyWith(
                       color: AppColors.grey900,
-                      fontWeight: AppTypography.medium,
+                      fontWeight: AppTypography.regular,
                     ),
                     decoration: InputDecoration(
                       // 테마의 filled:true(grey100)가 사각형으로 채워져
@@ -4504,7 +4459,7 @@ final class _ChatSearchTopBar extends StatelessWidget {
                       hintText: 'Search',
                       hintStyle: AppTypography.typography4.copyWith(
                         color: AppColors.grey500,
-                        fontWeight: AppTypography.medium,
+                        fontWeight: AppTypography.regular,
                       ),
                       prefixIconConstraints: const BoxConstraints(
                         minWidth: 50,
@@ -4557,7 +4512,7 @@ final class _ChatSearchTopBar extends StatelessWidget {
                 'Cancel',
                 style: AppTypography.typography4.copyWith(
                   color: AppColors.grey900,
-                  fontWeight: AppTypography.medium,
+                  fontWeight: AppTypography.regular,
                 ),
               ),
             ),
@@ -4587,28 +4542,38 @@ final class _ChatSearchToolbar extends StatelessWidget {
   final VoidCallback onMoveOlder;
   final VoidCallback onMoveNewer;
 
-  static const double height = 56;
+  static const double height = ChatComposerStyle.defaultMinimumHeight;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      key: const ValueKey<String>('chat-search-toolbar'),
-      color: AppColors.white.withAlpha(238),
-      elevation: 5,
-      shadowColor: AppColors.black.withAlpha(22),
-      borderRadius: AppRadius.borderRadiusFull,
-      clipBehavior: Clip.antiAlias,
+    return _ComposerSurface(
+      containerKey: const ValueKey<String>('chat-search-toolbar'),
+      surfaceKey: const ValueKey<String>('chat-search-toolbar-surface'),
       child: SizedBox(
-        height: height,
+        height: ChatComposerStyle.defaultActionDimension,
         child: Stack(
           alignment: Alignment.center,
           children: [
             Positioned(
-              left: 14,
-              child: _SearchToolIconButton(
-                semanticLabel: 'Search by date',
-                onPressed: onDateSearchPressed,
-                child: const _CalendarSearchIcon(),
+              left: 0,
+              child: Tooltip(
+                message: 'Search by date',
+                child: SizedBox.square(
+                  key: const ValueKey<String>('chat-search-date-button'),
+                  dimension: ChatComposerStyle.defaultActionDimension,
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: InkWell(
+                      borderRadius: AppRadius.borderRadius8,
+                      onTap: onDateSearchPressed,
+                      child: const Icon(
+                        AppIcons.calendar,
+                        size: ChatComposerStyle.neutralIconSize,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
             if (showCounter)
@@ -4616,27 +4581,27 @@ final class _ChatSearchToolbar extends StatelessWidget {
                 counterText,
                 key: const ValueKey<String>('chat-search-counter'),
                 style: AppTypography.typography5.copyWith(
-                  color: AppColors.grey900,
+                  color: AppColors.textPrimary,
                   fontWeight: AppTypography.bold,
                 ),
               ),
             Positioned(
-              right: 10,
+              right: 0,
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _SearchChevronButton(
-                    semanticLabel: 'Older search result',
-                    icon: Icons.keyboard_arrow_up_rounded,
-                    enabled: canMoveOlder,
-                    onPressed: onMoveOlder,
+                  _ComposerCircleButton.neutral(
+                    buttonKey: const ValueKey<String>('chat-search-older'),
+                    tooltip: 'Older search result',
+                    icon: AppIcons.keyboardArrowUp,
+                    onPressed: canMoveOlder ? onMoveOlder : null,
                   ),
-                  const SizedBox(width: 6),
-                  _SearchChevronButton(
-                    semanticLabel: 'Newer search result',
-                    icon: Icons.keyboard_arrow_down_rounded,
-                    enabled: canMoveNewer,
-                    onPressed: onMoveNewer,
+                  const SizedBox(width: AppSpacing.space4),
+                  _ComposerCircleButton.neutral(
+                    buttonKey: const ValueKey<String>('chat-search-newer'),
+                    tooltip: 'Newer search result',
+                    icon: AppIcons.keyboardArrowDown,
+                    onPressed: canMoveNewer ? onMoveNewer : null,
                   ),
                 ],
               ),
@@ -4644,91 +4609,6 @@ final class _ChatSearchToolbar extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-final class _SearchToolIconButton extends StatelessWidget {
-  const _SearchToolIconButton({
-    required this.semanticLabel,
-    required this.onPressed,
-    required this.child,
-  });
-
-  final String semanticLabel;
-  final VoidCallback? onPressed;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: semanticLabel,
-      enabled: onPressed != null,
-      child: SizedBox.square(
-        dimension: 44,
-        child: IconButton(
-          tooltip: semanticLabel,
-          onPressed: onPressed,
-          padding: EdgeInsets.zero,
-          icon: child,
-        ),
-      ),
-    );
-  }
-}
-
-final class _SearchChevronButton extends StatelessWidget {
-  const _SearchChevronButton({
-    required this.semanticLabel,
-    required this.icon,
-    required this.enabled,
-    required this.onPressed,
-  });
-
-  final String semanticLabel;
-  final IconData icon;
-  final bool enabled;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.white,
-      shape: const CircleBorder(),
-      clipBehavior: Clip.antiAlias,
-      child: SizedBox.square(
-        dimension: 44,
-        child: IconButton(
-          tooltip: semanticLabel,
-          onPressed: enabled ? onPressed : null,
-          padding: EdgeInsets.zero,
-          icon: Icon(
-            icon,
-            size: 31,
-            color: enabled ? AppColors.grey900 : AppColors.grey300,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-final class _CalendarSearchIcon extends StatelessWidget {
-  const _CalendarSearchIcon();
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      alignment: Alignment.center,
-      children: const [
-        Icon(Icons.calendar_today_rounded, color: AppColors.grey900, size: 26),
-        Positioned(
-          right: 4,
-          bottom: 4,
-          child: Icon(Icons.search_rounded, color: AppColors.grey900, size: 13),
-        ),
-      ],
     );
   }
 }
@@ -4749,6 +4629,12 @@ final class _SearchDateSheet extends StatefulWidget {
 }
 
 final class _SearchDateSheetState extends State<_SearchDateSheet> {
+  // 날짜 격자와 선택 휠의 기존 배치를 유지하는 전용 규격이에요.
+  static const double _verticalPadding = 22;
+
+  // 연·월 휠의 한 줄과 선택 배경은 높이가 같아야 해요.
+  static const double _pickerItemExtent = 45;
+
   static const List<String> _weekdayLabels = <String>[
     'S',
     'M',
@@ -4872,12 +4758,17 @@ final class _SearchDateSheetState extends State<_SearchDateSheet> {
       child: Material(
         color: AppColors.white,
         borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(24),
-          topRight: Radius.circular(24),
+          topLeft: Radius.circular(AppRadius.radius24),
+          topRight: Radius.circular(AppRadius.radius24),
         ),
         clipBehavior: Clip.antiAlias,
         child: Padding(
-          padding: EdgeInsets.fromLTRB(24, 22, 24, bottomPadding + 22),
+          padding: EdgeInsets.fromLTRB(
+            AppSpacing.space24,
+            _verticalPadding,
+            AppSpacing.space24,
+            bottomPadding + _verticalPadding,
+          ),
           child: _monthPickerOpen
               ? _buildMonthPicker(context)
               : _buildCalendar(context),
@@ -4890,12 +4781,12 @@ final class _SearchDateSheetState extends State<_SearchDateSheet> {
     final bool showUpCaret = _monthPickerOpen;
 
     return SizedBox(
-      height: 48,
+      height: 48.0,
       child: Row(
         children: [
           _MonthChevronButton(
             semanticLabel: 'Previous month',
-            icon: Icons.chevron_left_rounded,
+            icon: AppIcons.chevronLeft,
             enabled: !_monthPickerOpen && _canMoveToPreviousMonth,
             onPressed: () {
               _moveMonth(-1);
@@ -4914,15 +4805,16 @@ final class _SearchDateSheetState extends State<_SearchDateSheet> {
                   children: [
                     Text(
                       _formatSearchMonth(_visibleMonth),
+                      // 달력 배치에 연결된 기존 글자 크기와 행간을 유지해요.
                       style: AppTypography.typography4.copyWith(
-                        color: AppColors.grey900,
+                        color: AppColors.textPrimary,
                         fontWeight: AppTypography.bold,
                       ),
                     ),
                     Icon(
                       showUpCaret
-                          ? Icons.arrow_drop_up_rounded
-                          : Icons.arrow_drop_down_rounded,
+                          ? AppIcons.arrowDropUp
+                          : AppIcons.arrowDropDown,
                       color: AppColors.grey900,
                     ),
                   ],
@@ -4932,7 +4824,7 @@ final class _SearchDateSheetState extends State<_SearchDateSheet> {
           ),
           _MonthChevronButton(
             semanticLabel: 'Next month',
-            icon: Icons.chevron_right_rounded,
+            icon: AppIcons.chevronRight,
             enabled: !_monthPickerOpen && _canMoveToNextMonth,
             onPressed: () {
               _moveMonth(1);
@@ -4952,7 +4844,7 @@ final class _SearchDateSheetState extends State<_SearchDateSheet> {
       mainAxisSize: MainAxisSize.min,
       children: [
         _buildHeader(),
-        const SizedBox(height: 18),
+        const SizedBox(height: 18.0),
         Row(
           children: [
             for (final String label in _weekdayLabels)
@@ -4961,21 +4853,21 @@ final class _SearchDateSheetState extends State<_SearchDateSheet> {
                   child: Text(
                     label,
                     style: AppTypography.typography7.copyWith(
-                      color: AppColors.grey600,
-                      fontWeight: AppTypography.medium,
+                      color: AppColors.textSecondary,
+                      fontWeight: AppTypography.regular,
                     ),
                   ),
                 ),
               ),
           ],
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 14.0),
         GridView.count(
           crossAxisCount: 7,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 10,
-          crossAxisSpacing: 4,
+          mainAxisSpacing: 10.0,
+          crossAxisSpacing: AppSpacing.space4,
           children: [
             for (int index = 0; index < leadingBlankCount; index++)
               const SizedBox.shrink(),
@@ -5011,25 +4903,25 @@ final class _SearchDateSheetState extends State<_SearchDateSheet> {
       mainAxisSize: MainAxisSize.min,
       children: [
         _buildHeader(),
-        const SizedBox(height: 36),
+        const SizedBox(height: 36.0),
         Stack(
           alignment: Alignment.center,
           children: [
             Container(
-              height: 45,
+              height: _pickerItemExtent,
               decoration: const BoxDecoration(
                 color: AppColors.grey100,
-                borderRadius: BorderRadius.all(Radius.circular(12)),
+                borderRadius: AppRadius.borderRadius12,
               ),
             ),
             SizedBox(
-              height: 156,
+              height: 156.0,
               child: Row(
                 children: [
                   Expanded(
                     child: CupertinoPicker(
                       scrollController: _yearController,
-                      itemExtent: 45,
+                      itemExtent: _pickerItemExtent,
                       selectionOverlay: const SizedBox.shrink(),
                       onSelectedItemChanged: (int index) {
                         final int year = years[index];
@@ -5053,7 +4945,7 @@ final class _SearchDateSheetState extends State<_SearchDateSheet> {
                                 color: year == _temporaryYear
                                     ? AppColors.grey900
                                     : AppColors.grey400,
-                                fontWeight: AppTypography.medium,
+                                fontWeight: AppTypography.regular,
                               ),
                             ),
                           ),
@@ -5063,7 +4955,7 @@ final class _SearchDateSheetState extends State<_SearchDateSheet> {
                   Expanded(
                     child: CupertinoPicker(
                       scrollController: _monthController,
-                      itemExtent: 45,
+                      itemExtent: _pickerItemExtent,
                       selectionOverlay: const SizedBox.shrink(),
                       onSelectedItemChanged: (int index) {
                         setState(() {
@@ -5079,7 +4971,7 @@ final class _SearchDateSheetState extends State<_SearchDateSheet> {
                                 color: month == _temporaryMonth
                                     ? AppColors.grey900
                                     : AppColors.grey400,
-                                fontWeight: AppTypography.medium,
+                                fontWeight: AppTypography.regular,
                               ),
                             ),
                           ),
@@ -5091,18 +4983,19 @@ final class _SearchDateSheetState extends State<_SearchDateSheet> {
             ),
           ],
         ),
-        const SizedBox(height: 42),
+        const SizedBox(height: 42.0),
         Row(
           children: [
             Expanded(
-              child: _SearchDateSheetButton(
+              child: AppButton(
+                secondary: true,
                 label: 'Cancel',
                 onPressed: _cancelMonthPicker,
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 10.0),
             Expanded(
-              child: _SearchDateSheetButton(
+              child: AppButton(
                 label: 'OK',
                 onPressed: canApply ? _applyMonthPicker : null,
               ),
@@ -5134,7 +5027,7 @@ final class _MonthChevronButton extends StatelessWidget {
       onPressed: enabled ? onPressed : null,
       icon: Icon(
         icon,
-        size: 32,
+        size: 32.0,
         color: enabled ? AppColors.grey900 : AppColors.grey300,
       ),
     );
@@ -5164,7 +5057,7 @@ final class _SearchDateCell extends StatelessWidget {
 
     return Center(
       child: SizedBox.square(
-        dimension: 42,
+        dimension: 42.0,
         child: Material(
           color: selected ? AppColors.blue500 : Colors.transparent,
           shape: const CircleBorder(),
@@ -5179,7 +5072,7 @@ final class _SearchDateCell extends StatelessWidget {
                   color: textColor,
                   fontWeight: selected
                       ? AppTypography.bold
-                      : AppTypography.medium,
+                      : AppTypography.regular,
                 ),
               ),
             ),
@@ -5190,73 +5083,14 @@ final class _SearchDateCell extends StatelessWidget {
   }
 }
 
-final class _SearchDateSheetButton extends StatelessWidget {
-  const _SearchDateSheetButton({required this.label, required this.onPressed});
-
-  final String label;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 52,
-      child: TextButton(
-        onPressed: onPressed,
-        style: TextButton.styleFrom(
-          backgroundColor: AppColors.grey100,
-          foregroundColor: AppColors.grey900,
-          disabledForegroundColor: AppColors.grey400,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(10)),
-          ),
-        ),
-        child: Text(
-          label,
-          style: AppTypography.typography5.copyWith(
-            fontWeight: AppTypography.medium,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-String _formatCallDuration(Duration duration) {
-  final int totalSeconds = duration.inSeconds.clamp(0, 359999).toInt();
-  final int hours = totalSeconds ~/ 3600;
-  final int minutes = (totalSeconds % 3600) ~/ 60;
-  final int seconds = totalSeconds % 60;
-
-  String twoDigits(int value) {
-    return value.toString().padLeft(2, '0');
-  }
-
-  if (hours > 0) {
-    return '$hours:${twoDigits(minutes)}:${twoDigits(seconds)}';
-  }
-
-  return '${twoDigits(minutes)}:${twoDigits(seconds)}';
-}
-
-String _formatVoiceMemoSheetDuration(Duration duration) {
+String _formatVoiceMemoDuration(Duration duration, {required bool padMinutes}) {
   final int totalSeconds = duration.inSeconds.clamp(0, 5999).toInt();
   final int minutes = totalSeconds ~/ 60;
   final int seconds = totalSeconds % 60;
-
-  return '${minutes.toString().padLeft(2, '0')}:'
-      '${seconds.toString().padLeft(2, '0')}';
-}
-
-String _formatVoiceMemoBubbleDuration(Duration duration) {
-  final int totalSeconds = duration.inSeconds.clamp(0, 5999).toInt();
-  final int minutes = totalSeconds ~/ 60;
-  final int seconds = totalSeconds % 60;
-
-  return '$minutes:${seconds.toString().padLeft(2, '0')}';
-}
-
-double _voiceMemoMessageBubbleWidth(BuildContext context) {
-  return math.min(304, math.max(196, MediaQuery.sizeOf(context).width - 128));
+  final String minuteText = padMinutes
+      ? minutes.toString().padLeft(2, '0')
+      : minutes.toString();
+  return '$minuteText:${seconds.toString().padLeft(2, '0')}';
 }
 
 const int _voiceMemoWaveformSampleCount = 42;
@@ -5492,36 +5326,35 @@ final class _CallNowSheet extends StatelessWidget {
       bottom: false,
       child: Material(
         color: AppColors.grey50,
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(28),
-          topRight: Radius.circular(28),
-        ),
+        borderRadius: ChatActionSheetStyle.borderRadius,
         clipBehavior: Clip.antiAlias,
         child: SingleChildScrollView(
           child: Padding(
-            padding: EdgeInsets.fromLTRB(18, 26, 18, bottomPadding + 22),
+            padding: ChatActionSheetStyle.contentPadding.add(
+              EdgeInsets.only(bottom: bottomPadding),
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   'Call Now',
                   style: AppTypography.typography5.copyWith(
-                    color: AppColors.grey900,
-                    fontWeight: AppTypography.semibold,
+                    color: AppColors.textPrimary,
+                    fontWeight: AppTypography.bold,
                   ),
                 ),
                 const SizedBox(height: 18),
                 _CallNowOption(
                   label: 'Voice Call',
-                  icon: Icons.call_rounded,
+                  icon: AppIcons.call,
                   onTap: () {
                     Navigator.of(context).pop(_CallNowAction.voice);
                   },
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpacing.space12),
                 _CallNowOption(
                   label: 'Video Call',
-                  icon: Icons.videocam_rounded,
+                  icon: AppIcons.videocam,
                   onTap: () {
                     Navigator.of(context).pop(_CallNowAction.video);
                   },
@@ -5557,7 +5390,7 @@ final class _CallNowOption extends StatelessWidget {
         child: SizedBox(
           height: 68,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.space16),
             child: Row(
               children: [
                 Container(
@@ -5574,8 +5407,8 @@ final class _CallNowOption extends StatelessWidget {
                 Text(
                   label,
                   style: AppTypography.subTypography10.copyWith(
-                    color: AppColors.grey900,
-                    fontWeight: AppTypography.semibold,
+                    color: AppColors.textPrimary,
+                    fontWeight: AppTypography.bold,
                   ),
                 ),
               ],
@@ -5936,26 +5769,28 @@ final class _VoiceMemoSheetState extends State<_VoiceMemoSheet> {
       child: Material(
         key: const ValueKey<String>('voice-memo-sheet'),
         color: AppColors.white,
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(28),
-          topRight: Radius.circular(28),
-        ),
+        borderRadius: ChatActionSheetStyle.borderRadius,
         clipBehavior: Clip.antiAlias,
         child: Padding(
-          padding: EdgeInsets.fromLTRB(18, 26, 18, bottomPadding + 22),
+          padding: ChatActionSheetStyle.contentPadding.add(
+            EdgeInsets.only(bottom: bottomPadding),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 'Voice Memo',
                 style: AppTypography.typography5.copyWith(
-                  color: AppColors.grey900,
-                  fontWeight: AppTypography.semibold,
+                  color: AppColors.textPrimary,
+                  fontWeight: AppTypography.bold,
                 ),
               ),
-              const SizedBox(height: 22),
+              const SizedBox(
+                // 녹음창 내부 배치는 현재 모양을 유지하고, 바깥 여백은 시트 규격을 사용해요.
+                height: 22.0,
+              ),
               Transform.translate(
-                offset: const Offset(0, 4),
+                offset: Offset(0, 4),
                 child: _VoiceMemoRecorderBar(
                   mode: _mode,
                   elapsed: _elapsed,
@@ -5964,9 +5799,12 @@ final class _VoiceMemoSheetState extends State<_VoiceMemoSheet> {
                   onPlayPressed: _togglePlayback,
                 ),
               ),
-              const SizedBox(height: 44),
+              const SizedBox(height: 44.0),
               SizedBox(
-                height: 54,
+                // 모든 녹음 액션은 같은 원형 버튼을 쓰고, 바깥 원까지 포함한 높이를 확보해요.
+                height:
+                    _VoiceMemoRoundButton._buttonDimension +
+                    _VoiceMemoRoundButton._buttonHaloPadding * 2,
                 child: _VoiceMemoRecorderControls(
                   mode: _mode,
                   onRecordPressed: _startRecording,
@@ -6025,14 +5863,14 @@ final class _VoiceMemoRecorderBar extends StatelessWidget {
         : progress.clamp(0, 1).toDouble();
 
     return SizedBox(
-      height: 64,
+      height: 64.0,
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: backgroundColor,
-          borderRadius: const BorderRadius.all(Radius.circular(14)),
+          borderRadius: BorderRadius.all(Radius.circular(14)),
         ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18),
+          padding: const EdgeInsets.symmetric(horizontal: 18.0),
           child: Row(
             children: [
               if (_canPlay) ...[
@@ -6041,7 +5879,7 @@ final class _VoiceMemoRecorderBar extends StatelessWidget {
                   color: foregroundColor,
                   onPressed: onPlayPressed,
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpacing.space12),
               ],
               Expanded(
                 child: _hasRecording
@@ -6057,12 +5895,12 @@ final class _VoiceMemoRecorderBar extends StatelessWidget {
                       )
                     : const SizedBox.shrink(),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 14.0),
               Text(
-                _formatVoiceMemoSheetDuration(displayDuration),
+                _formatVoiceMemoDuration(displayDuration, padMinutes: true),
                 style: AppTypography.typography5.copyWith(
                   color: foregroundColor,
-                  fontWeight: AppTypography.semibold,
+                  fontWeight: AppTypography.bold,
                 ),
               ),
             ],
@@ -6074,6 +5912,8 @@ final class _VoiceMemoRecorderBar extends StatelessWidget {
 }
 
 final class _VoiceMemoInlinePlayButton extends StatelessWidget {
+  static const double _dimension = 30;
+
   const _VoiceMemoInlinePlayButton({
     required this.playing,
     required this.color,
@@ -6090,17 +5930,18 @@ final class _VoiceMemoInlinePlayButton extends StatelessWidget {
       key: const ValueKey<String>('voice-memo-preview-play'),
       onPressed: onPressed,
       padding: EdgeInsets.zero,
-      constraints: const BoxConstraints.tightFor(width: 30, height: 30),
-      icon: Icon(
-        playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-        size: 30,
-        color: color,
+      constraints: const BoxConstraints.tightFor(
+        width: _dimension,
+        height: _dimension,
       ),
+      icon: Icon(AppIcons.playback(playing), size: _dimension, color: color),
     );
   }
 }
 
 final class _VoiceMemoRecorderControls extends StatelessWidget {
+  static const double _actionIconSize = 31;
+
   const _VoiceMemoRecorderControls({
     required this.mode,
     required this.onRecordPressed,
@@ -6121,7 +5962,6 @@ final class _VoiceMemoRecorderControls extends StatelessWidget {
       return Center(
         child: _VoiceMemoRoundButton(
           key: const ValueKey<String>('voice-memo-record'),
-          size: 44,
           backgroundColor: AppColors.error,
           foregroundColor: AppColors.white,
           onPressed: onRecordPressed,
@@ -6133,19 +5973,17 @@ final class _VoiceMemoRecorderControls extends StatelessWidget {
     final Widget centerButton = mode == _VoiceMemoSheetMode.recording
         ? _VoiceMemoRoundButton(
             key: const ValueKey<String>('voice-memo-stop'),
-            size: 44,
             backgroundColor: AppColors.grey50,
             foregroundColor: AppColors.grey900,
             onPressed: onStopPressed,
-            child: const Icon(Icons.stop_rounded, size: 28),
+            child: const Icon(AppIcons.stop, size: 28.0),
           )
         : _VoiceMemoRoundButton(
             key: const ValueKey<String>('voice-memo-reset'),
-            size: 44,
             backgroundColor: AppColors.white,
             foregroundColor: AppColors.grey900,
             onPressed: onResetPressed,
-            child: const Icon(Icons.replay_rounded, size: 31),
+            child: const Icon(AppIcons.replay, size: _actionIconSize),
           );
 
     return Stack(
@@ -6156,11 +5994,10 @@ final class _VoiceMemoRecorderControls extends StatelessWidget {
           alignment: Alignment.centerRight,
           child: _VoiceMemoRoundButton(
             key: const ValueKey<String>('voice-memo-send'),
-            size: 44,
             backgroundColor: AppColors.primary,
             foregroundColor: AppColors.white,
             onPressed: onSendPressed,
-            child: const Icon(Icons.arrow_upward_rounded, size: 31),
+            child: const Icon(AppIcons.send, size: _actionIconSize),
           ),
         ),
       ],
@@ -6169,8 +6006,11 @@ final class _VoiceMemoRecorderControls extends StatelessWidget {
 }
 
 final class _VoiceMemoRoundButton extends StatelessWidget {
+  static const double _buttonDimension = 44;
+
+  static const double _buttonHaloPadding = 5;
+
   const _VoiceMemoRoundButton({
-    required this.size,
     required this.backgroundColor,
     required this.foregroundColor,
     required this.onPressed,
@@ -6178,7 +6018,6 @@ final class _VoiceMemoRoundButton extends StatelessWidget {
     super.key,
   });
 
-  final double size;
   final Color backgroundColor;
   final Color foregroundColor;
   final VoidCallback onPressed;
@@ -6192,7 +6031,7 @@ final class _VoiceMemoRoundButton extends StatelessWidget {
         shape: BoxShape.circle,
       ),
       child: Padding(
-        padding: const EdgeInsets.all(5),
+        padding: const EdgeInsets.all(_buttonHaloPadding),
         child: Material(
           color: backgroundColor,
           shape: const CircleBorder(),
@@ -6201,7 +6040,7 @@ final class _VoiceMemoRoundButton extends StatelessWidget {
             customBorder: const CircleBorder(),
             onTap: onPressed,
             child: SizedBox.square(
-              dimension: size,
+              dimension: _buttonDimension,
               child: IconTheme(
                 data: IconThemeData(color: foregroundColor),
                 child: Center(child: child),
@@ -6351,7 +6190,7 @@ final class _ActiveVoiceCallBanner extends StatelessWidget {
     required this.onPressed,
   });
 
-  static const double _verticalPadding = 8;
+  static const double _verticalPadding = AppSpacing.space8;
   static const double _buttonHeight = 52;
   static const double occupiedHeight = _buttonHeight + (_verticalPadding * 2);
 
@@ -6362,7 +6201,7 @@ final class _ActiveVoiceCallBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final String semanticLabel = connected
-        ? 'Voice call ${_formatCallDuration(elapsed)}'
+        ? 'Voice call ${formatChatCallDuration(elapsed)}'
         : 'Voice call connecting';
 
     return Align(
@@ -6390,22 +6229,22 @@ final class _ActiveVoiceCallBanner extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(
-                      Icons.call_rounded,
-                      size: 28,
-                      color: AppColors.white,
-                    ),
+                    const Icon(AppIcons.call, size: 28, color: AppColors.white),
                     SizedBox(width: connected ? 14 : 18),
                     if (connected)
                       Text(
-                        _formatCallDuration(elapsed),
+                        formatChatCallDuration(elapsed),
                         style: AppTypography.typography5.copyWith(
                           color: AppColors.white,
                           fontWeight: AppTypography.bold,
                         ),
                       )
                     else
-                      const _ActiveCallDots(),
+                      _CallConnectingDots(
+                        color: AppColors.white.withAlpha(122),
+                        dotSize: 8,
+                        spacing: 5,
+                      ),
                   ],
                 ),
               ),
@@ -6417,407 +6256,33 @@ final class _ActiveVoiceCallBanner extends StatelessWidget {
   }
 }
 
-final class _ActiveCallDots extends StatelessWidget {
-  const _ActiveCallDots();
+final class _CallConnectingDots extends StatelessWidget {
+  const _CallConnectingDots({
+    required this.color,
+    required this.dotSize,
+    required this.spacing,
+  });
+
+  final Color color;
+  final double dotSize;
+  final double spacing;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _ActiveCallDot(color: AppColors.white.withAlpha(122)),
-        const SizedBox(width: 5),
-        _ActiveCallDot(color: AppColors.white.withAlpha(122)),
-        const SizedBox(width: 5),
-        _ActiveCallDot(color: AppColors.white.withAlpha(122)),
-      ],
-    );
-  }
-}
-
-final class _ActiveCallDot extends StatelessWidget {
-  const _ActiveCallDot({required this.color});
-
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox.square(
-      dimension: 8,
-      child: DecoratedBox(
-        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-      ),
-    );
-  }
-}
-
-final class _VoiceCallScreen extends StatelessWidget {
-  const _VoiceCallScreen({
-    required this.participantName,
-    required this.participantProfileImageUrl,
-    required this.connected,
-    required this.elapsed,
-    required this.muted,
-    required this.audioOutputRoute,
-    required this.onReturnToChat,
-    required this.onToggleMute,
-    required this.onEndCall,
-    required this.onChooseAudioOutput,
-  });
-
-  final String participantName;
-  final String? participantProfileImageUrl;
-  final bool connected;
-  final Duration elapsed;
-  final bool muted;
-  final _AudioOutputRoute audioOutputRoute;
-  final VoidCallback onReturnToChat;
-  final VoidCallback onToggleMute;
-  final VoidCallback onEndCall;
-  final VoidCallback onChooseAudioOutput;
-
-  @override
-  Widget build(BuildContext context) {
-    final double bottomPadding = MediaQuery.viewPaddingOf(context).bottom;
-
-    return Material(
-      key: const ValueKey<String>('voice-call-screen'),
-      color: AppColors.black,
-      child: Column(
-        children: [
-          SizedBox(
-            height: 106,
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: Padding(
-                padding: const EdgeInsets.only(right: 22),
-                child: _CallTopButton(
-                  icon: Icons.picture_in_picture_alt_rounded,
-                  tooltip: 'Back to chat',
-                  onPressed: onReturnToChat,
-                ),
-              ),
-            ),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 18),
-              child: Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: AppColors.grey900,
-                  borderRadius: AppRadius.borderRadius24,
-                ),
-                child: LayoutBuilder(
-                  builder: (BuildContext context, BoxConstraints constraints) {
-                    final double topSpacing = (constraints.maxHeight * 0.12)
-                        .clamp(72.0, 116.0)
-                        .toDouble();
-
-                    return Column(
-                      children: [
-                        SizedBox(height: topSpacing),
-                        Text(
-                          participantName,
-                          style: AppTypography.typography2.copyWith(
-                            color: AppColors.white,
-                            fontWeight: AppTypography.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          connected
-                              ? _formatCallDuration(elapsed)
-                              : 'Connecting...',
-                          style: AppTypography.typography5.copyWith(
-                            color: AppColors.white,
-                            fontWeight: AppTypography.medium,
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        connected
-                            ? Text(
-                                'Voice Call',
-                                style: AppTypography.subTypography11.copyWith(
-                                  color: AppColors.grey400,
-                                  fontWeight: AppTypography.medium,
-                                ),
-                              )
-                            : const _ConnectingDots(),
-                        SizedBox(height: constraints.maxHeight * 0.08),
-                        AppProfileImage(
-                          imageUrl: participantProfileImageUrl,
-                          size: 112,
-                          borderRadius: 32,
-                          iconSize: 64,
-                          iconColor: AppColors.blue50,
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-            ),
-          ),
-          Padding(
-            padding: EdgeInsets.fromLTRB(28, 0, 28, bottomPadding + 24),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _CallControlButton(
-                  tooltip: muted ? 'Unmute' : 'Mute',
-                  icon: muted ? Icons.mic_off_rounded : Icons.mic_rounded,
-                  active: muted,
-                  onPressed: onToggleMute,
-                ),
-                const SizedBox(width: 34),
-                _EndCallButton(onPressed: onEndCall),
-                const SizedBox(width: 34),
-                _CallControlButton(
-                  tooltip: audioOutputRoute.label,
-                  icon: audioOutputRoute.icon,
-                  active: audioOutputRoute != _AudioOutputRoute.phone,
-                  onPressed: onChooseAudioOutput,
-                ),
-              ],
+        for (int index = 0; index < 3; index++) ...[
+          if (index > 0) SizedBox(width: spacing),
+          SizedBox.square(
+            dimension: dotSize,
+            child: DecoratedBox(
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-final class _ConnectingDots extends StatelessWidget {
-  const _ConnectingDots();
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: const [
-        _ConnectingDot(),
-        SizedBox(width: 9),
-        _ConnectingDot(),
-        SizedBox(width: 9),
-        _ConnectingDot(),
       ],
     );
-  }
-}
-
-final class _ConnectingDot extends StatelessWidget {
-  const _ConnectingDot();
-
-  @override
-  Widget build(BuildContext context) {
-    return const SizedBox.square(
-      dimension: 10,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: AppColors.blue500,
-          shape: BoxShape.circle,
-        ),
-      ),
-    );
-  }
-}
-
-final class _CallTopButton extends StatelessWidget {
-  const _CallTopButton({
-    required this.icon,
-    required this.tooltip,
-    required this.onPressed,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      tooltip: tooltip,
-      onPressed: onPressed,
-      icon: Icon(icon, size: 32, color: AppColors.white),
-    );
-  }
-}
-
-final class _CallControlButton extends StatelessWidget {
-  const _CallControlButton({
-    required this.tooltip,
-    required this.icon,
-    required this.active,
-    required this.onPressed,
-  });
-
-  final String tooltip;
-  final IconData icon;
-  final bool active;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: SizedBox.square(
-        dimension: 66,
-        child: Material(
-          color: active ? AppColors.grey700 : AppColors.grey800,
-          shape: const CircleBorder(),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: onPressed,
-            child: Icon(icon, size: 31, color: AppColors.white),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-final class _EndCallButton extends StatelessWidget {
-  const _EndCallButton({required this.onPressed});
-
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: 'End call',
-      child: SizedBox.square(
-        dimension: 72,
-        child: Material(
-          color: AppColors.red500,
-          shape: const CircleBorder(),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: onPressed,
-            child: const Icon(
-              Icons.call_end_rounded,
-              size: 34,
-              color: AppColors.white,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-final class _AudioOutputSheet extends StatelessWidget {
-  const _AudioOutputSheet({required this.selectedRoute});
-
-  final _AudioOutputRoute selectedRoute;
-
-  @override
-  Widget build(BuildContext context) {
-    final double bottomPadding = MediaQuery.viewPaddingOf(context).bottom;
-
-    return SafeArea(
-      top: false,
-      child: Material(
-        color: AppColors.white,
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(28),
-          topRight: Radius.circular(28),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(18, 12, 18, bottomPadding + 18),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 44,
-                height: 5,
-                decoration: const BoxDecoration(
-                  color: AppColors.grey300,
-                  borderRadius: BorderRadius.all(Radius.circular(3)),
-                ),
-              ),
-              const SizedBox(height: 22),
-              Text(
-                'Audio Output',
-                style: AppTypography.typography4.copyWith(
-                  color: AppColors.grey900,
-                  fontWeight: AppTypography.bold,
-                ),
-              ),
-              const SizedBox(height: 16),
-              for (final _AudioOutputRoute route in _AudioOutputRoute.values)
-                _AudioOutputOption(
-                  route: route,
-                  selected: route == selectedRoute,
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-final class _AudioOutputOption extends StatelessWidget {
-  const _AudioOutputOption({required this.route, required this.selected});
-
-  final _AudioOutputRoute route;
-  final bool selected;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: AppRadius.borderRadius16,
-        onTap: () {
-          Navigator.of(context).pop(route);
-        },
-        child: SizedBox(
-          height: 58,
-          child: Row(
-            children: [
-              const SizedBox(width: 4),
-              Icon(route.icon, size: 25, color: AppColors.grey700),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Text(
-                  route.label,
-                  style: AppTypography.subTypography10.copyWith(
-                    color: AppColors.grey900,
-                    fontWeight: AppTypography.medium,
-                  ),
-                ),
-              ),
-              if (selected)
-                const Icon(Icons.check_rounded, color: AppColors.blue500),
-              const SizedBox(width: 4),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-extension on _AudioOutputRoute {
-  String get label {
-    return switch (this) {
-      _AudioOutputRoute.phone => 'Phone',
-      _AudioOutputRoute.speaker => 'Speaker',
-      _AudioOutputRoute.bluetooth => 'Bluetooth Headset',
-    };
-  }
-
-  IconData get icon {
-    return switch (this) {
-      _AudioOutputRoute.phone => Icons.phone_in_talk_rounded,
-      _AudioOutputRoute.speaker => Icons.volume_up_rounded,
-      _AudioOutputRoute.bluetooth => Icons.headphones_rounded,
-    };
   }
 }
 
@@ -7286,6 +6751,11 @@ final class _MessageList extends StatefulWidget {
 
 final class _MessageListState extends State<_MessageList>
     with TickerProviderStateMixin {
+  // 둘 다 함께 나타나고, 스크롤을 멈추면 날짜가 먼저 사라지는 순서를 유지해요.
+  static const Duration _scrollOverlayFadeInDuration = Duration(
+    milliseconds: 90,
+  );
+
   static const double _replyOriginalAlignment = 0.28;
   static const double _historyCenterContentInset = 44;
   static const Duration _replyNavigationSnapshotTimeout = Duration(
@@ -7302,11 +6772,6 @@ final class _MessageListState extends State<_MessageList>
     milliseconds: 400,
   );
   static const Duration _scrollDateRefreshInterval = Duration(milliseconds: 50);
-  static const Duration _scrollDateHideDelay = Duration(milliseconds: 120);
-  static const Duration _scrollbarHideDelay = Duration(milliseconds: 520);
-  static const Duration _scrollToLatestScrollbarHoldDuration = Duration(
-    seconds: 1,
-  );
   final Set<String> _showTranslatedMessageIds = <String>{};
   final Set<String> _historyPageBoundaryMessageIds = <String>{};
   final Map<String, GlobalKey> _messageBubbleKeys = <String, GlobalKey>{};
@@ -7398,13 +6863,13 @@ final class _MessageListState extends State<_MessageList>
 
     _scrollbarOpacityController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 90),
-      reverseDuration: const Duration(milliseconds: 260),
+      duration: _scrollOverlayFadeInDuration,
+      reverseDuration: Duration(milliseconds: 260),
     );
     _scrollDateOpacityController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 90),
-      reverseDuration: const Duration(milliseconds: 170),
+      duration: _scrollOverlayFadeInDuration,
+      reverseDuration: Duration(milliseconds: 170),
     );
     _scrollDateOpacityAnimation = CurvedAnimation(
       parent: _scrollDateOpacityController,
@@ -7675,7 +7140,7 @@ final class _MessageListState extends State<_MessageList>
     _scrollbarOpacityController.stop();
     _scrollToLatestRetainedThumbLength = geometry.thumbRect.height;
     _updateScrollOverlayMetrics();
-    _scrollbarHideTimer = Timer(_scrollToLatestScrollbarHoldDuration, () {
+    _scrollbarHideTimer = Timer(Duration(seconds: 1), () {
       _scrollbarHideTimer = null;
 
       if (!mounted || _manualScrollSessionActive) {
@@ -7701,13 +7166,13 @@ final class _MessageListState extends State<_MessageList>
     _scrollDateHideTimer?.cancel();
     _scrollbarHideTimer?.cancel();
 
-    _scrollDateHideTimer = Timer(_scrollDateHideDelay, () {
+    _scrollDateHideTimer = Timer(Duration(milliseconds: 120), () {
       _scrollDateHideTimer = null;
       if (mounted && !_manualScrollSessionActive) {
         unawaited(_scrollDateOpacityController.reverse());
       }
     });
-    _scrollbarHideTimer = Timer(_scrollbarHideDelay, () {
+    _scrollbarHideTimer = Timer(Duration(milliseconds: 520), () {
       _scrollbarHideTimer = null;
       if (mounted && !_manualScrollSessionActive) {
         unawaited(_scrollbarOpacityController.reverse());
@@ -7758,15 +7223,12 @@ final class _MessageListState extends State<_MessageList>
     ChatMessage? topMessage;
     double topMessageOffset = double.infinity;
 
-    for (final MapEntry<String, GlobalKey> entry
-        in _messageBubbleKeys.entries) {
-      final BuildContext? messageContext = entry.value.currentContext;
-      final RenderObject? messageRenderObject = messageContext
-          ?.findRenderObject();
+    for (final ChatMessage message in _messages) {
+      final RenderObject? messageRenderObject = _messageRenderObjectFor(
+        message,
+      );
 
-      if (messageRenderObject is! RenderBox ||
-          !messageRenderObject.attached ||
-          !messageRenderObject.hasSize) {
+      if (messageRenderObject is! RenderBox || !messageRenderObject.hasSize) {
         continue;
       }
 
@@ -7781,12 +7243,8 @@ final class _MessageListState extends State<_MessageList>
         continue;
       }
 
-      final ChatMessage? message = _findMessage(entry.key);
-
-      if (message != null) {
-        topMessage = message;
-        topMessageOffset = messageRect.top;
-      }
+      topMessage = message;
+      topMessageOffset = messageRect.top;
     }
 
     return topMessage?.createdAt;
@@ -9149,7 +8607,14 @@ final class _MessageListState extends State<_MessageList>
   }
 
   RenderObject? _messageRenderObject(String messageId) {
-    final GlobalKey? messageKey = _messageBubbleKeys[messageId];
+    final ChatMessage? message = _findMessage(messageId);
+    return message == null ? null : _messageRenderObjectFor(message);
+  }
+
+  RenderObject? _messageRenderObjectFor(ChatMessage message) {
+    // 전송 완료로 메시지 ID가 바뀌어도 사진·영상의 화면 키는 유지해요.
+    final GlobalKey? messageKey =
+        _messageBubbleKeys[_messagePresentationId(message)];
 
     final BuildContext? messageContext = messageKey?.currentContext;
 
@@ -9722,10 +9187,6 @@ final class _MessageListState extends State<_MessageList>
     }
 
     final double initialScrollOffset = _scrollController.position.pixels;
-    final Map<String, int> messageIndexById = <String, int>{
-      for (int index = 0; index < _messages.length; index++)
-        _messages[index].id: index,
-    };
     double lowerOffsetBound = _scrollController.position.minScrollExtent;
     double upperOffsetBound = _scrollController.position.maxScrollExtent;
     bool hasObservedLowerBound = false;
@@ -9797,7 +9258,7 @@ final class _MessageListState extends State<_MessageList>
           : position.maxScrollExtent;
 
       final _RenderedMessageIndexRange? renderedRange =
-          _renderedMessageIndexRange(messageIndexById, position: position);
+          _renderedMessageIndexRange(position: position);
 
       if (renderedRange != null) {
         if (targetIndex < renderedRange.first) {
@@ -9912,8 +9373,7 @@ final class _MessageListState extends State<_MessageList>
     return false;
   }
 
-  _RenderedMessageIndexRange? _renderedMessageIndexRange(
-    Map<String, int> messageIndexById, {
+  _RenderedMessageIndexRange? _renderedMessageIndexRange({
     required ScrollPosition position,
   }) {
     int? firstIndex;
@@ -9921,13 +9381,10 @@ final class _MessageListState extends State<_MessageList>
     double? firstRevealOffset;
     double? lastRevealOffset;
 
-    for (final MapEntry<String, GlobalKey> entry
-        in _messageBubbleKeys.entries) {
-      final int? messageIndex = messageIndexById[entry.key];
+    for (final (messageIndex, message) in _messages.indexed) {
+      final RenderObject? renderObject = _messageRenderObjectFor(message);
 
-      final RenderObject? renderObject = _messageRenderObject(entry.key);
-
-      if (messageIndex == null || renderObject == null) {
+      if (renderObject == null) {
         continue;
       }
 
@@ -10546,8 +10003,9 @@ final class _MessageListState extends State<_MessageList>
         requestFocus: false,
         barrierDismissible: true,
         barrierLabel: 'Dismiss message actions',
+        // 배경 어두움과 메뉴 그림자는 역할이 달라 같은 알파여도 따로 관리해요.
         barrierColor: AppColors.black.withAlpha(31),
-        transitionDuration: const Duration(milliseconds: 140),
+        transitionDuration: Duration(milliseconds: 140),
         pageBuilder:
             (
               BuildContext context,
@@ -10577,6 +10035,7 @@ final class _MessageListState extends State<_MessageList>
             },
       );
     } finally {
+      // 닫힘 전환이 끝날 때까지 선택한 말풍선의 캡처를 유지해요.
       unawaited(
         Future<void>.delayed(
           const Duration(milliseconds: 160),
@@ -10611,12 +10070,13 @@ final class _MessageListState extends State<_MessageList>
         return;
 
       case ChatMessageAction.unsend:
-        unawaited(_unsendMessage(message.id));
+        unawaited(_unsendMessage(message));
         return;
     }
   }
 
-  Future<void> _unsendMessage(String messageId) async {
+  Future<void> _unsendMessage(ChatMessage message) async {
+    final String messageId = message.id;
     final ChatMessageDeleter? deleter = widget.onDeleteMessage;
 
     if (deleter != null) {
@@ -10642,7 +10102,7 @@ final class _MessageListState extends State<_MessageList>
       _messages.removeWhere((ChatMessage message) => message.id == messageId);
 
       _showTranslatedMessageIds.remove(messageId);
-      _messageBubbleKeys.remove(messageId);
+      _messageBubbleKeys.remove(_messagePresentationId(message));
 
       if (_highlightedMessageId == messageId) {
         _highlightedMessageId = null;
@@ -10739,8 +10199,11 @@ final class _MessageListState extends State<_MessageList>
     });
   }
 
-  GlobalKey _messageBubbleKeyFor(String messageId) {
-    return _messageBubbleKeys.putIfAbsent(messageId, () => GlobalKey());
+  GlobalKey _messageBubbleKeyFor(ChatMessage message) {
+    return _messageBubbleKeys.putIfAbsent(
+      _messagePresentationId(message),
+      () => GlobalKey(),
+    );
   }
 
   ChatMessage? _findMessage(String messageId) {
@@ -10976,7 +10439,7 @@ final class _MessageListState extends State<_MessageList>
                           ],
                         ),
                         child: const Padding(
-                          padding: EdgeInsets.all(12),
+                          padding: EdgeInsets.all(AppSpacing.space12),
                           child: CupertinoActivityIndicator(
                             color: AppColors.blue500,
                           ),
@@ -11311,6 +10774,13 @@ final class _MessageScrollOverlayMetrics {
 }
 
 final class _MessageScrollGeometry {
+  // 스크롤 위치·길이 계산은 기존 구현을 쓰고, 화면에 표시할 규격만 모아요.
+  static const double _scrollbarThickness = 3;
+
+  static const double _scrollbarRightMargin = 2;
+
+  static const double _dateHeight = 24;
+
   const _MessageScrollGeometry({
     required this.trackTop,
     required this.trackBottom,
@@ -11318,10 +10788,6 @@ final class _MessageScrollGeometry {
     required this.rightMargin,
     required this.thickness,
   });
-
-  static const double minimumOverscrollThumbLength = 8;
-  static const double defaultThickness = 3;
-  static const double defaultRightMargin = 2;
 
   final double trackTop;
   final double trackBottom;
@@ -11353,8 +10819,8 @@ final class _MessageScrollGeometry {
         trackTop: trackTop,
         trackBottom: trackBottom,
         thumbRect: Rect.zero,
-        rightMargin: defaultRightMargin,
-        thickness: defaultThickness,
+        rightMargin: _scrollbarRightMargin,
+        thickness: _scrollbarThickness,
       );
     }
 
@@ -11380,10 +10846,7 @@ final class _MessageScrollGeometry {
     final double thumbLength = overscroll <= 0
         ? normalThumbLength
         : (normalThumbLength - overscroll)
-              .clamp(
-                math.min(minimumOverscrollThumbLength, normalThumbLength),
-                normalThumbLength,
-              )
+              .clamp(math.min(8.0, normalThumbLength), normalThumbLength)
               .toDouble();
     final double availableTravel = math.max(0.0, trackExtent - thumbLength);
     final double scrollFraction =
@@ -11395,19 +10858,19 @@ final class _MessageScrollGeometry {
         : overscrollAfter > 0
         ? trackBottom - thumbLength
         : trackTop + (availableTravel * scrollFraction);
-    final double thumbRight = size.width - defaultRightMargin;
+    final double thumbRight = size.width - _scrollbarRightMargin;
 
     return _MessageScrollGeometry(
       trackTop: trackTop,
       trackBottom: trackBottom,
       thumbRect: Rect.fromLTWH(
-        thumbRight - defaultThickness,
+        thumbRight - _scrollbarThickness,
         thumbTop,
-        defaultThickness,
+        _scrollbarThickness,
         thumbLength,
       ),
-      rightMargin: defaultRightMargin,
-      thickness: defaultThickness,
+      rightMargin: _scrollbarRightMargin,
+      thickness: _scrollbarThickness,
     );
   }
 }
@@ -11467,9 +10930,6 @@ final class _MessageScrollDateBubbleOverlay extends StatelessWidget {
     required this.opacity,
   });
 
-  static const double _height = 24;
-  static const double _scrollbarGap = 3;
-
   final ValueListenable<_MessageScrollOverlayMetrics?> metricsListenable;
   final Animation<double> opacity;
 
@@ -11495,12 +10955,14 @@ final class _MessageScrollDateBubbleOverlay extends StatelessWidget {
             }
 
             final double bubbleTop =
-                (geometry.thumbRect.center.dy - _height / 2)
+                (geometry.thumbRect.center.dy -
+                        _MessageScrollGeometry._dateHeight / 2)
                     .clamp(
                       geometry.trackTop,
                       math.max(
                         geometry.trackTop,
-                        geometry.trackBottom - _height,
+                        geometry.trackBottom -
+                            _MessageScrollGeometry._dateHeight,
                       ),
                     )
                     .toDouble();
@@ -11510,9 +10972,8 @@ final class _MessageScrollDateBubbleOverlay extends StatelessWidget {
               children: <Widget>[
                 Positioned(
                   top: bubbleTop,
-                  right:
-                      geometry.rightMargin + geometry.thickness + _scrollbarGap,
-                  height: _height,
+                  right: geometry.rightMargin + geometry.thickness + 3.0,
+                  height: _MessageScrollGeometry._dateHeight,
                   child: Opacity(
                     opacity: opacity.value,
                     child: DecoratedBox(
@@ -11522,7 +10983,7 @@ final class _MessageScrollDateBubbleOverlay extends StatelessWidget {
                         borderRadius: AppRadius.borderRadiusFull,
                       ),
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        padding: EdgeInsets.symmetric(horizontal: 10),
                         child: Center(
                           child: Text(
                             formatChatScrollDate(metrics.date!),
@@ -11577,7 +11038,7 @@ final class _ScrollToLatestMessageButton extends StatelessWidget {
             child: const SizedBox.square(
               dimension: 44,
               child: Icon(
-                Icons.keyboard_arrow_down_rounded,
+                AppIcons.keyboardArrowDown,
                 size: 28,
                 color: AppColors.grey900,
               ),
@@ -11607,11 +11068,14 @@ final class _BackToReplyMessageButton extends StatelessWidget {
         onTap: onPressed,
         borderRadius: AppRadius.borderRadiusFull,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
+          padding: const EdgeInsets.symmetric(
+            horizontal: 15,
+            vertical: AppSpacing.space8,
+          ),
           child: Text(
             'Back to Reply Message',
             style: AppTypography.typography7.copyWith(
-              color: AppColors.grey900,
+              color: AppColors.textPrimary,
               fontWeight: AppTypography.bold,
             ),
           ),
@@ -11664,15 +11128,12 @@ final class _MessageActionOverlay extends StatelessWidget {
 }
 
 final class _MessageActionMenuLayoutDelegate extends SingleChildLayoutDelegate {
+  static const double _bubbleGap = 6;
+
   const _MessageActionMenuLayoutDelegate({
     required this.bubbleRect,
     required this.safePadding,
   });
-
-  static const double _horizontalMargin = 16;
-  static const double _verticalMargin = 8;
-  static const double _bubbleGap = 6;
-  static const double _maxWidth = 288;
 
   final Rect bubbleRect;
   final EdgeInsets safePadding;
@@ -11680,8 +11141,9 @@ final class _MessageActionMenuLayoutDelegate extends SingleChildLayoutDelegate {
   @override
   BoxConstraints getConstraintsForChild(BoxConstraints constraints) {
     final double width = math.min(
-      _maxWidth,
-      constraints.maxWidth - (_horizontalMargin * 2),
+      // 메시지 종류와 상관없이 같은 메뉴를 쓰고, 배치 계산에는 기존 치수를 전달해요.
+      288.0,
+      constraints.maxWidth - (AppSpacing.space16 * 2),
     );
 
     return BoxConstraints.tightFor(width: width);
@@ -11690,9 +11152,9 @@ final class _MessageActionMenuLayoutDelegate extends SingleChildLayoutDelegate {
   @override
   Offset getPositionForChild(Size size, Size childSize) {
     final double left = (size.width - childSize.width) / 2;
-    final double minimumTop = safePadding.top + _verticalMargin;
+    final double minimumTop = safePadding.top + AppSpacing.space8;
     final double maximumBottom =
-        size.height - safePadding.bottom - _verticalMargin;
+        size.height - safePadding.bottom - AppSpacing.space8;
     final double belowTop = bubbleRect.bottom + _bubbleGap;
 
     final double top = belowTop + childSize.height <= maximumBottom
@@ -11719,9 +11181,9 @@ final class _MessageActionMenu extends StatelessWidget {
     return Material(
       key: const ValueKey<String>('message-action-menu'),
       color: AppColors.white,
-      elevation: 4,
+      elevation: 4.0,
       shadowColor: AppColors.black.withAlpha(31),
-      borderRadius: const BorderRadius.all(Radius.circular(12)),
+      borderRadius: AppRadius.borderRadius12,
       clipBehavior: Clip.antiAlias,
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -11729,7 +11191,11 @@ final class _MessageActionMenu extends StatelessWidget {
           for (int index = 0; index < actions.length; index++) ...[
             _MessageActionMenuItem(action: actions[index]),
             if (index != actions.length - 1)
-              const Divider(height: 1, thickness: 1, color: AppColors.grey100),
+              const Divider(
+                height: 1.0,
+                thickness: 1.0,
+                color: AppColors.grey100,
+              ),
           ],
         ],
       ),
@@ -11744,9 +11210,7 @@ final class _MessageActionMenuItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color foregroundColor = action == ChatMessageAction.unsend
-        ? AppColors.red500
-        : AppColors.grey900;
+    final bool isDestructive = action == ChatMessageAction.unsend;
 
     return InkWell(
       key: ValueKey<String>('message-action-${action.name}'),
@@ -11754,26 +11218,24 @@ final class _MessageActionMenuItem extends StatelessWidget {
         Navigator.of(context).pop(action);
       },
       child: SizedBox(
-        height: 40,
+        height: 40.0,
         child: Padding(
-          padding: const EdgeInsets.only(left: 14, right: 12),
+          padding: EdgeInsets.only(left: 14, right: AppSpacing.space12),
           child: Row(
             children: [
               Expanded(
                 child: Text(
                   action.label,
                   style: AppTypography.typography6.copyWith(
-                    color: foregroundColor,
+                    color: isDestructive ? AppColors.red500 : AppColors.grey900,
                     fontWeight: AppTypography.regular,
                   ),
                 ),
               ),
               Icon(
                 action.icon,
-                size: 20,
-                color: action == ChatMessageAction.unsend
-                    ? AppColors.red500
-                    : AppColors.grey700,
+                size: 20.0,
+                color: isDestructive ? AppColors.red500 : AppColors.grey700,
               ),
             ],
           ),
@@ -11795,10 +11257,10 @@ extension on ChatMessageAction {
 
   IconData get icon {
     return switch (this) {
-      ChatMessageAction.copy => Icons.copy_outlined,
-      ChatMessageAction.reply => Icons.reply_rounded,
-      ChatMessageAction.edit => Icons.edit_outlined,
-      ChatMessageAction.unsend => Icons.delete_outline_rounded,
+      ChatMessageAction.copy => AppIcons.copy,
+      ChatMessageAction.reply => AppIcons.reply,
+      ChatMessageAction.edit => AppIcons.edit,
+      ChatMessageAction.unsend => AppIcons.delete,
     };
   }
 }
@@ -11835,18 +11297,6 @@ final class _ReplyMessageBody extends StatelessWidget {
           ? 'Me'
           : otherParticipantName;
 
-      final Color primaryColor = isOutgoing
-          ? AppColors.white
-          : AppColors.grey900;
-
-      final Color secondaryColor = isOutgoing
-          ? AppColors.white.withAlpha(220)
-          : AppColors.grey700;
-
-      final Color dividerColor = isOutgoing
-          ? AppColors.white.withAlpha(56)
-          : AppColors.grey200;
-
       final Widget quotedArea = GestureDetector(
         key: ValueKey<String>('reply-quote-area-${message.id}'),
         behavior: HitTestBehavior.opaque,
@@ -11865,22 +11315,16 @@ final class _ReplyMessageBody extends StatelessWidget {
             Text(
               'Reply to $authorLabel',
               key: ValueKey<String>('reply-message-title-${message.id}'),
-              style: AppTypography.subTypography10.copyWith(
-                color: primaryColor,
-                fontWeight: AppTypography.bold,
-              ),
+              style: ChatMessageStyle.replyTitle(isOutgoing: isOutgoing),
             ),
-            const SizedBox(height: 1),
+            const SizedBox(height: 1.0),
             _SearchHighlightedText(
               text: replyTo.content,
               query: searchQuery,
               key: ValueKey<String>('reply-message-preview-${message.id}'),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppTypography.subTypography10.copyWith(
-                color: secondaryColor,
-                fontWeight: AppTypography.regular,
-              ),
+              style: ChatMessageStyle.replyPreview(isOutgoing: isOutgoing),
             ),
           ],
         ),
@@ -11891,9 +11335,9 @@ final class _ReplyMessageBody extends StatelessWidget {
         quote: quotedArea,
         divider: Divider(
           key: ValueKey<String>('reply-message-divider-${message.id}'),
-          height: 1,
-          thickness: 1,
-          color: dividerColor,
+          height: ChatMessageStyle.replyDividerThickness,
+          thickness: ChatMessageStyle.replyDividerThickness,
+          color: ChatMessageStyle.replyDividerColor(isOutgoing: isOutgoing),
         ),
         body: _MessageEditStatusBody(
           message: message,
@@ -11935,9 +11379,6 @@ final class _RenderReplyMessageLayout extends RenderBox
     with
         ContainerRenderObjectMixin<RenderBox, _ReplyMessageParentData>,
         RenderBoxContainerDefaultsMixin<RenderBox, _ReplyMessageParentData> {
-  static const double _quoteToDividerGap = 7;
-  static const double _dividerToBodyGap = 7;
-
   RenderBox get _quote {
     assert(childCount == 3);
     return firstChild!;
@@ -11999,9 +11440,9 @@ final class _RenderReplyMessageLayout extends RenderBox
       Size(
         width,
         quoteSize.height +
-            _quoteToDividerGap +
+            ChatMessageStyle.replyDividerGap +
             dividerSize.height +
-            _dividerToBodyGap +
+            ChatMessageStyle.replyDividerGap +
             bodySize.height,
       ),
     );
@@ -12036,8 +11477,10 @@ final class _RenderReplyMessageLayout extends RenderBox
     final _ReplyMessageParentData bodyParentData =
         body.parentData! as _ReplyMessageParentData;
 
-    final double dividerTop = quote.size.height + _quoteToDividerGap;
-    final double bodyTop = dividerTop + divider.size.height + _dividerToBodyGap;
+    final double dividerTop =
+        quote.size.height + ChatMessageStyle.replyDividerGap;
+    final double bodyTop =
+        dividerTop + divider.size.height + ChatMessageStyle.replyDividerGap;
 
     quoteParentData.offset = Offset.zero;
     dividerParentData.offset = Offset(0, dividerTop);
@@ -12087,23 +11530,16 @@ final class _MessageEditStatusBody extends StatelessWidget {
       return child;
     }
 
-    final Color editedColor = isOutgoing
-        ? AppColors.white.withAlpha(190)
-        : AppColors.grey600;
-
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         child,
-        const SizedBox(height: 1),
+        const SizedBox(height: 1.0),
         Text(
           'Edited',
           key: ValueKey<String>('message-edited-${message.id}'),
-          style: AppTypography.typography7.copyWith(
-            color: editedColor,
-            fontWeight: AppTypography.regular,
-          ),
+          style: ChatMessageStyle.editedLabel(isOutgoing: isOutgoing),
         ),
       ],
     );
@@ -12130,7 +11566,12 @@ final class _DateSeparator extends StatelessWidget {
           borderRadius: AppRadius.borderRadiusFull,
         ),
         child: Padding(
-          padding: const EdgeInsets.only(left: 12, right: 7, top: 3, bottom: 3),
+          padding: const EdgeInsets.only(
+            left: AppSpacing.space12,
+            right: 7,
+            top: 3,
+            bottom: 3,
+          ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -12143,7 +11584,7 @@ final class _DateSeparator extends StatelessWidget {
               ),
               const SizedBox(width: 2),
               const Icon(
-                Icons.chevron_right_rounded,
+                AppIcons.chevronRight,
                 size: 16,
                 color: AppColors.grey600,
               ),
@@ -12312,7 +11753,7 @@ final class _IncomingMessageGroup extends StatelessWidget {
         AppProfileImage(
           imageUrl: otherParticipantProfileImageUrl,
           size: 36,
-          borderRadius: 12,
+          borderRadius: AppRadius.radius12,
           iconSize: 22,
         ),
         const SizedBox(width: 10),
@@ -12352,11 +11793,10 @@ final class _IncomingMessageGroup extends StatelessWidget {
                   },
                   onMessageLongPress: onMessageLongPress,
                   onReplyQuoteTap: onReplyQuoteTap,
-                  bubbleInteractionKey: messageBubbleKeyFor(
-                    _messagePresentationId(messages[index]),
-                  ),
+                  bubbleInteractionKey: messageBubbleKeyFor(messages[index]),
                 ),
-                if (index != messages.length - 1) const SizedBox(height: 5),
+                if (index != messages.length - 1)
+                  const SizedBox(height: ChatMessageStyle.groupedMessageGap),
               ],
             ],
           ),
@@ -12562,7 +12002,6 @@ final class _IncomingMessageRow extends StatelessWidget {
         messageId: message.id,
         measurementKey: ValueKey<String>('incoming-bubble-${message.id}'),
         isReply: !isFileMessage && message.replyTo != null,
-        backgroundColor: AppColors.grey100,
         direction: _BubbleDirection.incoming,
         showTail: showTail,
         isHighlighted: isHighlighted,
@@ -12613,7 +12052,7 @@ final class _IncomingMessageRow extends StatelessWidget {
       children: [
         rowBubble,
         if (showTime) ...[
-          const SizedBox(width: 6),
+          const SizedBox(width: ChatMessageStyle.timestampGap),
           Padding(
             padding: const EdgeInsets.only(bottom: 1),
             child: _MessageTime(createdAt: message.createdAt),
@@ -12665,10 +12104,7 @@ final class _IncomingMessageContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle messageTextStyle = AppTypography.subTypography10.copyWith(
-      color: AppColors.grey900,
-      fontWeight: AppTypography.regular,
-    );
+    final TextStyle messageTextStyle = ChatMessageStyle.body();
 
     final bool hasCompletedTranslation =
         canUseTranslation &&
@@ -12716,7 +12152,7 @@ final class _IncomingMessageContent extends StatelessWidget {
       children: [
         messageText,
         AnimatedSwitcher(
-          duration: const Duration(milliseconds: 160),
+          duration: ChatMessageStyle.translationFadeDuration,
           switchInCurve: Curves.easeOut,
           switchOutCurve: Curves.easeIn,
           transitionBuilder: (Widget child, Animation<double> animation) {
@@ -12728,7 +12164,7 @@ final class _IncomingMessageContent extends StatelessWidget {
     );
 
     return AnimatedSize(
-      duration: const Duration(milliseconds: 180),
+      duration: Duration(milliseconds: 180),
       curve: Curves.easeOutCubic,
       alignment: Alignment.topLeft,
       child: _ReplyMessageBody(
@@ -12754,23 +12190,22 @@ final class _IncomingMessageContent extends StatelessWidget {
       case ChatTranslationStatus.translating:
         return Padding(
           key: ValueKey<String>('translation-loading-${message.id}'),
-          padding: const EdgeInsets.only(top: 4),
+          padding: EdgeInsets.only(top: AppSpacing.space4),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               const SizedBox.square(
-                dimension: 10,
+                dimension: 10.0,
                 child: CircularProgressIndicator(
                   strokeWidth: 1.5,
                   color: AppColors.grey500,
                 ),
               ),
-              const SizedBox(width: 5),
+              const SizedBox(width: 5.0),
               Text(
                 _translationLoadingText,
-                style: AppTypography.subTypography12.copyWith(
-                  color: AppColors.grey500,
-                  fontWeight: AppTypography.regular,
+                style: ChatMessageStyle.translationTextStyle(
+                  AppColors.textTertiary,
                 ),
               ),
             ],
@@ -12778,11 +12213,12 @@ final class _IncomingMessageContent extends StatelessWidget {
         );
 
       case ChatTranslationStatus.failed:
-        final TextStyle failureTextStyle = _translationFailureTextStyle;
+        final TextStyle failureTextStyle =
+            ChatMessageStyle.translationTextStyle(AppColors.textSecondary);
 
         return Padding(
           key: ValueKey<String>('translation-failed-${message.id}'),
-          padding: const EdgeInsets.only(top: 3),
+          padding: EdgeInsets.only(top: 3),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -12795,11 +12231,12 @@ final class _IncomingMessageContent extends StatelessWidget {
                 textHeightBehavior: _messageTextHeightBehavior,
               ),
               if (canRetryTranslation && canUseTranslation) ...[
-                const SizedBox(height: 2),
+                const SizedBox(height: 2.0),
                 TextButton(
                   onPressed: onRetryTranslation,
+                  // 말풍선 안의 재시도 링크는 기존처럼 별도 버튼 여백 없이 표시해요.
                   style: TextButton.styleFrom(
-                    foregroundColor: AppColors.blue500,
+                    foregroundColor: ChatMessageStyle.translationRetry.color,
                     minimumSize: Size.zero,
                     padding: EdgeInsets.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -12807,10 +12244,7 @@ final class _IncomingMessageContent extends StatelessWidget {
                   ),
                   child: Text(
                     _translationRetryText,
-                    style: AppTypography.subTypography12.copyWith(
-                      color: AppColors.blue500,
-                      fontWeight: AppTypography.medium,
-                    ),
+                    style: ChatMessageStyle.translationRetry,
                   ),
                 ),
               ],
@@ -12858,13 +12292,6 @@ final class _IncomingMessageContent extends StatelessWidget {
         return 'Translating...';
     }
   }
-
-  TextStyle get _translationFailureTextStyle {
-    return AppTypography.subTypography12.copyWith(
-      color: AppColors.grey600,
-      fontWeight: AppTypography.regular,
-    );
-  }
 }
 
 final class _AnimatedTranslationText extends StatelessWidget {
@@ -12897,7 +12324,7 @@ final class _AnimatedTranslationText extends StatelessWidget {
         : 'original-message-$messageId';
 
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 160),
+      duration: ChatMessageStyle.translationFadeDuration,
       switchInCurve: Curves.easeOut,
       switchOutCurve: Curves.easeIn,
       layoutBuilder: (Widget? currentChild, List<Widget> previousChildren) {
@@ -12980,7 +12407,12 @@ final class _SearchHighlightedText extends StatelessWidget {
       children.add(
         TextSpan(
           text: text.substring(match.start, match.end),
-          style: style.copyWith(backgroundColor: _highlightColor),
+          style: style.copyWith(
+            backgroundColor: ChatMessageStyle.searchHighlightColor(
+              isOutgoing: isOutgoing,
+              isActiveResult: isActiveResult,
+            ),
+          ),
         ),
       );
 
@@ -12992,14 +12424,6 @@ final class _SearchHighlightedText extends StatelessWidget {
     }
 
     return TextSpan(style: style, children: children);
-  }
-
-  Color get _highlightColor {
-    if (isOutgoing) {
-      return isActiveResult ? AppColors.blue900 : AppColors.white.withAlpha(76);
-    }
-
-    return isActiveResult ? AppColors.blue200 : AppColors.primary.withAlpha(54);
   }
 }
 
@@ -13033,9 +12457,8 @@ final class _LinkMessageContent extends StatelessWidget {
     final CrossAxisAlignment crossAxisAlignment = isOutgoing
         ? CrossAxisAlignment.end
         : CrossAxisAlignment.start;
-    final TextStyle messageTextStyle = AppTypography.subTypography10.copyWith(
-      color: isOutgoing ? AppColors.white : AppColors.grey900,
-      fontWeight: AppTypography.regular,
+    final TextStyle messageTextStyle = ChatMessageStyle.body(
+      isOutgoing: isOutgoing,
     );
 
     final List<Widget> children = <Widget>[];
@@ -13046,7 +12469,6 @@ final class _LinkMessageContent extends StatelessWidget {
           messageId: message.id,
           measurementKey: measurementKey,
           isReply: message.replyTo != null,
-          backgroundColor: isOutgoing ? AppColors.blue500 : AppColors.grey100,
           direction: isOutgoing
               ? _BubbleDirection.outgoing
               : _BubbleDirection.incoming,
@@ -13067,7 +12489,7 @@ final class _LinkMessageContent extends StatelessWidget {
           ),
         ),
       );
-      children.add(const SizedBox(height: 6));
+      children.add(const SizedBox(height: 6.0));
     }
 
     children.add(
@@ -13205,6 +12627,17 @@ final class _LinkifiedMessageTextState extends State<_LinkifiedMessageText> {
 }
 
 final class _LinkPreviewCard extends StatelessWidget {
+  static const int _contentMaxLines = 2;
+
+  static final TextStyle _title = ChatMessageStyle.body().copyWith(
+    fontWeight: AppTypography.bold,
+  );
+
+  static final TextStyle _description = AppTypography.subTypography12.copyWith(
+    color: AppColors.textSecondary,
+    fontWeight: AppTypography.regular,
+  );
+
   const _LinkPreviewCard({
     required this.preview,
     required this.isHighlighted,
@@ -13217,10 +12650,11 @@ final class _LinkPreviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final double cardWidth = math.min(
-      MediaQuery.sizeOf(context).width * 0.68,
-      316,
+      MediaQuery.sizeOf(context).width * ChatMessageStyle.maximumWidthRatio,
+      // 화면 너비 비율과 모서리는 메시지 공통 규격을 쓰고, 카드의 최대 너비만 따로 둬요.
+      316.0,
     );
-    final BorderRadius borderRadius = BorderRadius.circular(17);
+    const BorderRadius borderRadius = ChatMessageStyle.bubbleBorderRadius;
     final Border border = Border.all(
       color: isHighlighted
           ? AppColors.primary.withAlpha(110)
@@ -13260,40 +12694,38 @@ final class _LinkPreviewCard extends StatelessWidget {
                     children: [
                       _LinkPreviewImage(preview: preview, width: cardWidth),
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(14, 12, 14, 13),
+                        padding: EdgeInsets.fromLTRB(
+                          14,
+                          AppSpacing.space12,
+                          14,
+                          13,
+                        ),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               title,
-                              maxLines: 2,
+                              maxLines: _contentMaxLines,
                               overflow: TextOverflow.ellipsis,
-                              style: AppTypography.subTypography10.copyWith(
-                                color: AppColors.grey900,
-                                fontWeight: AppTypography.bold,
-                              ),
+                              style: _title,
                             ),
                             if (description != null) ...[
-                              const SizedBox(height: 5),
+                              const SizedBox(height: 5.0),
                               Text(
                                 description,
-                                maxLines: 2,
+                                maxLines: _contentMaxLines,
                                 overflow: TextOverflow.ellipsis,
-                                style: AppTypography.subTypography12.copyWith(
-                                  color: AppColors.grey600,
-                                  fontWeight: AppTypography.regular,
-                                ),
+                                style: _description,
                               ),
                             ],
-                            const SizedBox(height: 8),
+                            const SizedBox(height: AppSpacing.space8),
                             Text(
                               domain,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: AppTypography.subTypography12.copyWith(
+                              style: _description.copyWith(
                                 color: AppColors.blue500,
-                                fontWeight: AppTypography.regular,
                                 decoration: TextDecoration.underline,
                                 decorationColor: AppColors.blue500,
                               ),
@@ -13380,16 +12812,13 @@ final class _LinkPreviewImage extends StatelessWidget {
       height: height,
       alignment: Alignment.center,
       color: AppColors.grey50,
-      padding: const EdgeInsets.symmetric(horizontal: 18),
+      padding: EdgeInsets.symmetric(horizontal: 18),
       child: Text(
         label,
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
         textAlign: TextAlign.center,
-        style: AppTypography.subTypography10.copyWith(
-          color: AppColors.grey600,
-          fontWeight: AppTypography.bold,
-        ),
+        style: _LinkPreviewCard._title.copyWith(color: AppColors.textSecondary),
       ),
     );
   }
@@ -13451,25 +12880,26 @@ final class _OutgoingMessageGroup extends StatelessWidget {
             onCreatePhotoThumbnailAccessUrl: onCreatePhotoThumbnailAccessUrl,
             onMessageLongPress: onMessageLongPress,
             onReplyQuoteTap: onReplyQuoteTap,
-            bubbleInteractionKey: messageBubbleKeyFor(
-              _messagePresentationId(messages[index]),
-            ),
+            bubbleInteractionKey: messageBubbleKeyFor(messages[index]),
           ),
           if (messages[index].id == latestReadMessageId) ...[
             const SizedBox(height: 3),
             Padding(
-              padding: const EdgeInsets.only(right: _messageHorizontalPadding),
+              padding: const EdgeInsets.only(
+                right: ChatMessageStyle.horizontalPadding,
+              ),
               child: Text(
                 formatReadReceipt(readAt: messages[index].readAt!, now: now),
                 textAlign: TextAlign.right,
                 style: AppTypography.subTypography12.copyWith(
-                  color: AppColors.grey500,
-                  fontWeight: AppTypography.medium,
+                  color: AppColors.textTertiary,
+                  fontWeight: AppTypography.regular,
                 ),
               ),
             ),
           ],
-          if (index != messages.length - 1) const SizedBox(height: 5),
+          if (index != messages.length - 1)
+            const SizedBox(height: ChatMessageStyle.groupedMessageGap),
         ],
       ],
     );
@@ -13513,10 +12943,7 @@ final class _OutgoingMessageRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle messageTextStyle = AppTypography.subTypography10.copyWith(
-      color: AppColors.white,
-      fontWeight: AppTypography.regular,
-    );
+    final TextStyle messageTextStyle = ChatMessageStyle.body(isOutgoing: true);
 
     final Widget content;
 
@@ -13580,7 +13007,6 @@ final class _OutgoingMessageRow extends StatelessWidget {
       content = _MessageBubble(
         messageId: message.id,
         measurementKey: ValueKey<String>('outgoing-bubble-${message.id}'),
-        backgroundColor: AppColors.blue500,
         direction: _BubbleDirection.outgoing,
         showTail: showTail,
         isHighlighted: isHighlighted,
@@ -13594,7 +13020,6 @@ final class _OutgoingMessageRow extends StatelessWidget {
         messageId: message.id,
         measurementKey: ValueKey<String>('outgoing-bubble-${message.id}'),
         isReply: message.replyTo != null,
-        backgroundColor: AppColors.blue500,
         direction: _BubbleDirection.outgoing,
         showTail: showTail,
         isHighlighted: isHighlighted,
@@ -13645,7 +13070,7 @@ final class _OutgoingMessageRow extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 1),
             child: _MessageTime(createdAt: message.createdAt),
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: ChatMessageStyle.timestampGap),
         ],
         rowBubble,
       ],
@@ -13952,7 +13377,7 @@ final class _VideoDownloadRetryIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const _MediaStatusIndicator(
-      icon: Icon(Icons.refresh_rounded, size: 24, color: AppColors.white),
+      icon: Icon(AppIcons.refresh, size: 24, color: AppColors.white),
       label: 'Try again',
     );
   }
@@ -13966,7 +13391,7 @@ final class _VideoEncodingIndicator extends StatelessWidget {
     return const _MediaStatusIndicator(
       icon: SizedBox.square(
         dimension: 15,
-        child: CustomPaint(painter: _PhotoUploadIconPainter()),
+        child: Icon(AppIcons.image, size: 15, color: AppColors.white),
       ),
       label: 'Encoding…',
     );
@@ -13981,12 +13406,8 @@ final class _VideoPlayIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _MediaStatusIndicator(
-      icon: const Icon(
-        Icons.play_arrow_rounded,
-        size: 26,
-        color: AppColors.white,
-      ),
-      label: _formatChatVideoDuration(duration),
+      icon: const Icon(AppIcons.play, size: 26, color: AppColors.white),
+      label: formatChatVideoDuration(duration),
     );
   }
 }
@@ -14039,7 +13460,7 @@ final class _MediaStatusIndicator extends StatelessWidget {
               label!,
               style: AppTypography.typography7.copyWith(
                 color: AppColors.white,
-                fontWeight: AppTypography.semibold,
+                fontWeight: AppTypography.bold,
               ),
             ),
           ],
@@ -14052,7 +13473,7 @@ final class _MediaStatusIndicator extends StatelessWidget {
 Size _videoBubbleSize(BuildContext context, ChatVideoAttachment attachment) {
   final double maximumWidth = math.min(
     260,
-    MediaQuery.sizeOf(context).width * 0.68,
+    MediaQuery.sizeOf(context).width * ChatMessageStyle.maximumWidthRatio,
   );
   final double sourceRatio = attachment.width > 0 && attachment.height > 0
       ? attachment.width / attachment.height
@@ -14067,10 +13488,6 @@ Size _videoBubbleSize(BuildContext context, ChatVideoAttachment attachment) {
   }
 
   return Size(width, height);
-}
-
-String _videoFileExtension(String? fileName) {
-  return ChatVideoDiskCache.fileExtension(fileName);
 }
 
 String _photoFileExtension(ChatPhotoAttachment attachment) {
@@ -14111,18 +13528,57 @@ String _photoSavePlatformErrorDetails(Object error) {
       '${details.isEmpty ? '' : ' platform_details=$details'}';
 }
 
-String _formatChatVideoDuration(Duration duration) {
-  final int totalSeconds = duration.inSeconds;
-  final int hours = totalSeconds ~/ 3600;
-  final int minutes = (totalSeconds % 3600) ~/ 60;
-  final int seconds = totalSeconds % 60;
-
-  if (hours > 0) {
-    return '$hours:${minutes.toString().padLeft(2, '0')}:'
-        '${seconds.toString().padLeft(2, '0')}';
+final class _MessagePulseController extends AnimationController {
+  _MessagePulseController({
+    required super.vsync,
+    required bool curvedVerticalOffset,
+  }) : super(duration: const Duration(milliseconds: 360)) {
+    _scale = _sequence(1, 1.026, 0.995, curved: true);
+    // 사진은 세로 이동만 선형이고, 말풍선은 확대와 같은 곡선을 사용해요.
+    _verticalOffset = _sequence(0, -1.4, 0.5, curved: curvedVerticalOffset);
   }
 
-  return '$minutes:${seconds.toString().padLeft(2, '0')}';
+  late final Animation<double> _scale;
+  late final Animation<double> _verticalOffset;
+
+  Animation<double> _sequence(
+    double start,
+    double peak,
+    double rebound, {
+    required bool curved,
+  }) {
+    return TweenSequence<double>([
+      for (final (begin, end, curve, weight)
+          in <(double, double, Curve, double)>[
+            (start, peak, Curves.easeOutCubic, 22),
+            (peak, rebound, Curves.easeInOutCubic, 28),
+            (rebound, start, Curves.easeOutCubic, 50),
+          ])
+        TweenSequenceItem<double>(
+          tween: Tween<double>(
+            begin: begin,
+            end: end,
+          ).chain(CurveTween(curve: curved ? curve : Curves.linear)),
+          weight: weight,
+        ),
+    ]).animate(this);
+  }
+
+  Widget transform({
+    required String messageId,
+    required Alignment alignment,
+    required Widget child,
+  }) {
+    return Transform.translate(
+      offset: Offset(0, _verticalOffset.value),
+      child: Transform.scale(
+        key: ValueKey<String>('message-pulse-$messageId'),
+        scale: _scale.value,
+        alignment: alignment,
+        child: child,
+      ),
+    );
+  }
 }
 
 final class _PhotoMessage extends StatefulWidget {
@@ -14160,59 +13616,16 @@ final class _PhotoMessage extends StatefulWidget {
 
 final class _PhotoMessageState extends State<_PhotoMessage>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _pulseController;
-
-  late final Animation<double> _scaleAnimation;
-
-  late final Animation<double> _verticalOffsetAnimation;
+  late final _MessagePulseController _pulseController;
 
   @override
   void initState() {
     super.initState();
 
-    _pulseController = AnimationController(
+    _pulseController = _MessagePulseController(
       vsync: this,
-      duration: const Duration(milliseconds: 360),
+      curvedVerticalOffset: false,
     );
-
-    _scaleAnimation = TweenSequence<double>([
-      TweenSequenceItem<double>(
-        tween: Tween<double>(
-          begin: 1,
-          end: 1.026,
-        ).chain(CurveTween(curve: Curves.easeOutCubic)),
-        weight: 22,
-      ),
-      TweenSequenceItem<double>(
-        tween: Tween<double>(
-          begin: 1.026,
-          end: 0.995,
-        ).chain(CurveTween(curve: Curves.easeInOutCubic)),
-        weight: 28,
-      ),
-      TweenSequenceItem<double>(
-        tween: Tween<double>(
-          begin: 0.995,
-          end: 1,
-        ).chain(CurveTween(curve: Curves.easeOutCubic)),
-        weight: 50,
-      ),
-    ]).animate(_pulseController);
-
-    _verticalOffsetAnimation = TweenSequence<double>([
-      TweenSequenceItem<double>(
-        tween: Tween<double>(begin: 0, end: -1.4),
-        weight: 22,
-      ),
-      TweenSequenceItem<double>(
-        tween: Tween<double>(begin: -1.4, end: 0.5),
-        weight: 28,
-      ),
-      TweenSequenceItem<double>(
-        tween: Tween<double>(begin: 0.5, end: 0),
-        weight: 50,
-      ),
-    ]).animate(_pulseController);
 
     if (widget.isHighlighted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -14319,64 +13732,56 @@ final class _PhotoMessageState extends State<_PhotoMessage>
             ? progress / 0.22
             : (1 - progress) / 0.78;
 
-        return Transform.translate(
-          offset: Offset(0, _verticalOffsetAnimation.value),
-          child: Transform.scale(
-            key: ValueKey<String>('message-pulse-${widget.messageId}'),
-            scale: _scaleAnimation.value,
-            alignment: widget.pulseAlignment,
-            child: Stack(
-              key: widget.measurementKey,
-              children: [
-                child!,
-                if (widget.isUploading)
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: ClipRRect(
-                        borderRadius: const BorderRadius.all(
-                          Radius.circular(14),
-                        ),
-                        child: ColoredBox(
-                          color: AppColors.black.withAlpha(70),
-                          child: _PhotoUploadProgress(
-                            key: ValueKey<String>(
-                              'photo-upload-progress-${widget.messageId}',
-                            ),
-                            uploadedBytes: widget.uploadedBytes,
-                            totalBytes: widget.totalBytes,
+        return _pulseController.transform(
+          messageId: widget.messageId,
+          alignment: widget.pulseAlignment,
+          child: Stack(
+            key: widget.measurementKey,
+            children: [
+              child!,
+              if (widget.isUploading)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: ClipRRect(
+                      borderRadius: ChatMessageStyle.mediaBorderRadius,
+                      child: ColoredBox(
+                        color: AppColors.black.withAlpha(70),
+                        child: _PhotoUploadProgress(
+                          key: ValueKey<String>(
+                            'photo-upload-progress-${widget.messageId}',
                           ),
+                          uploadedBytes: widget.uploadedBytes,
+                          totalBytes: widget.totalBytes,
                         ),
                       ),
                     ),
                   ),
-                if (progress > 0)
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: ClipRRect(
-                        borderRadius: const BorderRadius.all(
-                          Radius.circular(14),
-                        ),
-                        child: ColoredBox(
-                          color: AppColors.black.withAlpha(
-                            (18 * overlayStrength.clamp(0.0, 1.0)).round(),
-                          ),
+                ),
+              if (progress > 0)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: ClipRRect(
+                      borderRadius: ChatMessageStyle.mediaBorderRadius,
+                      child: ColoredBox(
+                        color: AppColors.black.withAlpha(
+                          (18 * overlayStrength.clamp(0.0, 1.0)).round(),
                         ),
                       ),
                     ),
                   ),
-                if (widget.isHighlighted)
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: SizedBox.expand(
-                        key: ValueKey<String>(
-                          'message-highlight-'
-                          '${widget.messageId}',
-                        ),
+                ),
+              if (widget.isHighlighted)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: SizedBox.expand(
+                      key: ValueKey<String>(
+                        'message-highlight-'
+                        '${widget.messageId}',
                       ),
                     ),
                   ),
-              ],
-            ),
+                ),
+            ],
           ),
         );
       },
@@ -14407,64 +13812,17 @@ final class _PhotoUploadProgress extends StatelessWidget {
       circleKey: const ValueKey<String>('photo-upload-progress-circle'),
       progress: showProgressRing ? uploaded / total : null,
       icon: showProgressRing
-          ? const Icon(Icons.close_rounded, size: 18, color: AppColors.white)
+          ? const Icon(AppIcons.close, size: 18, color: AppColors.white)
           : const SizedBox.square(
               key: ValueKey<String>('photo-upload-image-icon'),
               dimension: 15,
-              child: CustomPaint(painter: _PhotoUploadIconPainter()),
+              child: Icon(AppIcons.image, size: 15, color: AppColors.white),
             ),
       label: showByteProgress
           ? _formatPhotoUploadProgress(uploaded, total)
           : null,
     );
   }
-}
-
-final class _PhotoUploadIconPainter extends CustomPainter {
-  const _PhotoUploadIconPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final Paint whitePaint = Paint()..color = AppColors.white;
-    final Paint blackPaint = Paint()..color = AppColors.black;
-    final RRect background = RRect.fromRectAndRadius(
-      Offset.zero & size,
-      const Radius.circular(2.5),
-    );
-
-    canvas.drawRRect(background, whitePaint);
-    canvas.drawCircle(
-      Offset(size.width * 0.72, size.height * 0.31),
-      size.width * 0.075,
-      blackPaint,
-    );
-
-    final Path mountains = Path()
-      ..moveTo(size.width * 0.16, size.height * 0.79)
-      ..lineTo(size.width * 0.42, size.height * 0.49)
-      ..quadraticBezierTo(
-        size.width * 0.46,
-        size.height * 0.44,
-        size.width * 0.51,
-        size.height * 0.49,
-      )
-      ..lineTo(size.width * 0.62, size.height * 0.61)
-      ..lineTo(size.width * 0.72, size.height * 0.50)
-      ..quadraticBezierTo(
-        size.width * 0.77,
-        size.height * 0.44,
-        size.width * 0.82,
-        size.height * 0.50,
-      )
-      ..lineTo(size.width * 0.88, size.height * 0.57)
-      ..lineTo(size.width * 0.88, size.height * 0.81)
-      ..close();
-
-    canvas.drawPath(mountains, blackPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _PhotoUploadIconPainter oldDelegate) => false;
 }
 
 String _formatPhotoUploadProgress(int uploadedBytes, int totalBytes) {
@@ -14505,7 +13863,10 @@ final class _PhotoMessageCollage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double width = math.min(260, MediaQuery.sizeOf(context).width * 0.68);
+    final double width = math.min(
+      260,
+      MediaQuery.sizeOf(context).width * ChatMessageStyle.maximumWidthRatio,
+    );
 
     if (attachments.isEmpty) {
       return const SizedBox.shrink();
@@ -14523,7 +13884,7 @@ final class _PhotoMessageCollage extends StatelessWidget {
       final double height = (width / aspectRatio).clamp(150, 260).toDouble();
 
       return ClipRRect(
-        borderRadius: const BorderRadius.all(Radius.circular(14)),
+        borderRadius: ChatMessageStyle.mediaBorderRadius,
         child: SizedBox(
           width: width,
           height: height,
@@ -14556,7 +13917,7 @@ final class _PhotoMessageCollage extends StatelessWidget {
 
   Widget _buildThreePhotoCollage(double width) {
     return ClipRRect(
-      borderRadius: const BorderRadius.all(Radius.circular(14)),
+      borderRadius: ChatMessageStyle.mediaBorderRadius,
       child: SizedBox(
         width: width,
         height: width,
@@ -14683,7 +14044,7 @@ final class _PhotoMessageCollage extends StatelessWidget {
     }
 
     return ClipRRect(
-      borderRadius: const BorderRadius.all(Radius.circular(14)),
+      borderRadius: ChatMessageStyle.mediaBorderRadius,
       child: SizedBox(
         width: width,
         height: height,
@@ -15339,6 +14700,28 @@ final class _PhotoMessagePlaceholder extends StatelessWidget {
 enum _ActionConfirmationMotion { fade, slideFromBottom }
 
 final class _ActionConfirmation extends StatefulWidget {
+  static const double _height = 56;
+
+  static const double _iconDimension = 24;
+
+  // 각 구간의 밀리초를 가중치와 전체 시간에 함께 써서 기존 속도를 유지해요.
+  static const int _saveFadeInMilliseconds = 200;
+
+  static const int _saveHoldMilliseconds = 2500;
+
+  static const int _saveFadeOutMilliseconds = 250;
+
+  // 복사 안내는 기존 참조 화면처럼 도착점을 13/3만큼 지나갔다 돌아와요.
+  static const double _copyOvershoot = 13 / 3;
+
+  static const int _copyEnterMilliseconds = 167;
+
+  static const int _copySettleMilliseconds = 117;
+
+  static const int _copyHoldMilliseconds = 2716;
+
+  static const int _copyExitMilliseconds = 300;
+
   const _ActionConfirmation({
     required this.keyPrefix,
     this.fillWidth = false,
@@ -15373,9 +14756,19 @@ final class _ActionConfirmationState extends State<_ActionConfirmation>
     _controller = AnimationController(
       vsync: this,
       duration: switch (widget.motion) {
-        _ActionConfirmationMotion.fade => _mediaSaveConfirmationDuration,
-        _ActionConfirmationMotion.slideFromBottom =>
-          _messageCopyConfirmationDuration,
+        _ActionConfirmationMotion.fade => Duration(
+          milliseconds:
+              _ActionConfirmation._saveFadeInMilliseconds +
+              _ActionConfirmation._saveHoldMilliseconds +
+              _ActionConfirmation._saveFadeOutMilliseconds,
+        ),
+        _ActionConfirmationMotion.slideFromBottom => Duration(
+          milliseconds:
+              _ActionConfirmation._copyEnterMilliseconds +
+              _ActionConfirmation._copySettleMilliseconds +
+              _ActionConfirmation._copyHoldMilliseconds +
+              _ActionConfirmation._copyExitMilliseconds,
+        ),
       },
     )..addStatusListener(_handleAnimationStatus);
     _opacity = switch (widget.motion) {
@@ -15386,18 +14779,18 @@ final class _ActionConfirmationState extends State<_ActionConfirmation>
               begin: 0,
               end: 1,
             ).chain(CurveTween(curve: Curves.easeInOut)),
-            weight: 200,
+            weight: _ActionConfirmation._saveFadeInMilliseconds.toDouble(),
           ),
           TweenSequenceItem<double>(
             tween: ConstantTween<double>(1),
-            weight: 2500,
+            weight: _ActionConfirmation._saveHoldMilliseconds.toDouble(),
           ),
           TweenSequenceItem<double>(
             tween: Tween<double>(
               begin: 1,
               end: 0,
             ).chain(CurveTween(curve: Curves.easeIn)),
-            weight: 250,
+            weight: _ActionConfirmation._saveFadeOutMilliseconds.toDouble(),
           ),
         ]).animate(_controller),
       _ActionConfirmationMotion.slideFromBottom =>
@@ -15409,36 +14802,34 @@ final class _ActionConfirmationState extends State<_ActionConfirmation>
   Animation<double> _createOffsetAnimation() {
     return switch (widget.motion) {
       _ActionConfirmationMotion.fade => const AlwaysStoppedAnimation<double>(0),
-      _ActionConfirmationMotion.slideFromBottom => TweenSequence<double>(
-        <TweenSequenceItem<double>>[
-          // 인스타그램 원본의 60fps 위치와 최대 13px 오버슈트를 맞춰요.
+      _ActionConfirmationMotion.slideFromBottom =>
+        TweenSequence<double>(<TweenSequenceItem<double>>[
           TweenSequenceItem<double>(
             tween: Tween<double>(
               begin: widget.hiddenOffsetY,
-              end: -_messageCopyConfirmationOvershoot,
+              end: -_ActionConfirmation._copyOvershoot,
             ).chain(CurveTween(curve: Curves.fastOutSlowIn)),
-            weight: 167,
+            weight: _ActionConfirmation._copyEnterMilliseconds.toDouble(),
           ),
           TweenSequenceItem<double>(
             tween: Tween<double>(
-              begin: -_messageCopyConfirmationOvershoot,
+              begin: -_ActionConfirmation._copyOvershoot,
               end: 0,
             ).chain(CurveTween(curve: Curves.easeInOut)),
-            weight: 117,
+            weight: _ActionConfirmation._copySettleMilliseconds.toDouble(),
           ),
           TweenSequenceItem<double>(
             tween: ConstantTween<double>(0),
-            weight: 2716,
+            weight: _ActionConfirmation._copyHoldMilliseconds.toDouble(),
           ),
           TweenSequenceItem<double>(
             tween: Tween<double>(
               begin: 0,
               end: widget.hiddenOffsetY,
             ).chain(CurveTween(curve: Curves.easeInOut)),
-            weight: 300,
+            weight: _ActionConfirmation._copyExitMilliseconds.toDouble(),
           ),
-        ],
-      ).animate(_controller),
+        ]).animate(_controller),
     };
   }
 
@@ -15509,18 +14900,18 @@ final class _ActionConfirmationState extends State<_ActionConfirmation>
                   '${widget.keyPrefix}-action-confirmation',
                 ),
                 width: widget.fillWidth ? double.infinity : null,
-                height: _actionConfirmationHeight,
+                height: _ActionConfirmation._height,
                 // 글자의 오른쪽 사이드베어링까지 포함해 보이는 좌우 여백을 맞춰요.
-                padding: const EdgeInsets.only(left: 16, right: 14.5),
-                decoration: const BoxDecoration(
-                  color: Color(0x80000000),
-                  borderRadius: BorderRadius.all(Radius.circular(18)),
+                padding: EdgeInsets.only(left: AppSpacing.space16, right: 14.5),
+                decoration: BoxDecoration(
+                  color: AppColors.black.withAlpha(128),
+                  borderRadius: const BorderRadius.all(Radius.circular(18)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const _ActionConfirmationCheckIcon(),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: AppSpacing.space12),
                     Text(
                       message,
                       style: AppTypography.subTypography9.copyWith(
@@ -15545,40 +14936,85 @@ final class _ActionConfirmationCheckIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const SizedBox.square(
-      dimension: 24,
-      child: CustomPaint(painter: _ActionConfirmationCheckPainter()),
+      dimension: _ActionConfirmation._iconDimension,
+      child: Icon(
+        AppIcons.checkCircle,
+        size: _ActionConfirmation._iconDimension,
+        color: AppColors.white,
+      ),
     );
   }
 }
 
-final class _ActionConfirmationCheckPainter extends CustomPainter {
-  const _ActionConfirmationCheckPainter();
+// 원본 준비와 임시 파일 정리는 각 뷰어에서 맡고, 저장 결과 안내는 함께 처리해요.
+Future<void> _saveViewerMedia({
+  required BuildContext context,
+  required GlobalKey<_ActionConfirmationState> confirmationKey,
+  required String mediaLabel,
+  required Future<void> Function(ClipboardDiagnostics diagnostics) save,
+  String Function(Object error)? errorDetails,
+}) async {
+  final Stopwatch totalStopwatch = Stopwatch()..start();
+  final String logPrefix = '${mediaLabel.toLowerCase()}-save';
+  final ClipboardDiagnostics diagnostics = ClipboardDiagnostics(logPrefix)
+    ..record('[$logPrefix] stage=tap');
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    final Paint circlePaint = Paint()
-      ..color = AppColors.white
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-    final Paint checkPaint = Paint()
-      ..color = AppColors.white
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
+  try {
+    await save(diagnostics);
+    if (!context.mounted) {
+      return;
+    }
 
-    canvas.drawCircle(size.center(Offset.zero), 10.5, circlePaint);
-    canvas.drawPath(
-      Path()
-        ..moveTo(7, 12)
-        ..lineTo(11, 15)
-        ..lineTo(17, 9),
-      checkPaint,
+    confirmationKey.currentState?.show('$mediaLabel saved');
+    totalStopwatch.stop();
+    diagnostics.record(
+      '[$logPrefix] stage=confirmation '
+      'elapsed_ms=${_elapsedMilliseconds(totalStopwatch)}',
     );
-  }
+  } on Object catch (error) {
+    totalStopwatch.stop();
+    diagnostics.record(
+      '[$logPrefix] stage=failure '
+      'elapsed_ms=${_elapsedMilliseconds(totalStopwatch)} '
+      'error_type=${error.runtimeType}'
+      '${errorDetails?.call(error) ?? ''}',
+    );
 
-  @override
-  bool shouldRepaint(_ActionConfirmationCheckPainter oldDelegate) => false;
+    if (!context.mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text('$mediaLabel could not be saved.')),
+      );
+  } finally {
+    // 진단할 때만 아래 줄의 주석을 풀어 클립보드 복사를 켜요.
+    // unawaited(diagnostics.copyToClipboard());
+  }
+}
+
+Future<void> _saveToPhotoLibrary(
+  ClipboardDiagnostics diagnostics,
+  Future<void> Function() save,
+) async {
+  final Stopwatch stopwatch = Stopwatch()..start();
+  try {
+    await save();
+    stopwatch.stop();
+    diagnostics.record(
+      '[${diagnostics.logPrefix}] stage=photo_library '
+      'elapsed_ms=${_elapsedMilliseconds(stopwatch)} result=success',
+    );
+  } on Object {
+    stopwatch.stop();
+    diagnostics.record(
+      '[${diagnostics.logPrefix}] stage=photo_library '
+      'elapsed_ms=${_elapsedMilliseconds(stopwatch)} result=failed',
+    );
+    rethrow;
+  }
 }
 
 final class _PhotoViewerScreen extends StatefulWidget {
@@ -15607,8 +15043,6 @@ final class _PhotoViewerScreen extends StatefulWidget {
 }
 
 final class _PhotoViewerScreenState extends State<_PhotoViewerScreen> {
-  static const Color _thumbnailBorderColor = AppColors.blue500;
-
   late final PageController _pageController;
 
   late final List<GlobalKey> _thumbnailKeys;
@@ -15621,8 +15055,6 @@ final class _PhotoViewerScreenState extends State<_PhotoViewerScreen> {
   bool _controlsVisible = true;
 
   bool _mediaActionInProgress = false;
-
-  double _verticalDragDistance = 0;
 
   bool get _hasMultiplePhotos {
     return widget.attachments.length > 1;
@@ -15751,28 +15183,10 @@ final class _PhotoViewerScreenState extends State<_PhotoViewerScreen> {
 
     Scrollable.ensureVisible(
       thumbnailContext,
-      duration: const Duration(milliseconds: 160),
+      duration: Duration(milliseconds: 160),
       curve: Curves.easeOutCubic,
       alignment: 0.5,
     );
-  }
-
-  void _handleVerticalDragStart(DragStartDetails details) {
-    _verticalDragDistance = 0;
-  }
-
-  void _handleVerticalDragUpdate(DragUpdateDetails details) {
-    _verticalDragDistance += details.delta.dy;
-  }
-
-  void _handleVerticalDragEnd(DragEndDetails details) {
-    final double velocity = details.primaryVelocity ?? 0;
-
-    if (_verticalDragDistance.abs() > 82 || velocity.abs() > 650) {
-      _close();
-    }
-
-    _verticalDragDistance = 0;
   }
 
   Future<ChatPhotoFile> _loadPhotoSource(
@@ -15979,181 +15393,116 @@ final class _PhotoViewerScreenState extends State<_PhotoViewerScreen> {
     }
   }
 
-  Future<void> _downloadCurrentPhoto() async {
+  Future<void> _downloadCurrentPhoto() {
     final ChatPhotoAttachment attachment = _currentAttachment;
     final int timestamp = DateTime.now().millisecondsSinceEpoch;
-    final Stopwatch totalStopwatch = Stopwatch()..start();
-    final ClipboardDiagnostics diagnostics = ClipboardDiagnostics('photo-save')
-      ..record('[photo-save] stage=tap');
-
-    try {
-      final ChatPhotoFile sourceFile = await _loadPhotoSource(
-        attachment,
-        diagnostics: diagnostics,
-      );
-      final File? imageFile = sourceFile.localPath == null
-          ? null
-          : File(sourceFile.localPath!);
-      final Uint8List imageBytes = sourceFile.bytes;
-
-      File? photoLibraryInputFile;
-      final Stopwatch photoLibraryStopwatch = Stopwatch()..start();
-
-      try {
-        if (imageFile != null) {
-          final String extension = _photoFileExtension(attachment);
-          photoLibraryInputFile = await imageFile.copy(
-            '${imageFile.path}.photo-save-$timestamp.$extension',
-          );
-          await PhotoManager.editor.saveImageWithPath(
-            photoLibraryInputFile.path,
-            title: 'naru-$timestamp.$extension',
-            creationDate: DateTime.now(),
-          );
-        } else {
-          await PhotoManager.editor.saveImage(
-            imageBytes,
-            filename: 'naru-$timestamp.jpg',
-            title: 'naru Photo',
-            creationDate: DateTime.now(),
-          );
-        }
-        photoLibraryStopwatch.stop();
-        diagnostics.record(
-          '[photo-save] stage=photo_library '
-          'elapsed_ms=${_elapsedMilliseconds(photoLibraryStopwatch)} '
-          'result=success',
+    return _saveViewerMedia(
+      context: context,
+      confirmationKey: _saveConfirmationKey,
+      mediaLabel: 'Photo',
+      errorDetails: _photoSavePlatformErrorDetails,
+      save: (diagnostics) async {
+        final ChatPhotoFile sourceFile = await _loadPhotoSource(
+          attachment,
+          diagnostics: diagnostics,
         );
-      } on Object {
-        photoLibraryStopwatch.stop();
-        diagnostics.record(
-          '[photo-save] stage=photo_library '
-          'elapsed_ms=${_elapsedMilliseconds(photoLibraryStopwatch)} '
-          'result=failed',
-        );
-        rethrow;
-      } finally {
-        if (photoLibraryInputFile != null) {
-          try {
-            await photoLibraryInputFile.delete();
-          } catch (_) {
-            // 삭제에 실패해도 캐시 디렉터리의 임시 파일이라 저장에는 영향이 없어요.
+        final File? imageFile = sourceFile.localPath == null
+            ? null
+            : File(sourceFile.localPath!);
+        final Uint8List imageBytes = sourceFile.bytes;
+        File? photoLibraryInputFile;
+
+        try {
+          await _saveToPhotoLibrary(diagnostics, () async {
+            if (imageFile != null) {
+              final String extension = _photoFileExtension(attachment);
+              photoLibraryInputFile = await imageFile.copy(
+                '${imageFile.path}.photo-save-$timestamp.$extension',
+              );
+              await PhotoManager.editor.saveImageWithPath(
+                photoLibraryInputFile!.path,
+                title: 'naru-$timestamp.$extension',
+                creationDate: DateTime.now(),
+              );
+            } else {
+              await PhotoManager.editor.saveImage(
+                imageBytes,
+                filename: 'naru-$timestamp.jpg',
+                title: 'naru Photo',
+                creationDate: DateTime.now(),
+              );
+            }
+          });
+        } finally {
+          if (photoLibraryInputFile != null) {
+            try {
+              await photoLibraryInputFile!.delete();
+            } catch (_) {
+              // 삭제에 실패해도 캐시 디렉터리의 임시 파일이라 저장에는 영향이 없어요.
+            }
           }
         }
-      }
-
-      if (!mounted) {
-        return;
-      }
-
-      _saveConfirmationKey.currentState?.show('Photo saved');
-      totalStopwatch.stop();
-      diagnostics.record(
-        '[photo-save] stage=confirmation '
-        'elapsed_ms=${_elapsedMilliseconds(totalStopwatch)}',
-      );
-    } on Object catch (error) {
-      totalStopwatch.stop();
-      diagnostics.record(
-        '[photo-save] stage=failure '
-        'elapsed_ms=${_elapsedMilliseconds(totalStopwatch)} '
-        'error_type=${error.runtimeType}'
-        '${_photoSavePlatformErrorDetails(error)}',
-      );
-
-      if (!mounted) {
-        return;
-      }
-
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(content: Text('Photo could not be saved.')),
-        );
-    } finally {
-      // 진단할 때만 아래 줄의 주석을 풀어 클립보드 복사를 켜요.
-      // unawaited(diagnostics.copyToClipboard());
-    }
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final EdgeInsets padding = MediaQuery.paddingOf(context);
-    final double topBarHeight = _mediaViewerTopBarHeight(padding.top);
-    final SystemUiOverlayStyle overlayStyle = SystemUiOverlayStyle.light
-        .copyWith(
-          statusBarColor: Colors.transparent,
-          systemNavigationBarColor: _mediaViewerChromeBarColor,
-          systemNavigationBarIconBrightness: Brightness.light,
-        );
-
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: overlayStyle,
-      child: Scaffold(
-        backgroundColor: _mediaViewerChromeBarColor,
-        body: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: _toggleControls,
-          onVerticalDragStart: _handleVerticalDragStart,
-          onVerticalDragUpdate: _handleVerticalDragUpdate,
-          onVerticalDragEnd: _handleVerticalDragEnd,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              PageView.builder(
-                key: const ValueKey<String>('photo-viewer-page-view'),
-                controller: _pageController,
-                itemCount: widget.attachments.length,
-                onPageChanged: _handlePageChanged,
-                itemBuilder: (BuildContext context, int index) {
-                  return _PhotoViewerPage(
-                    attachment: widget.attachments[index],
-                    onCreateMediaAssetAccessUrl:
-                        widget.onCreateMediaAssetAccessUrl,
-                    onCreateThumbnailAccessUrl:
-                        widget.onCreateThumbnailAccessUrl,
-                  );
-                },
-              ),
-              _MediaViewerTopBar(
-                visible: _controlsVisible,
-                height: topBarHeight,
-                topPadding: padding.top,
-                senderName: widget.senderName,
-                sentAt: widget.sentAt,
-                onBackPressed: _close,
-              ),
-              _PhotoViewerBottomOverlay(
-                visible: _controlsVisible,
-                attachments: widget.attachments,
-                currentIndex: _currentIndex,
-                thumbnailKeys: _thumbnailKeys,
-                onCreateMediaAssetAccessUrl: widget.onCreateThumbnailAccessUrl,
-                onThumbnailPressed: (int index) {
-                  _pageController.animateToPage(
-                    index,
-                    duration: const Duration(milliseconds: 180),
-                    curve: Curves.easeOutCubic,
-                  );
-                },
-                onEditPressed: () {
-                  unawaited(_editCurrentPhoto());
-                },
-                onDownloadPressed: () {
-                  unawaited(_downloadCurrentPhoto());
-                },
-                onSharePressed: () {
-                  unawaited(_shareCurrentPhoto());
-                },
-              ),
-              _ActionConfirmation(
-                key: _saveConfirmationKey,
-                keyPrefix: 'photo-viewer',
-              ),
-            ],
-          ),
+    final double topBarHeight = AppMediaViewerChrome.topBarHeight(padding.top);
+    return ChatMediaViewerScaffold(
+      onTap: _toggleControls,
+      onClose: _close,
+      children: [
+        PageView.builder(
+          key: const ValueKey<String>('photo-viewer-page-view'),
+          controller: _pageController,
+          itemCount: widget.attachments.length,
+          onPageChanged: _handlePageChanged,
+          itemBuilder: (BuildContext context, int index) {
+            return _PhotoViewerPage(
+              attachment: widget.attachments[index],
+              onCreateMediaAssetAccessUrl: widget.onCreateMediaAssetAccessUrl,
+              onCreateThumbnailAccessUrl: widget.onCreateThumbnailAccessUrl,
+            );
+          },
         ),
-      ),
+        _MediaViewerTopBar(
+          visible: _controlsVisible,
+          height: topBarHeight,
+          topPadding: padding.top,
+          senderName: widget.senderName,
+          sentAt: widget.sentAt,
+          onBackPressed: _close,
+        ),
+        _PhotoViewerBottomOverlay(
+          visible: _controlsVisible,
+          attachments: widget.attachments,
+          currentIndex: _currentIndex,
+          thumbnailKeys: _thumbnailKeys,
+          onCreateMediaAssetAccessUrl: widget.onCreateThumbnailAccessUrl,
+          onThumbnailPressed: (int index) {
+            _pageController.animateToPage(
+              index,
+              duration: Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+            );
+          },
+          onEditPressed: () {
+            unawaited(_editCurrentPhoto());
+          },
+          onDownloadPressed: () {
+            unawaited(_downloadCurrentPhoto());
+          },
+          onSharePressed: () {
+            unawaited(_shareCurrentPhoto());
+          },
+        ),
+        _ActionConfirmation(
+          key: _saveConfirmationKey,
+          keyPrefix: 'photo-viewer',
+        ),
+      ],
     );
   }
 }
@@ -16193,7 +15542,6 @@ final class _VideoViewerScreenState extends State<_VideoViewerScreen> {
 
   bool _mediaActionInProgress = false;
   bool _scrubbing = false;
-  double _verticalDragDistance = 0;
 
   ChatPhotoAttachment get _thumbnailAttachment {
     final ChatVideoAttachment attachment = widget.attachment;
@@ -16455,24 +15803,6 @@ final class _VideoViewerScreenState extends State<_VideoViewerScreen> {
     Navigator.of(context).maybePop();
   }
 
-  void _handleVerticalDragStart(DragStartDetails details) {
-    _verticalDragDistance = 0;
-  }
-
-  void _handleVerticalDragUpdate(DragUpdateDetails details) {
-    _verticalDragDistance += details.delta.dy;
-  }
-
-  void _handleVerticalDragEnd(DragEndDetails details) {
-    final double velocity = details.primaryVelocity ?? 0;
-
-    if (_verticalDragDistance.abs() > 82 || velocity.abs() > 650) {
-      _close();
-    }
-
-    _verticalDragDistance = 0;
-  }
-
   Future<void> _editVideo() async {
     if (_mediaActionInProgress || !isChatPhotoEditorSupported) {
       return;
@@ -16492,7 +15822,7 @@ final class _VideoViewerScreenState extends State<_VideoViewerScreen> {
           'viewer-video-${DateTime.now().microsecondsSinceEpoch}';
       final String fileName = _safeLocalFileName(
         attachment.fileName ??
-            'naru-video.${_videoFileExtension(attachment.fileName)}',
+            'naru-video.${ChatVideoDiskCache.fileExtension(attachment.fileName)}',
       );
       final ChatPhotoFile sourceFile = ChatPhotoFile(
         bytes: Uint8List(0),
@@ -16578,70 +15908,26 @@ final class _VideoViewerScreenState extends State<_VideoViewerScreen> {
     }
   }
 
-  Future<void> _downloadVideo() async {
+  Future<void> _downloadVideo() {
     final int timestamp = DateTime.now().millisecondsSinceEpoch;
-    final String extension = _videoFileExtension(widget.attachment.fileName);
-    final Stopwatch totalStopwatch = Stopwatch()..start();
-    final ClipboardDiagnostics diagnostics = ClipboardDiagnostics('video-save')
-      ..record('[video-save] stage=tap')
-      ..record('[video-save] stage=bytes_source source=local_file');
-
-    try {
-      final Stopwatch photoLibraryStopwatch = Stopwatch()..start();
-
-      try {
-        await PhotoManager.editor.saveVideo(
-          widget.videoFile,
-          title: 'naru-$timestamp.$extension',
-          creationDate: DateTime.now(),
-        );
-        photoLibraryStopwatch.stop();
-        diagnostics.record(
-          '[video-save] stage=photo_library '
-          'elapsed_ms=${_elapsedMilliseconds(photoLibraryStopwatch)} '
-          'result=success',
-        );
-      } on Object {
-        photoLibraryStopwatch.stop();
-        diagnostics.record(
-          '[video-save] stage=photo_library '
-          'elapsed_ms=${_elapsedMilliseconds(photoLibraryStopwatch)} '
-          'result=failed',
-        );
-        rethrow;
-      }
-
-      if (!mounted) {
-        return;
-      }
-
-      _saveConfirmationKey.currentState?.show('Video saved');
-      totalStopwatch.stop();
-      diagnostics.record(
-        '[video-save] stage=confirmation '
-        'elapsed_ms=${_elapsedMilliseconds(totalStopwatch)}',
-      );
-    } on Object catch (error) {
-      totalStopwatch.stop();
-      diagnostics.record(
-        '[video-save] stage=failure '
-        'elapsed_ms=${_elapsedMilliseconds(totalStopwatch)} '
-        'error_type=${error.runtimeType}',
-      );
-
-      if (!mounted) {
-        return;
-      }
-
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(content: Text('Video could not be saved.')),
-        );
-    } finally {
-      // 진단할 때만 아래 줄의 주석을 풀어 클립보드 복사를 켜요.
-      // unawaited(diagnostics.copyToClipboard());
-    }
+    final String extension = ChatVideoDiskCache.fileExtension(
+      widget.attachment.fileName,
+    );
+    return _saveViewerMedia(
+      context: context,
+      confirmationKey: _saveConfirmationKey,
+      mediaLabel: 'Video',
+      save: (diagnostics) async {
+        diagnostics.record('[video-save] stage=bytes_source source=local_file');
+        await _saveToPhotoLibrary(diagnostics, () async {
+          await PhotoManager.editor.saveVideo(
+            widget.videoFile,
+            title: 'naru-$timestamp.$extension',
+            creationDate: DateTime.now(),
+          );
+        });
+      },
+    );
   }
 
   Widget _buildVideo(BuildContext context) {
@@ -16655,7 +15941,7 @@ final class _VideoViewerScreenState extends State<_VideoViewerScreen> {
       filterQuality: FilterQuality.high,
       onCreateMediaAssetAccessUrl: widget.onCreateThumbnailAccessUrl,
       persistToDisk: true,
-      placeholderColor: _mediaViewerChromeBarColor,
+      placeholderColor: AppMediaViewerChrome.backgroundColor,
     );
     final VideoPlayerController? controller = _controller;
 
@@ -16683,75 +15969,63 @@ final class _VideoViewerScreenState extends State<_VideoViewerScreen> {
   @override
   Widget build(BuildContext context) {
     final EdgeInsets padding = MediaQuery.paddingOf(context);
-    final double topBarHeight = _mediaViewerTopBarHeight(padding.top);
+    final double topBarHeight = AppMediaViewerChrome.topBarHeight(padding.top);
     final Duration duration = _duration;
     final Duration position = _position > duration ? duration : _position;
-    final SystemUiOverlayStyle overlayStyle = SystemUiOverlayStyle.light
-        .copyWith(
-          statusBarColor: Colors.transparent,
-          systemNavigationBarColor: _mediaViewerChromeBarColor,
-          systemNavigationBarIconBrightness: Brightness.light,
-        );
-
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: overlayStyle,
-      child: Scaffold(
-        backgroundColor: _mediaViewerChromeBarColor,
-        body: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: _handleViewerTap,
-          onVerticalDragStart: _handleVerticalDragStart,
-          onVerticalDragUpdate: _handleVerticalDragUpdate,
-          onVerticalDragEnd: _handleVerticalDragEnd,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              _buildVideo(context),
-              _MediaViewerTopBar(
-                keyPrefix: 'video-viewer',
-                visible: _controlsVisible,
-                height: topBarHeight,
-                topPadding: padding.top,
-                senderName: widget.senderName,
-                sentAt: widget.sentAt,
-                onBackPressed: _close,
-              ),
-              _VideoViewerBottomOverlay(
-                visible: _controlsVisible,
-                isPlaying: _isPlaying,
-                position: position,
-                duration: duration,
-                onPlaybackPressed: () {
-                  unawaited(_togglePlayback());
-                },
-                onSeekStart: _handleSeekStart,
-                onSeekUpdate: _handleSeekUpdate,
-                onSeekEnd: (double fraction) {
-                  unawaited(_handleSeekEnd(fraction));
-                },
-                onEditPressed: () {
-                  unawaited(_editVideo());
-                },
-                onDownloadPressed: () {
-                  unawaited(_downloadVideo());
-                },
-                onSharePressed: () {
-                  unawaited(_shareVideo());
-                },
-              ),
-              _ActionConfirmation(
-                key: _saveConfirmationKey,
-                keyPrefix: 'video-viewer',
-              ),
-            ],
-          ),
+    return ChatMediaViewerScaffold(
+      onTap: _handleViewerTap,
+      onClose: _close,
+      children: [
+        _buildVideo(context),
+        _MediaViewerTopBar(
+          keyPrefix: 'video-viewer',
+          visible: _controlsVisible,
+          height: topBarHeight,
+          topPadding: padding.top,
+          senderName: widget.senderName,
+          sentAt: widget.sentAt,
+          onBackPressed: _close,
         ),
-      ),
+        _VideoViewerBottomOverlay(
+          visible: _controlsVisible,
+          isPlaying: _isPlaying,
+          position: position,
+          duration: duration,
+          onPlaybackPressed: () {
+            unawaited(_togglePlayback());
+          },
+          onSeekStart: _handleSeekStart,
+          onSeekUpdate: _handleSeekUpdate,
+          onSeekEnd: (double fraction) {
+            unawaited(_handleSeekEnd(fraction));
+          },
+          onEditPressed: () {
+            unawaited(_editVideo());
+          },
+          onDownloadPressed: () {
+            unawaited(_downloadVideo());
+          },
+          onSharePressed: () {
+            unawaited(_shareVideo());
+          },
+        ),
+        _ActionConfirmation(
+          key: _saveConfirmationKey,
+          keyPrefix: 'video-viewer',
+        ),
+      ],
     );
   }
 }
 
 final class _VideoViewerBottomOverlay extends StatelessWidget {
+  // 진행바 배치와 터치 영역이 같은 높이를 사용해요.
+  static const double _progressRowHeight = 24;
+
+  static const double _progressToActionBarGap = 2;
+
+  static const double _timeToProgressGap = 6;
+
   const _VideoViewerBottomOverlay({
     required this.visible,
     required this.isPlaying,
@@ -16766,23 +16040,19 @@ final class _VideoViewerBottomOverlay extends StatelessWidget {
     required this.onSharePressed,
   });
 
-  static const double _fadeHeight = 44;
-  static const double _progressRowHeight = 24;
-  static const double _progressToActionBarGap = 2;
   static const double _progressCenterToDownloadButtonTop =
-      _progressRowHeight / 2 + _progressToActionBarGap + _topBarTrailingSpacing;
+      _progressRowHeight / 2 +
+      _progressToActionBarGap +
+      AppMediaViewerChrome.trailingSpacing;
   static const double _progressTopPaddingWithinActionBar =
       _progressCenterToDownloadButtonTop - _progressRowHeight / 2;
   static const double _downloadButtonTopToBottom =
-      _mediaViewerActionButtonDimension + _topBarTrailingSpacing;
+      AppMediaEditIcon.referenceButtonDimension +
+      AppMediaViewerChrome.trailingSpacing;
   static const double _actionBarHeight =
       _progressCenterToDownloadButtonTop * 2 + _downloadButtonTopToBottom;
   static const double _fadeAboveActionBarHeight =
-      _fadeHeight - _progressTopPaddingWithinActionBar;
-  static const double _horizontalPadding = 16;
-  static const double _playbackButtonDimension = 20;
-  static const double _playbackToTimeGap = 18;
-  static const double _timeToProgressGap = 6;
+      44.0 - _progressTopPaddingWithinActionBar;
 
   final bool visible;
   final bool isPlaying;
@@ -16812,101 +16082,92 @@ final class _VideoViewerBottomOverlay extends StatelessWidget {
       left: 0,
       right: 0,
       bottom: 0,
-      child: AnimatedSlide(
-        key: const ValueKey<String>('video-viewer-bottom-overlay'),
-        duration: _mediaViewerControlsAnimationDuration,
-        curve: _mediaViewerControlsSlideCurve(visible),
-        offset: visible ? Offset.zero : const Offset(0, 1),
-        child: IgnorePointer(
-          ignoring: !visible,
-          child: AnimatedOpacity(
-            duration: _mediaViewerControlsAnimationDuration,
-            opacity: visible ? 1 : 0,
-            child: DecoratedBox(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: <Color>[
-                    Color(0x00000000),
-                    Color(0xB8000000),
-                    _mediaViewerChromeBarColor,
-                  ],
-                  stops: <double>[0, 0.43, 1],
-                ),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const SizedBox(height: _fadeAboveActionBarHeight),
-                  AppMediaViewerControlTapRegion(
-                    child: SizedBox(
-                      height: _actionBarHeight,
-                      child: ColoredBox(
-                        key: ValueKey<String>(
-                          'video-viewer-action-bar-background',
+      child: AppMediaViewerControlsTransition(
+        slideKey: const ValueKey<String>('video-viewer-bottom-overlay'),
+
+        visible: visible,
+        hiddenOffset: const Offset(0, 1),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: <Color>[
+                AppColors.black.withAlpha(0),
+                AppColors.black.withAlpha(184),
+                AppMediaViewerChrome.backgroundColor,
+              ],
+              stops: const <double>[0, 0.43, 1],
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: _fadeAboveActionBarHeight),
+              AppMediaViewerControlTapRegion(
+                child: SizedBox(
+                  height: _actionBarHeight,
+                  child: ColoredBox(
+                    key: ValueKey<String>('video-viewer-action-bar-background'),
+                    color: AppMediaViewerChrome.backgroundColor,
+                    child: Column(
+                      children: [
+                        const SizedBox(
+                          height: _progressTopPaddingWithinActionBar,
                         ),
-                        color: _mediaViewerChromeBarColor,
-                        child: Column(
-                          children: [
-                            const SizedBox(
-                              height: _progressTopPaddingWithinActionBar,
+                        SizedBox(
+                          height: _progressRowHeight,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.space16,
                             ),
-                            SizedBox(
-                              height: _progressRowHeight,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: _horizontalPadding,
+                            child: Row(
+                              children: [
+                                _VideoViewerPlaybackButton(
+                                  isPlaying: isPlaying,
+                                  dimension: 20.0,
+                                  onPressed: onPlaybackPressed,
                                 ),
-                                child: Row(
-                                  children: [
-                                    _VideoViewerPlaybackButton(
-                                      isPlaying: isPlaying,
-                                      dimension: _playbackButtonDimension,
-                                      onPressed: onPlaybackPressed,
-                                    ),
-                                    const SizedBox(width: _playbackToTimeGap),
-                                    _VideoViewerTimeLabel(
-                                      key: const ValueKey<String>(
-                                        'video-viewer-elapsed-time',
-                                      ),
-                                      duration: position,
-                                    ),
-                                    const SizedBox(width: _timeToProgressGap),
-                                    Expanded(
-                                      child: _VideoViewerProgressScrubber(
-                                        progress: _progress,
-                                        onSeekStart: onSeekStart,
-                                        onSeekUpdate: onSeekUpdate,
-                                        onSeekEnd: onSeekEnd,
-                                      ),
-                                    ),
-                                    const SizedBox(width: _timeToProgressGap),
-                                    _VideoViewerTimeLabel(
-                                      key: const ValueKey<String>(
-                                        'video-viewer-total-time',
-                                      ),
-                                      duration: duration,
-                                    ),
-                                  ],
+                                const SizedBox(width: 18.0),
+                                _VideoViewerTimeLabel(
+                                  key: const ValueKey<String>(
+                                    'video-viewer-elapsed-time',
+                                  ),
+                                  duration: position,
                                 ),
-                              ),
+                                const SizedBox(width: _timeToProgressGap),
+                                Expanded(
+                                  child: _VideoViewerProgressScrubber(
+                                    progress: _progress,
+                                    onSeekStart: onSeekStart,
+                                    onSeekUpdate: onSeekUpdate,
+                                    onSeekEnd: onSeekEnd,
+                                  ),
+                                ),
+                                const SizedBox(width: _timeToProgressGap),
+                                _VideoViewerTimeLabel(
+                                  key: const ValueKey<String>(
+                                    'video-viewer-total-time',
+                                  ),
+                                  duration: duration,
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: _progressToActionBarGap),
-                            _MediaViewerActionBar(
-                              keyPrefix: 'video-viewer',
-                              onEditPressed: onEditPressed,
-                              onDownloadPressed: onDownloadPressed,
-                              onSharePressed: onSharePressed,
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
+                        const SizedBox(height: _progressToActionBarGap),
+                        _MediaViewerActionBar(
+                          keyPrefix: 'video-viewer',
+                          onEditPressed: onEditPressed,
+                          onDownloadPressed: onDownloadPressed,
+                          onSharePressed: onSharePressed,
+                        ),
+                      ],
                     ),
                   ),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
         ),
       ),
@@ -16933,115 +16194,13 @@ final class _VideoViewerPlaybackButton extends StatelessWidget {
       onTap: onPressed,
       child: SizedBox.square(
         dimension: dimension,
-        child: CustomPaint(
-          painter: _VideoViewerPlaybackIconPainter(isPlaying: isPlaying),
+        child: Icon(
+          AppIcons.playback(isPlaying),
+          size: dimension,
+          color: AppColors.white,
         ),
       ),
     );
-  }
-}
-
-final class _VideoViewerPlaybackIconPainter extends CustomPainter {
-  const _VideoViewerPlaybackIconPainter({required this.isPlaying});
-
-  final bool isPlaying;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final Paint paint = Paint()
-      ..color = AppColors.white
-      ..style = PaintingStyle.fill;
-    final double iconHeight = size.height * (isPlaying ? 0.875 : 0.804);
-    final double iconAspectRatio = isPlaying ? 5 / 6 : 0.846;
-    final Rect iconBounds = Rect.fromCenter(
-      center: size.center(Offset.zero),
-      width: iconHeight * iconAspectRatio,
-      height: iconHeight,
-    );
-
-    if (isPlaying) {
-      final double barWidth = iconBounds.width / 3;
-      final double cornerRadius = barWidth / 2;
-      final RRect leftBar = RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          iconBounds.left,
-          iconBounds.top,
-          barWidth,
-          iconBounds.height,
-        ),
-        Radius.circular(cornerRadius),
-      );
-      final RRect rightBar = RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          iconBounds.right - barWidth,
-          iconBounds.top,
-          barWidth,
-          iconBounds.height,
-        ),
-        Radius.circular(cornerRadius),
-      );
-
-      canvas.drawRRect(leftBar, paint);
-      canvas.drawRRect(rightBar, paint);
-      return;
-    }
-
-    const double cornerFraction = 0.1;
-    final Offset topVertex = iconBounds.topLeft;
-    final Offset rightVertex = Offset(iconBounds.right, iconBounds.center.dy);
-    final Offset bottomVertex = iconBounds.bottomLeft;
-    final Offset topEntry = Offset.lerp(
-      topVertex,
-      bottomVertex,
-      cornerFraction,
-    )!;
-    final Offset topExit = Offset.lerp(topVertex, rightVertex, cornerFraction)!;
-    final Offset rightEntry = Offset.lerp(
-      rightVertex,
-      topVertex,
-      cornerFraction,
-    )!;
-    final Offset rightExit = Offset.lerp(
-      rightVertex,
-      bottomVertex,
-      cornerFraction,
-    )!;
-    final Offset bottomEntry = Offset.lerp(
-      bottomVertex,
-      rightVertex,
-      cornerFraction,
-    )!;
-    final Offset bottomExit = Offset.lerp(
-      bottomVertex,
-      topVertex,
-      cornerFraction,
-    )!;
-    final Path playPath = Path()
-      ..moveTo(topExit.dx, topExit.dy)
-      ..lineTo(rightEntry.dx, rightEntry.dy)
-      ..quadraticBezierTo(
-        rightVertex.dx,
-        rightVertex.dy,
-        rightExit.dx,
-        rightExit.dy,
-      )
-      ..lineTo(bottomEntry.dx, bottomEntry.dy)
-      ..quadraticBezierTo(
-        bottomVertex.dx,
-        bottomVertex.dy,
-        bottomExit.dx,
-        bottomExit.dy,
-      )
-      ..lineTo(topEntry.dx, topEntry.dy)
-      ..quadraticBezierTo(topVertex.dx, topVertex.dy, topExit.dx, topExit.dy)
-      ..close();
-
-    canvas.drawPath(playPath, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _VideoViewerPlaybackIconPainter oldDelegate) {
-    return isPlaying != oldDelegate.isPlaying;
   }
 }
 
@@ -17053,14 +16212,13 @@ final class _VideoViewerTimeLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Text(
-      _formatChatVideoDuration(duration),
-      style: const TextStyle(
-        color: Color(0xFFF2F2F2),
-        fontSize: 13,
+      formatChatVideoDuration(duration),
+      // 재생 시간은 기존 20 높이와 고정 폭 숫자, 좁은 자간을 유지해요.
+      style: AppTypography.typography7.copyWith(
+        color: AppMediaViewerChrome.labelColor,
         height: 20 / 13,
         letterSpacing: -0.8,
-        fontWeight: AppTypography.regular,
-        fontFeatures: <ui.FontFeature>[ui.FontFeature.tabularFigures()],
+        fontFeatures: const <ui.FontFeature>[ui.FontFeature.tabularFigures()],
       ),
     );
   }
@@ -17136,11 +16294,9 @@ final class _VideoViewerProgressScrubberState
 }
 
 final class _VideoViewerProgressPainter extends CustomPainter {
-  const _VideoViewerProgressPainter({required this.progress});
-
-  static const double _inactiveTrackHeight = 2;
-  static const double _activeTrackHeight = 4;
   static const double _thumbRadius = 5.5;
+
+  const _VideoViewerProgressPainter({required this.progress});
 
   final double progress;
 
@@ -17151,12 +16307,12 @@ final class _VideoViewerProgressPainter extends CustomPainter {
     final double endX = math.max(startX, size.width - _thumbRadius);
     final double progressX = startX + (endX - startX) * progress;
     final Paint inactivePaint = Paint()
-      ..color = const Color(0xFFB8B8B8)
-      ..strokeWidth = _inactiveTrackHeight
+      ..color = Color(0xFFB8B8B8)
+      ..strokeWidth = 2.0
       ..strokeCap = StrokeCap.round;
     final Paint activePaint = Paint()
       ..color = AppColors.blue500
-      ..strokeWidth = _activeTrackHeight
+      ..strokeWidth = 4.0
       ..strokeCap = StrokeCap.round;
 
     canvas.drawLine(
@@ -17298,7 +16454,7 @@ final class _PhotoViewerImageState extends State<_PhotoViewerImage> {
       fit: widget.fit,
       filterQuality: widget.filterQuality,
       persistToDisk: true,
-      placeholderColor: _mediaViewerChromeBarColor,
+      placeholderColor: AppMediaViewerChrome.backgroundColor,
     );
     final ImageProvider<Object>? originalProvider = switch ((
       _originalBytes,
@@ -17409,71 +16565,69 @@ final class _MediaViewerTopBar extends StatelessWidget {
       left: 0,
       top: 0,
       right: 0,
-      child: AnimatedSlide(
-        key: ValueKey<String>('$keyPrefix-top-bar'),
-        duration: _mediaViewerControlsAnimationDuration,
-        curve: _mediaViewerControlsSlideCurve(visible),
-        offset: visible ? Offset.zero : const Offset(0, -1),
-        child: IgnorePointer(
-          ignoring: !visible,
-          child: AnimatedOpacity(
-            duration: _mediaViewerControlsAnimationDuration,
-            opacity: visible ? 1 : 0,
-            child: AppMediaViewerControlTapRegion(
-              child: Container(
-                height: height,
-                color: _mediaViewerChromeBarColor,
-                child: Stack(
-                  children: [
-                    Positioned(
-                      left: _topBarHorizontalMargin,
-                      top: topPadding,
-                      child: AppMediaViewerChromeButton(
-                        key: ValueKey<String>('$keyPrefix-back'),
-                        onPressed: onBackPressed,
-                        child: const AppTopBarBackIcon(),
-                      ),
-                    ),
-                    Positioned(
-                      left: _topBarHorizontalMargin + _topBarButtonDimension,
-                      top: topPadding,
-                      right: _topBarHorizontalMargin + _topBarButtonDimension,
-                      height: _topBarButtonDimension,
-                      child: Center(
-                        child: Column(
-                          key: ValueKey<String>('$keyPrefix-info'),
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              key: ValueKey<String>('$keyPrefix-sender-name'),
-                              senderName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTypography.typography6.copyWith(
-                                color: const Color(0xFFF2F2F2),
-                                fontWeight: AppTypography.bold,
-                                height: 18 / 15,
-                              ),
-                            ),
-                            Text(
-                              key: ValueKey<String>('$keyPrefix-timestamp'),
-                              _formatPhotoViewerTimestamp(sentAt),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
-                              style: AppTypography.typography7.copyWith(
-                                color: const Color(0xFFF2F2F2),
-                                fontWeight: AppTypography.regular,
-                                height: 16 / 13,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
+      child: AppMediaViewerControlsTransition(
+        slideKey: ValueKey<String>('$keyPrefix-top-bar'),
+
+        visible: visible,
+        hiddenOffset: const Offset(0, -1),
+        child: AppMediaViewerControlTapRegion(
+          child: Container(
+            height: height,
+            color: AppMediaViewerChrome.backgroundColor,
+            child: Stack(
+              children: [
+                Positioned(
+                  left: AppMediaViewerChrome.horizontalMargin,
+                  top: topPadding,
+                  child: AppMediaViewerChromeButton(
+                    key: ValueKey<String>('$keyPrefix-back'),
+                    onPressed: onBackPressed,
+                    child: const AppTopBarBackIcon(),
+                  ),
                 ),
-              ),
+                Positioned(
+                  left:
+                      AppMediaViewerChrome.horizontalMargin +
+                      AppMediaViewerChrome.buttonDimension,
+                  top: topPadding,
+                  right:
+                      AppMediaViewerChrome.horizontalMargin +
+                      AppMediaViewerChrome.buttonDimension,
+                  height: AppMediaViewerChrome.buttonDimension,
+                  child: Center(
+                    child: Column(
+                      key: ValueKey<String>('$keyPrefix-info'),
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          key: ValueKey<String>('$keyPrefix-sender-name'),
+                          senderName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          // 기존 줄 높이를 유지해 이름·날짜 두 줄의 위치가 바뀌지 않게 해요.
+                          style: AppTypography.typography6.copyWith(
+                            color: AppMediaViewerChrome.labelColor,
+                            fontWeight: AppTypography.bold,
+                            height: 18 / 15,
+                          ),
+                        ),
+                        Text(
+                          key: ValueKey<String>('$keyPrefix-timestamp'),
+                          _formatPhotoViewerTimestamp(sentAt),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: AppTypography.typography7.copyWith(
+                            color: AppMediaViewerChrome.labelColor,
+                            fontWeight: AppTypography.regular,
+                            height: 16 / 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -17515,58 +16669,51 @@ final class _PhotoViewerBottomOverlay extends StatelessWidget {
       left: 0,
       right: 0,
       bottom: 0,
-      child: AnimatedSlide(
-        key: const ValueKey<String>('photo-viewer-bottom-overlay'),
-        duration: _mediaViewerControlsAnimationDuration,
-        curve: _mediaViewerControlsSlideCurve(visible),
-        offset: visible ? Offset.zero : const Offset(0, 1),
-        child: IgnorePointer(
-          ignoring: !visible,
-          child: AnimatedOpacity(
-            duration: _mediaViewerControlsAnimationDuration,
-            opacity: visible ? 1 : 0,
-            child: AppMediaViewerControlTapRegion(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (_hasMultiplePhotos)
-                    SizedBox(
-                      width: double.infinity,
-                      child: Stack(
-                        fit: StackFit.passthrough,
-                        children: [
-                          const Positioned(
-                            left: 0,
-                            // 사진 상단 위로 하단 버튼의 아래 여백인 23pt만큼 확장해요.
-                            top: 15,
-                            right: 0,
-                            bottom: 0,
-                            child: ColoredBox(
-                              key: ValueKey<String>(
-                                'photo-viewer-filmstrip-chrome-extension',
-                              ),
-                              color: _mediaViewerChromeBarColor,
-                            ),
+      child: AppMediaViewerControlsTransition(
+        slideKey: const ValueKey<String>('photo-viewer-bottom-overlay'),
+
+        visible: visible,
+        hiddenOffset: const Offset(0, 1),
+        child: AppMediaViewerControlTapRegion(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_hasMultiplePhotos)
+                SizedBox(
+                  width: double.infinity,
+                  child: Stack(
+                    fit: StackFit.passthrough,
+                    children: [
+                      const Positioned(
+                        left: 0,
+                        // 배경을 사진 상단보다 23pt 위까지 확장하는 기존 위치예요.
+                        top: 15.0,
+                        right: 0,
+                        bottom: 0,
+                        child: ColoredBox(
+                          key: ValueKey<String>(
+                            'photo-viewer-filmstrip-chrome-extension',
                           ),
-                          _PhotoViewerThumbnailBar(
-                            attachments: attachments,
-                            currentIndex: currentIndex,
-                            thumbnailKeys: thumbnailKeys,
-                            onCreateMediaAssetAccessUrl:
-                                onCreateMediaAssetAccessUrl,
-                            onThumbnailPressed: onThumbnailPressed,
-                          ),
-                        ],
+                          color: AppMediaViewerChrome.backgroundColor,
+                        ),
                       ),
-                    ),
-                  _MediaViewerActionBar(
-                    onEditPressed: onEditPressed,
-                    onDownloadPressed: onDownloadPressed,
-                    onSharePressed: onSharePressed,
+                      _PhotoViewerThumbnailBar(
+                        attachments: attachments,
+                        currentIndex: currentIndex,
+                        thumbnailKeys: thumbnailKeys,
+                        onCreateMediaAssetAccessUrl:
+                            onCreateMediaAssetAccessUrl,
+                        onThumbnailPressed: onThumbnailPressed,
+                      ),
+                    ],
                   ),
-                ],
+                ),
+              _MediaViewerActionBar(
+                onEditPressed: onEditPressed,
+                onDownloadPressed: onDownloadPressed,
+                onSharePressed: onSharePressed,
               ),
-            ),
+            ],
           ),
         ),
       ),
@@ -17589,138 +16736,39 @@ final class _MediaViewerActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final List<(String, IconData, VoidCallback)> actions = [
+      ('edit', AppIcons.edit, onEditPressed),
+      ('download', AppIcons.download, onDownloadPressed),
+      ('share', AppIcons.share, onSharePressed),
+    ];
+
     return Container(
       height: _mediaViewerActionBarContentHeight,
-      color: _mediaViewerChromeBarColor,
+      color: AppMediaViewerChrome.backgroundColor,
       child: Row(
         children: <Widget>[
-          Expanded(
-            child: Center(
-              child: AppMediaViewerChromeButton(
-                key: ValueKey<String>('$keyPrefix-edit'),
-                dimension: _mediaViewerActionButtonDimension,
-                onPressed: onEditPressed,
-                child: const AppMediaEditIcon(
-                  dimension: _mediaViewerActionIconDimension,
-                  color: AppColors.white,
+          for (final (suffix, icon, onPressed) in actions)
+            Expanded(
+              child: Center(
+                child: AppMediaViewerChromeButton(
+                  key: ValueKey<String>('$keyPrefix-$suffix'),
+                  dimension: AppMediaEditIcon.referenceButtonDimension,
+                  onPressed: onPressed,
+                  child: SizedBox.square(
+                    dimension: AppMediaEditIcon.referenceDimension,
+                    child: Icon(
+                      icon,
+                      size: AppMediaEditIcon.referenceDimension,
+                      color: AppColors.white,
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
-          Expanded(
-            child: Center(
-              child: AppMediaViewerChromeButton(
-                key: ValueKey<String>('$keyPrefix-download'),
-                dimension: _mediaViewerActionButtonDimension,
-                onPressed: onDownloadPressed,
-                child: const _PhotoViewerDownloadIcon(),
-              ),
-            ),
-          ),
-          Expanded(
-            child: Center(
-              child: AppMediaViewerChromeButton(
-                key: ValueKey<String>('$keyPrefix-share'),
-                dimension: _mediaViewerActionButtonDimension,
-                onPressed: onSharePressed,
-                child: const _MediaViewerShareIcon(),
-              ),
-            ),
-          ),
         ],
       ),
     );
   }
-}
-
-final class _PhotoViewerDownloadIcon extends StatelessWidget {
-  const _PhotoViewerDownloadIcon();
-
-  @override
-  Widget build(BuildContext context) {
-    return const SizedBox.square(
-      dimension: _mediaViewerActionIconDimension,
-      child: CustomPaint(painter: _PhotoViewerDownloadIconPainter()),
-    );
-  }
-}
-
-final class _PhotoViewerDownloadIconPainter extends CustomPainter {
-  const _PhotoViewerDownloadIconPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final Paint paint = _mediaViewerActionIconPaint();
-
-    canvas.drawLine(const Offset(12, 2), const Offset(12, 14), paint);
-    canvas.drawPath(
-      Path()
-        ..moveTo(6, 9)
-        ..lineTo(12, 15)
-        ..lineTo(18, 9),
-      paint,
-    );
-    canvas.drawLine(const Offset(3, 20.5), const Offset(21, 20.5), paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _PhotoViewerDownloadIconPainter oldDelegate) {
-    return false;
-  }
-}
-
-final class _MediaViewerShareIcon extends StatelessWidget {
-  const _MediaViewerShareIcon();
-
-  @override
-  Widget build(BuildContext context) {
-    return const SizedBox.square(
-      dimension: _mediaViewerActionIconDimension,
-      child: CustomPaint(painter: _MediaViewerShareIconPainter()),
-    );
-  }
-}
-
-final class _MediaViewerShareIconPainter extends CustomPainter {
-  const _MediaViewerShareIconPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final Paint paint = _mediaViewerActionIconPaint();
-
-    canvas.drawLine(const Offset(12, 2), const Offset(12, 14), paint);
-    canvas.drawPath(
-      Path()
-        ..moveTo(6.5, 7.5)
-        ..lineTo(12, 2)
-        ..lineTo(17.5, 7.5),
-      paint,
-    );
-    canvas.drawPath(
-      Path()
-        ..moveTo(3, 13.5)
-        ..lineTo(3, 20)
-        ..quadraticBezierTo(3, 21, 4, 21)
-        ..lineTo(20, 21)
-        ..quadraticBezierTo(21, 21, 21, 20)
-        ..lineTo(21, 13.5),
-      paint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _MediaViewerShareIconPainter oldDelegate) {
-    return false;
-  }
-}
-
-Paint _mediaViewerActionIconPaint() {
-  return Paint()
-    ..color = AppColors.white
-    ..style = PaintingStyle.stroke
-    ..strokeWidth = _mediaViewerActionIconStrokeWidth
-    ..strokeCap = StrokeCap.round
-    ..strokeJoin = StrokeJoin.round;
 }
 
 final class _PhotoViewerThumbnailBar extends StatelessWidget {
@@ -17741,14 +16789,14 @@ final class _PhotoViewerThumbnailBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 12, 18, 10),
+      padding: EdgeInsets.fromLTRB(18, AppSpacing.space12, 18, 10),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           SizedBox(
-            height: 56,
+            height: 56.0,
             child: Transform.translate(
-              offset: const Offset(0, 19),
+              offset: Offset(0, 19),
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
@@ -17770,34 +16818,34 @@ final class _PhotoViewerThumbnailBar extends StatelessWidget {
                         },
                       ),
                       if (index != attachments.length - 1)
-                        const SizedBox(width: 5),
+                        const SizedBox(width: 5.0),
                     ],
                   ],
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 7),
+          const SizedBox(height: 7.0),
           SizedBox(
-            height: 24,
+            height: 24.0,
             child: Transform.translate(
-              // 썸네일 하단과 실제 글리프 상단 사이를 레퍼런스의 15pt로 맞춰요.
-              offset: const Offset(0, 37 / 3),
+              // 썸네일 하단과 실제 글리프 상단 사이의 기존 15pt 간격을 유지해요.
+              offset: Offset(0, 37 / 3),
               child: Row(
                 key: const ValueKey<String>('photo-viewer-counter'),
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Icon(
-                    Icons.image_outlined,
+                    AppIcons.image,
                     color: AppColors.white,
-                    size: 18,
+                    size: 18.0,
                   ),
-                  const SizedBox(width: 5),
+                  const SizedBox(width: 5.0),
                   Text(
                     'Number ${currentIndex + 1} out of ${attachments.length}',
                     style: AppTypography.subTypography13.copyWith(
                       color: AppColors.white,
-                      fontWeight: AppTypography.medium,
+                      fontWeight: AppTypography.regular,
                     ),
                   ),
                 ],
@@ -17826,6 +16874,7 @@ final class _PhotoViewerThumbnail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final double dimension = selected ? 44 : 42;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onPressed,
@@ -17833,16 +16882,14 @@ final class _PhotoViewerThumbnail extends StatelessWidget {
         key: ValueKey<String>(
           'photo-viewer-thumbnail-frame-${attachment.assetId}',
         ),
-        duration: const Duration(milliseconds: 140),
+        duration: Duration(milliseconds: 140),
         curve: Curves.easeOutCubic,
-        width: selected ? 44 : 42,
-        height: selected ? 44 : 42,
+        width: dimension,
+        height: dimension,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.all(Radius.circular(selected ? 5 : 7)),
           border: Border.all(
-            color: selected
-                ? _PhotoViewerScreenState._thumbnailBorderColor
-                : Colors.transparent,
+            color: selected ? AppColors.blue500 : Colors.transparent,
             width: selected ? 2 : 0,
           ),
         ),
@@ -17877,7 +16924,7 @@ BoxFit _photoViewerFit({
   final bool sameOrientation =
       (photoRatio >= 1 && viewportRatio >= 1) ||
       (photoRatio < 1 && viewportRatio < 1);
-  final double ratioDelta = (math.log(photoRatio / viewportRatio)).abs();
+  final double ratioDelta = math.log(photoRatio / viewportRatio).abs();
 
   if (sameOrientation && ratioDelta < 0.45) {
     return BoxFit.cover;
@@ -17975,7 +17022,7 @@ _CallMessagePresentation _callMessagePresentation(
           attachment.outcome == ChatCallOutcome.noAnswer)) {
     return const _CallMessagePresentation(
       label: 'Missed Call',
-      icon: Icons.phone_missed_rounded,
+      icon: AppIcons.phoneMissed,
       iconColor: AppColors.red500,
       showsDuration: false,
     );
@@ -17984,31 +17031,32 @@ _CallMessagePresentation _callMessagePresentation(
   return switch (attachment.outcome) {
     ChatCallOutcome.started => const _CallMessagePresentation(
       label: 'Voice Call',
-      icon: Icons.call_rounded,
+      icon: AppIcons.call,
+      // 상태별 의미만 통화 전용으로 관리하고, 색상 값은 디자인 시스템에서 가져와요.
       iconColor: AppColors.green500,
       showsDuration: false,
     ),
     ChatCallOutcome.ended => const _CallMessagePresentation(
       label: 'End voice call',
-      icon: Icons.call_rounded,
+      icon: AppIcons.call,
       iconColor: AppColors.grey900,
       showsDuration: true,
     ),
     ChatCallOutcome.cancelled => const _CallMessagePresentation(
       label: 'Canceled',
-      icon: Icons.phone_disabled_rounded,
+      icon: AppIcons.phoneDisabled,
       iconColor: AppColors.grey500,
       showsDuration: false,
     ),
     ChatCallOutcome.missed => const _CallMessagePresentation(
       label: 'Missed Call',
-      icon: Icons.phone_missed_rounded,
+      icon: AppIcons.phoneMissed,
       iconColor: AppColors.red500,
       showsDuration: false,
     ),
     ChatCallOutcome.noAnswer => const _CallMessagePresentation(
       label: 'No Answer',
-      icon: Icons.phone_disabled_rounded,
+      icon: AppIcons.phoneDisabled,
       iconColor: AppColors.grey500,
       showsDuration: false,
     ),
@@ -18016,6 +17064,8 @@ _CallMessagePresentation _callMessagePresentation(
 }
 
 final class _CallMessageBubble extends StatelessWidget {
+  static const double _iconSize = 22;
+
   const _CallMessageBubble({
     required this.messageId,
     required this.measurementKey,
@@ -18037,15 +17087,9 @@ final class _CallMessageBubble extends StatelessWidget {
       isOutgoing,
     );
     final String? durationText = presentation.showsDuration
-        ? _formatCallDuration(attachment.duration)
+        ? formatChatCallDuration(attachment.duration)
         : null;
-    const double horizontalPadding = _messageHorizontalPadding;
-    const double iconSize = 22;
-    const double iconLabelGap = 10;
-    final TextStyle callTextStyle = AppTypography.subTypography10.copyWith(
-      color: AppColors.grey900,
-      fontWeight: AppTypography.regular,
-    );
+    final TextStyle callTextStyle = ChatMessageStyle.body();
     final StrutStyle callStrutStyle = _buildMessageStrutStyle(callTextStyle);
     Widget callText(String text) {
       return Text(
@@ -18076,14 +17120,17 @@ final class _CallMessageBubble extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           DecoratedBox(
+            // 통화 기록은 발신·수신 모두 흰 카드예요. 모서리와 좌우 여백은 메시지 규격을 공유해요.
             decoration: BoxDecoration(
               color: AppColors.white,
-              borderRadius: const BorderRadius.all(Radius.circular(17)),
-              border: Border.all(color: AppColors.grey100),
+              borderRadius: ChatMessageStyle.bubbleBorderRadius,
+              border: Border.fromBorderSide(
+                BorderSide(color: AppColors.grey100),
+              ),
             ),
             child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: horizontalPadding,
+              padding: EdgeInsets.symmetric(
+                horizontal: ChatMessageStyle.horizontalPadding,
                 vertical: 9,
               ),
               child: Row(
@@ -18091,15 +17138,15 @@ final class _CallMessageBubble extends StatelessWidget {
                 children: [
                   SizedBox(
                     key: ValueKey<String>('call-icon-slot-$messageId'),
-                    width: iconSize,
-                    height: iconSize,
+                    width: _iconSize,
+                    height: _iconSize,
                     child: Icon(
                       presentation.icon,
-                      size: iconSize,
+                      size: _iconSize,
                       color: presentation.iconColor,
                     ),
                   ),
-                  const SizedBox(width: iconLabelGap),
+                  const SizedBox(width: 10.0),
                   callLabel,
                 ],
               ),
@@ -18786,7 +17833,10 @@ final class _VoiceMemoMessageBubbleState
 
   @override
   Widget build(BuildContext context) {
-    final double width = _voiceMemoMessageBubbleWidth(context);
+    final double width = math.min(
+      304.0,
+      math.max(196.0, MediaQuery.sizeOf(context).width - 128.0),
+    );
     final Duration displayPlaybackPosition = _displayPlaybackPosition;
     final bool canPlay =
         widget.attachment.localPath != null ||
@@ -18803,19 +17853,27 @@ final class _VoiceMemoMessageBubbleState
         children: [
           SizedBox(
             width: width,
-            height: 56,
+            // 녹음창의 표시줄과 다른, 채팅에 보낸 음성 카드의 기존 크기를 유지해요.
+            height: 56.0,
             child: DecoratedBox(
               decoration: BoxDecoration(
                 color: AppColors.white,
-                borderRadius: const BorderRadius.all(Radius.circular(15)),
-                border: Border.all(color: AppColors.grey100),
+                borderRadius: BorderRadius.all(Radius.circular(15)),
+                border: Border.fromBorderSide(
+                  BorderSide(color: AppColors.grey100),
+                ),
               ),
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(10, 8, 14, 8),
+                padding: EdgeInsets.fromLTRB(
+                  10,
+                  AppSpacing.space8,
+                  14,
+                  AppSpacing.space8,
+                ),
                 child: Row(
                   children: [
                     SizedBox.square(
-                      dimension: 40,
+                      dimension: AppSpacing.space40,
                       child: Material(
                         color: AppColors.grey50,
                         shape: const CircleBorder(),
@@ -18824,10 +17882,8 @@ final class _VoiceMemoMessageBubbleState
                           customBorder: const CircleBorder(),
                           onTap: canPlay ? _togglePlayback : null,
                           child: Icon(
-                            _playing
-                                ? Icons.pause_rounded
-                                : Icons.play_arrow_rounded,
-                            size: 30,
+                            AppIcons.playback(_playing),
+                            size: 30.0,
                             color: canPlay
                                 ? AppColors.grey900
                                 : AppColors.grey300,
@@ -18835,7 +17891,10 @@ final class _VoiceMemoMessageBubbleState
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(
+                      // 파형 양옆 간격은 공유하고, 파형을 그리는 규칙은 녹음창과 계속 함께 써요.
+                      width: AppSpacing.space12,
+                    ),
                     Expanded(
                       child: LayoutBuilder(
                         builder: (context, constraints) {
@@ -18894,7 +17953,7 @@ final class _VoiceMemoMessageBubbleState
                                 ? _cancelWaveformScrub
                                 : null,
                             child: SizedBox(
-                              height: 22,
+                              height: 22.0,
                               child: _VoiceMemoWaveform(
                                 color: AppColors.grey300,
                                 playedColor: AppColors.grey900,
@@ -18909,15 +17968,13 @@ final class _VoiceMemoMessageBubbleState
                         },
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: AppSpacing.space12),
                     Text(
-                      _formatVoiceMemoBubbleDuration(
+                      _formatVoiceMemoDuration(
+                        padMinutes: false,
                         widget.attachment.duration,
                       ),
-                      style: AppTypography.subTypography10.copyWith(
-                        color: AppColors.grey900,
-                        fontWeight: AppTypography.medium,
-                      ),
+                      style: ChatMessageStyle.body(),
                     ),
                   ],
                 ),
@@ -18941,6 +17998,8 @@ final class _VoiceMemoMessageBubbleState
 }
 
 final class _FileMessageContent extends StatelessWidget {
+  static const double _iconSurfaceDimension = 38;
+
   const _FileMessageContent({
     required this.attachment,
     required this.isOutgoing,
@@ -18951,36 +18010,33 @@ final class _FileMessageContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color iconBackgroundColor = isOutgoing
-        ? AppColors.white.withAlpha(38)
-        : AppColors.blue50;
-    final Color iconColor = isOutgoing ? AppColors.white : AppColors.blue500;
-    final Color titleColor = isOutgoing ? AppColors.white : AppColors.grey900;
-    final Color metadataColor = isOutgoing
-        ? AppColors.white.withAlpha(200)
-        : AppColors.grey500;
-
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 224),
+      constraints: const BoxConstraints(
+        // 바깥 말풍선은 메시지 공통 규격을 쓰고, 파일 정보의 내부 배치만 관리해요.
+        maxWidth: 224.0,
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
-            width: 38,
-            height: 38,
+            width: _iconSurfaceDimension,
+            height: _iconSurfaceDimension,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: iconBackgroundColor,
+              // 파란 발신 말풍선 위의 흰 아이콘 배경은 기존 투명도를 유지해요.
+              color: isOutgoing
+                  ? AppColors.white.withAlpha(38)
+                  : AppColors.blue50,
               borderRadius: AppRadius.borderRadius8,
             ),
             child: Icon(
-              Icons.insert_drive_file_rounded,
-              size: 21,
-              color: iconColor,
+              AppIcons.file,
+              size: 21.0,
+              color: isOutgoing ? AppColors.white : AppColors.blue500,
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 10.0),
           Flexible(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -18991,15 +18047,19 @@ final class _FileMessageContent extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: AppTypography.typography6.copyWith(
-                    color: titleColor,
-                    fontWeight: AppTypography.medium,
+                    color: isOutgoing
+                        ? AppColors.textOnPrimary
+                        : AppColors.textPrimary,
+                    fontWeight: AppTypography.regular,
                   ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 3.0),
                 Text(
                   _formatFileSize(attachment.sizeBytes),
                   style: AppTypography.subTypography12.copyWith(
-                    color: metadataColor,
+                    color: isOutgoing
+                        ? AppColors.white.withAlpha(200)
+                        : AppColors.grey500,
                   ),
                 ),
               ],
@@ -19016,7 +18076,6 @@ enum _BubbleDirection { incoming, outgoing }
 final class _MessageBubble extends StatefulWidget {
   const _MessageBubble({
     required this.messageId,
-    required this.backgroundColor,
     required this.direction,
     required this.showTail,
     required this.isHighlighted,
@@ -19026,7 +18085,6 @@ final class _MessageBubble extends StatefulWidget {
   });
 
   final String messageId;
-  final Color backgroundColor;
   final _BubbleDirection direction;
   final bool showTail;
   final bool isHighlighted;
@@ -19042,13 +18100,7 @@ final class _MessageBubble extends StatefulWidget {
 
 final class _MessageBubbleState extends State<_MessageBubble>
     with SingleTickerProviderStateMixin {
-  static const Duration _pulseDuration = Duration(milliseconds: 360);
-
-  late final AnimationController _pulseController;
-
-  late final Animation<double> _scaleAnimation;
-
-  late final Animation<double> _verticalOffsetAnimation;
+  late final _MessagePulseController _pulseController;
 
   bool get _isOutgoing {
     return widget.direction == _BubbleDirection.outgoing;
@@ -19058,58 +18110,10 @@ final class _MessageBubbleState extends State<_MessageBubble>
   void initState() {
     super.initState();
 
-    _pulseController = AnimationController(
+    _pulseController = _MessagePulseController(
       vsync: this,
-      duration: _pulseDuration,
+      curvedVerticalOffset: true,
     );
-
-    _scaleAnimation = TweenSequence<double>([
-      TweenSequenceItem<double>(
-        tween: Tween<double>(
-          begin: 1,
-          end: 1.026,
-        ).chain(CurveTween(curve: Curves.easeOutCubic)),
-        weight: 22,
-      ),
-      TweenSequenceItem<double>(
-        tween: Tween<double>(
-          begin: 1.026,
-          end: 0.995,
-        ).chain(CurveTween(curve: Curves.easeInOutCubic)),
-        weight: 28,
-      ),
-      TweenSequenceItem<double>(
-        tween: Tween<double>(
-          begin: 0.995,
-          end: 1,
-        ).chain(CurveTween(curve: Curves.easeOutCubic)),
-        weight: 50,
-      ),
-    ]).animate(_pulseController);
-
-    _verticalOffsetAnimation = TweenSequence<double>([
-      TweenSequenceItem<double>(
-        tween: Tween<double>(
-          begin: 0,
-          end: -1.4,
-        ).chain(CurveTween(curve: Curves.easeOutCubic)),
-        weight: 22,
-      ),
-      TweenSequenceItem<double>(
-        tween: Tween<double>(
-          begin: -1.4,
-          end: 0.5,
-        ).chain(CurveTween(curve: Curves.easeInOutCubic)),
-        weight: 28,
-      ),
-      TweenSequenceItem<double>(
-        tween: Tween<double>(
-          begin: 0.5,
-          end: 0,
-        ).chain(CurveTween(curve: Curves.easeOutCubic)),
-        weight: 50,
-      ),
-    ]).animate(_pulseController);
 
     if (widget.isHighlighted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -19142,9 +18146,13 @@ final class _MessageBubbleState extends State<_MessageBubble>
   }
 
   Color _bubbleColorFor(double progress) {
+    // 본문과 파일, 링크 메시지가 같은 방향별 말풍선 색상을 사용해요.
+    final Color backgroundColor = _isOutgoing
+        ? AppColors.outgoingMessageBubble
+        : AppColors.incomingMessageBubble;
     final Color pulseColor = Color.alphaBlend(
       AppColors.black.withAlpha(18),
-      widget.backgroundColor,
+      backgroundColor,
     );
 
     const double peakPoint = 0.22;
@@ -19155,7 +18163,7 @@ final class _MessageBubbleState extends State<_MessageBubble>
           .toDouble();
 
       return Color.lerp(
-        widget.backgroundColor,
+        backgroundColor,
         pulseColor,
         Curves.easeOutCubic.transform(normalized),
       )!;
@@ -19167,7 +18175,7 @@ final class _MessageBubbleState extends State<_MessageBubble>
 
     return Color.lerp(
       pulseColor,
-      widget.backgroundColor,
+      backgroundColor,
       Curves.easeOutCubic.transform(normalized),
     )!;
   }
@@ -19175,17 +18183,24 @@ final class _MessageBubbleState extends State<_MessageBubble>
   @override
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.sizeOf(context).width;
-    final double minWidth = widget.isReply
-        ? screenWidth * _replyMessageMinimumWidthRatio
-        : 0;
+    final double minWidth = widget.isReply ? screenWidth * 0.36 : 0;
     final double maxWidth =
-        screenWidth * (widget.isReply ? _replyMessageMaximumWidthRatio : 0.68);
+        screenWidth *
+        (widget.isReply ? 0.70 : ChatMessageStyle.maximumWidthRatio);
 
     final BorderRadius borderRadius = BorderRadius.only(
-      topLeft: Radius.circular(!_isOutgoing && widget.showTail ? 13 : 17),
-      topRight: Radius.circular(_isOutgoing && widget.showTail ? 13 : 17),
-      bottomLeft: const Radius.circular(17),
-      bottomRight: const Radius.circular(17),
+      topLeft: Radius.circular(
+        !_isOutgoing && widget.showTail
+            ? ChatMessageStyle.tailCornerRadius
+            : ChatMessageStyle.bubbleRadius,
+      ),
+      topRight: Radius.circular(
+        _isOutgoing && widget.showTail
+            ? ChatMessageStyle.tailCornerRadius
+            : ChatMessageStyle.bubbleRadius,
+      ),
+      bottomLeft: const Radius.circular(ChatMessageStyle.bubbleRadius),
+      bottomRight: const Radius.circular(ChatMessageStyle.bubbleRadius),
     );
 
     final Alignment pulseAlignment = _isOutgoing
@@ -19198,61 +18213,62 @@ final class _MessageBubbleState extends State<_MessageBubble>
       builder: (BuildContext context, Widget? child) {
         final Color bubbleColor = _bubbleColorFor(_pulseController.value);
 
-        return Transform.translate(
-          offset: Offset(0, _verticalOffsetAnimation.value),
-          child: Transform.scale(
-            key: ValueKey<String>('message-pulse-${widget.messageId}'),
-            scale: _scaleAnimation.value,
-            alignment: pulseAlignment,
-            child: Stack(
-              key: widget.measurementKey,
-              clipBehavior: Clip.none,
-              children: [
-                ConstrainedBox(
-                  constraints: BoxConstraints(
-                    minWidth: minWidth,
-                    maxWidth: maxWidth,
+        return _pulseController.transform(
+          messageId: widget.messageId,
+          alignment: pulseAlignment,
+          child: Stack(
+            key: widget.measurementKey,
+            clipBehavior: Clip.none,
+            children: [
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  minWidth: minWidth,
+                  maxWidth: maxWidth,
+                ),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: bubbleColor,
+                    borderRadius: borderRadius,
                   ),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: bubbleColor,
-                      borderRadius: borderRadius,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: ChatMessageStyle.horizontalPadding,
+                      vertical: 6.0,
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: _messageHorizontalPadding,
-                        vertical: 6,
-                      ),
-                      child: child,
+                    child: child,
+                  ),
+                ),
+              ),
+              if (widget.showTail)
+                Positioned(
+                  top: 6.0,
+                  left: _isOutgoing
+                      ? null
+                      : ChatMessageStyle.tailHorizontalOffset,
+                  right: _isOutgoing
+                      ? ChatMessageStyle.tailHorizontalOffset
+                      : null,
+                  child: CustomPaint(
+                    // 꼬리 위치는 본문 여백과 별도로 관리해요. 숫자가 같아도 함께 바뀌면 안 돼요.
+                    size: Size(12, 13),
+                    painter: _BubbleTailPainter(
+                      color: bubbleColor,
+                      direction: widget.direction,
                     ),
                   ),
                 ),
-                if (widget.showTail)
-                  Positioned(
-                    top: 6,
-                    left: _isOutgoing ? null : -7,
-                    right: _isOutgoing ? -7 : null,
-                    child: CustomPaint(
-                      size: const Size(12, 13),
-                      painter: _BubbleTailPainter(
-                        color: bubbleColor,
-                        direction: widget.direction,
+              if (widget.isHighlighted)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: SizedBox.expand(
+                      key: ValueKey<String>(
+                        'message-highlight-'
+                        '${widget.messageId}',
                       ),
                     ),
                   ),
-                if (widget.isHighlighted)
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: SizedBox.expand(
-                        key: ValueKey<String>(
-                          'message-highlight-'
-                          '${widget.messageId}',
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+                ),
+            ],
           ),
         );
       },
@@ -19324,7 +18340,9 @@ final class _MessageTime extends StatelessWidget {
 
     return Text(
       formattedTime,
-      style: AppTypography.subTypography12.copyWith(color: AppColors.grey500),
+      style: AppTypography.subTypography12.copyWith(
+        color: AppColors.textTertiary,
+      ),
     );
   }
 }
@@ -19512,31 +18530,31 @@ final class _ChatAttachmentPanel extends StatelessWidget {
     _AttachmentPanelActionData(
       id: 'photo',
       label: 'Photo',
-      icon: Icons.image_rounded,
+      icon: AppIcons.image,
       foregroundColor: AppColors.green500,
     ),
     _AttachmentPanelActionData(
       id: 'camera',
       label: 'Camera',
-      icon: Icons.photo_camera_rounded,
+      icon: AppIcons.camera,
       foregroundColor: AppColors.blue500,
     ),
     _AttachmentPanelActionData(
       id: 'call',
       label: 'Call',
-      icon: Icons.call_rounded,
+      icon: AppIcons.call,
       foregroundColor: AppColors.green500,
     ),
     _AttachmentPanelActionData(
       id: 'file',
       label: 'File',
-      icon: Icons.insert_drive_file_rounded,
+      icon: AppIcons.file,
       foregroundColor: AppColors.grey700,
     ),
     _AttachmentPanelActionData(
       id: 'voice-memo',
       label: 'Voice Memo',
-      icon: Icons.graphic_eq_rounded,
+      icon: AppIcons.graphicEq,
       foregroundColor: AppColors.red500,
     ),
   ];
@@ -19604,7 +18622,7 @@ final class _AttachmentPanelAction extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       key: ValueKey<String>('attachment-action-${action.id}'),
-      borderRadius: const BorderRadius.all(Radius.circular(16)),
+      borderRadius: AppRadius.borderRadius16,
       onTap: () {
         Feedback.forTap(context);
         onPressed();
@@ -19622,18 +18640,56 @@ final class _AttachmentPanelAction extends StatelessWidget {
               child: Icon(action.icon, size: 28, color: action.foregroundColor),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.space8),
           Text(
             action.label,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
             style: AppTypography.subTypography11.copyWith(
-              color: AppColors.grey900,
+              color: AppColors.textPrimary,
               fontWeight: AppTypography.regular,
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// 입력과 검색은 같은 표면을 쓰고, 안쪽 내용만 바꿔요.
+final class _ComposerSurface extends StatelessWidget {
+  const _ComposerSurface({
+    required this.containerKey,
+    required this.surfaceKey,
+    required this.child,
+  });
+
+  final Key containerKey;
+  final Key surfaceKey;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      key: containerKey,
+      borderRadius: AppRadius.borderRadius24,
+      child: DecoratedBox(
+        key: surfaceKey,
+        decoration: BoxDecoration(
+          color: AppColors.grey50,
+          borderRadius: AppRadius.borderRadius24,
+          border: Border.fromBorderSide(BorderSide(color: AppColors.white)),
+        ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            minHeight: ChatComposerStyle.defaultMinimumHeight,
+          ),
+          child: Padding(
+            padding: EdgeInsets.all(AppSpacing.space8),
+            child: child,
+          ),
+        ),
       ),
     );
   }
@@ -19683,16 +18739,6 @@ final class _MessageComposer extends StatelessWidget {
   final VoidCallback onInputTap;
   final VoidCallback onVoiceMemoPressed;
 
-  static const double _defaultComposerHeight = 48;
-
-  static const double _defaultComposerRadius = 24;
-
-  static const double _defaultActionDimension = 32;
-
-  static const Color _defaultIconColor = Color(0xFF191919);
-
-  static const Color _defaultHintColor = Color(0xFF92989E);
-
   @override
   Widget build(BuildContext context) {
     final ChatMessage? editTarget = editingMessage;
@@ -19703,12 +18749,14 @@ final class _MessageComposer extends StatelessWidget {
     final MediaQueryData mediaQuery = MediaQuery.of(context);
     final double keyboardHeight = mediaQuery.viewInsets.bottom;
     final double systemBottomPadding = mediaQuery.viewPadding.bottom;
-    final double keyboardBottomPadding = (keyboardHeight - systemBottomPadding)
-        .clamp(0, _composerRaisedBottomPadding)
-        .toDouble();
+    final double keyboardBottomPadding =
+        ChatComposerStyle.keyboardBottomPadding(
+          keyboardHeight: keyboardHeight,
+          systemBottomPadding: systemBottomPadding,
+        );
     final double bottomPadding =
         attachmentPanelOpen || preserveRaisedBottomPadding
-        ? _composerRaisedBottomPadding
+        ? ChatComposerStyle.raisedBottomPadding
         : keyboardBottomPadding;
 
     final String? replyTitle = replyTarget == null
@@ -19719,9 +18767,9 @@ final class _MessageComposer extends StatelessWidget {
     return TextFieldTapRegion(
       child: Padding(
         padding: EdgeInsets.fromLTRB(
-          _composerHorizontalPadding,
+          ChatComposerStyle.horizontalPadding,
           0,
-          _composerHorizontalPadding,
+          ChatComposerStyle.horizontalPadding,
           bottomPadding,
         ),
         child: ValueListenableBuilder<TextEditingValue>(
@@ -19739,19 +18787,58 @@ final class _MessageComposer extends StatelessWidget {
                     rawValue != editingOriginalContent;
 
                 return AnimatedSize(
-                  duration: const Duration(milliseconds: 180),
+                  duration: Duration(milliseconds: 180),
                   curve: Curves.easeOutCubic,
                   alignment: Alignment.bottomCenter,
                   child: isEditing
-                      ? _buildEditComposer(
-                          originalContent: editingOriginalContent ?? '',
-                          canSaveEdit: canSaveEdit,
+                      ? _buildContextComposer(
+                          keyPrefix: 'edit',
+                          title: 'Edit message',
+                          preview: editingOriginalContent ?? '',
+                          hintText: '',
+                          onCancel: onCancelEdit,
+                          action: canSaveEdit
+                              ? _ComposerCircleButton(
+                                  buttonKey: const ValueKey<String>(
+                                    'edit-save',
+                                  ),
+                                  tooltip: 'Save edit',
+                                  icon: AppIcons.check,
+                                  iconSize: 24.0,
+                                  backgroundColor: AppColors.grey900,
+                                  foregroundColor: AppColors.white,
+                                  onPressed: onSaveEdit,
+                                )
+                              : const SizedBox.shrink(
+                                  key: ValueKey<String>(
+                                    'edit-action-placeholder',
+                                  ),
+                                ),
                         )
                       : isReplying
-                      ? _buildReplyComposer(
-                          replyTitle: replyTitle!,
-                          replyPreview: replyingToContent ?? '',
-                          canSend: canSend,
+                      ? _buildContextComposer(
+                          keyPrefix: 'reply',
+                          title: replyTitle!,
+                          preview: replyingToContent ?? '',
+                          hintText: 'Reply to message...',
+                          onCancel: onCancelReply,
+                          action: canSend
+                              ? _ComposerCircleButton(
+                                  buttonKey: const ValueKey<String>(
+                                    'message-send',
+                                  ),
+                                  tooltip: 'Send',
+                                  icon: AppIcons.send,
+                                  iconSize: 23.0,
+                                  backgroundColor: AppColors.blue500,
+                                  foregroundColor: AppColors.white,
+                                  onPressed: onSend,
+                                )
+                              : const SizedBox.shrink(
+                                  key: ValueKey<String>(
+                                    'reply-action-placeholder',
+                                  ),
+                                ),
                         )
                       : _buildDefaultComposer(canSend: canSend),
                 );
@@ -19762,250 +18849,82 @@ final class _MessageComposer extends StatelessWidget {
   }
 
   Widget _buildDefaultComposer({required bool canSend}) {
-    return ClipRRect(
-      key: const ValueKey<String>('message-composer-default'),
-      borderRadius: const BorderRadius.all(
-        Radius.circular(_defaultComposerRadius),
-      ),
-      child: DecoratedBox(
-        key: const ValueKey<String>('message-composer-surface'),
-        decoration: BoxDecoration(
-          color: AppColors.grey50,
-          borderRadius: const BorderRadius.all(
-            Radius.circular(_defaultComposerRadius),
-          ),
-          border: Border.all(color: AppColors.white),
-        ),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: _defaultComposerHeight),
-          child: Padding(
-            padding: const EdgeInsets.all(8),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                _ComposerLastLineAction(
-                  offsetY: 0,
-                  child: _ComposerCircleButton(
-                    buttonKey: const ValueKey<String>('message-attachment'),
-                    tooltip: attachmentPanelOpen
-                        ? 'Open keyboard'
-                        : 'Attachments',
-                    icon: attachmentPanelOpen
-                        ? Icons.close_rounded
-                        : CupertinoIcons.add,
-                    iconSize: 20,
-                    dimension: _defaultActionDimension,
-                    backgroundColor: AppColors.white,
-                    foregroundColor: _defaultIconColor,
-                    onPressed: onToggleAttachmentPanel,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: _buildTextField(
-                    hintText: 'Enter a message',
-                    textStyle: AppTypography.typography6,
-                    textColor: _defaultIconColor,
-                    hintColor: _defaultHintColor,
-                    verticalContentPadding: 4.5,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                _ComposerLastLineAction(
-                  offsetY: 0,
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 140),
-                    switchInCurve: Curves.easeOut,
-                    switchOutCurve: Curves.easeIn,
-                    transitionBuilder:
-                        (Widget child, Animation<double> animation) {
-                          return FadeTransition(
-                            opacity: animation,
-                            child: ScaleTransition(
-                              scale: animation,
-                              child: child,
-                            ),
-                          );
-                        },
-                    child: canSend
-                        ? _ComposerCircleButton(
-                            buttonKey: const ValueKey<String>('message-send'),
-                            tooltip: 'Send',
-                            icon: Icons.arrow_upward_rounded,
-                            iconSize: 19,
-                            dimension: _defaultActionDimension,
-                            backgroundColor: AppColors.blue500,
-                            foregroundColor: AppColors.white,
-                            onPressed: onSend,
-                          )
-                        : _ComposerCircleButton(
-                            buttonKey: const ValueKey<String>('message-voice'),
-                            tooltip: 'Voice message',
-                            icon: Icons.graphic_eq_rounded,
-                            iconSize: 18,
-                            dimension: _defaultActionDimension,
-                            backgroundColor: AppColors.white,
-                            foregroundColor: _defaultIconColor,
-                            onPressed: onVoiceMemoPressed,
-                          ),
-                  ),
-                ),
-              ],
+    return _ComposerSurface(
+      containerKey: const ValueKey<String>('message-composer-default'),
+      surfaceKey: const ValueKey<String>('message-composer-surface'),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          _ComposerLastLineAction(
+            offsetY: 0,
+            child: _ComposerCircleButton.neutral(
+              buttonKey: const ValueKey<String>('message-attachment'),
+              tooltip: attachmentPanelOpen ? 'Open keyboard' : 'Attachments',
+              icon: attachmentPanelOpen ? AppIcons.close : AppIcons.add,
+              onPressed: onToggleAttachmentPanel,
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildReplyComposer({
-    required String replyTitle,
-    required String replyPreview,
-    required bool canSend,
-  }) {
-    return ClipRRect(
-      key: const ValueKey<String>('reply-composer'),
-      borderRadius: const BorderRadius.all(Radius.circular(28)),
-      child: ColoredBox(
-        key: const ValueKey<String>('reply-composer-surface'),
-        color: AppColors.grey50,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 11, 10, 6),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 1),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            replyTitle,
-                            key: const ValueKey<String>('reply-composer-title'),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTypography.typography6.copyWith(
-                              color: AppColors.grey900,
-                              fontWeight: AppTypography.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            replyPreview,
-                            key: const ValueKey<String>(
-                              'reply-composer-preview',
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTypography.typography6.copyWith(
-                              color: AppColors.grey700,
-                              fontWeight: AppTypography.regular,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  _ReplyActionSlot(
-                    child: SizedBox.square(
-                      key: const ValueKey<String>('reply-cancel'),
-                      dimension: 34,
-                      child: Material(
-                        color: AppColors.white,
-                        shape: const CircleBorder(
-                          side: BorderSide(color: AppColors.grey200),
-                        ),
-                        clipBehavior: Clip.antiAlias,
-                        child: InkWell(
-                          customBorder: const CircleBorder(),
-                          onTap: onCancelReply,
-                          child: const Icon(
-                            Icons.close_rounded,
-                            size: 20,
-                            color: AppColors.grey700,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+          const SizedBox(width: AppSpacing.space4),
+          Expanded(
+            child: _buildTextField(
+              hintText: 'Enter a message',
+              textStyle: ChatComposerStyle.defaultInput,
+              // 기본 입력창 안내 문구의 승인된 색상은 공통 회색으로 치환하지 않아요.
+              hintStyle: ChatComposerStyle.defaultInput.copyWith(
+                color: const Color(0xFF92989E),
               ),
-              const SizedBox(height: 5),
-              ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 50),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Expanded(
-                      child: _buildTextField(
-                        hintText: 'Reply to message...',
-                        horizontalContentPadding: 0,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    _ComposerLastLineAction(
-                      child: _ReplyActionSlot(
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 140),
-                          switchInCurve: Curves.easeOut,
-                          switchOutCurve: Curves.easeIn,
-                          transitionBuilder:
-                              (Widget child, Animation<double> animation) {
-                                return FadeTransition(
-                                  opacity: animation,
-                                  child: ScaleTransition(
-                                    scale: animation,
-                                    child: child,
-                                  ),
-                                );
-                              },
-                          child: canSend
-                              ? _ComposerCircleButton(
-                                  buttonKey: const ValueKey<String>(
-                                    'message-send',
-                                  ),
-                                  tooltip: 'Send',
-                                  icon: Icons.arrow_upward_rounded,
-                                  iconSize: 23,
-                                  backgroundColor: AppColors.blue500,
-                                  foregroundColor: AppColors.white,
-                                  onPressed: onSend,
-                                )
-                              : const SizedBox.shrink(
-                                  key: ValueKey<String>(
-                                    'reply-action-placeholder',
-                                  ),
-                                ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: AppSpacing.space4,
+                vertical: 4.5,
               ),
-            ],
+            ),
           ),
-        ),
+          const SizedBox(width: AppSpacing.space4),
+          _ComposerLastLineAction(
+            offsetY: 0,
+            child: _buildComposerActionSwitcher(
+              canSend
+                  ? _ComposerCircleButton(
+                      buttonKey: const ValueKey<String>('message-send'),
+                      tooltip: 'Send',
+                      icon: AppIcons.send,
+                      iconSize: 19.0,
+                      dimension: ChatComposerStyle.defaultActionDimension,
+                      backgroundColor: AppColors.blue500,
+                      foregroundColor: AppColors.white,
+                      onPressed: onSend,
+                    )
+                  : _ComposerCircleButton.neutral(
+                      buttonKey: const ValueKey<String>('message-voice'),
+                      tooltip: 'Voice message',
+                      icon: AppIcons.graphicEq,
+                      iconSize: 18.0,
+                      onPressed: onVoiceMemoPressed,
+                    ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildEditComposer({
-    required String originalContent,
-    required bool canSaveEdit,
+  // 답장과 수정은 같은 입력창을 쓰고 문구와 동작만 바꿔요.
+  Widget _buildContextComposer({
+    required String keyPrefix,
+    required String title,
+    required String preview,
+    required String hintText,
+    required VoidCallback onCancel,
+    required Widget action,
   }) {
     return ClipRRect(
-      key: const ValueKey<String>('edit-composer'),
-      borderRadius: const BorderRadius.all(Radius.circular(28)),
+      key: ValueKey<String>('$keyPrefix-composer'),
+      borderRadius: BorderRadius.all(Radius.circular(28)),
       child: ColoredBox(
-        key: const ValueKey<String>('edit-composer-surface'),
+        key: ValueKey<String>('$keyPrefix-composer-surface'),
         color: AppColors.grey50,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 11, 10, 6),
+          padding: EdgeInsets.fromLTRB(AppSpacing.space16, 11, 10, 6),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -20014,27 +18933,27 @@ final class _MessageComposer extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.only(top: 1),
+                      padding: EdgeInsets.only(top: 1),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Edit message',
-                            key: const ValueKey<String>('edit-composer-title'),
-                            maxLines: 1,
+                            title,
+                            key: ValueKey<String>('$keyPrefix-composer-title'),
+                            maxLines: ChatComposerStyle.contextSummaryMaxLines,
                             overflow: TextOverflow.ellipsis,
                             style: AppTypography.typography6.copyWith(
-                              color: AppColors.grey900,
+                              color: AppColors.textPrimary,
                               fontWeight: AppTypography.bold,
                             ),
                           ),
-                          const SizedBox(height: 2),
+                          const SizedBox(height: 2.0),
                           Text(
-                            originalContent,
-                            key: const ValueKey<String>(
-                              'edit-composer-preview',
+                            preview,
+                            key: ValueKey<String>(
+                              '$keyPrefix-composer-preview',
                             ),
-                            maxLines: 1,
+                            maxLines: ChatComposerStyle.contextSummaryMaxLines,
                             overflow: TextOverflow.ellipsis,
                             style: AppTypography.typography6.copyWith(
                               color: AppColors.grey700,
@@ -20045,23 +18964,23 @@ final class _MessageComposer extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  _ReplyActionSlot(
+                  const SizedBox(width: 10.0),
+                  _ComposerActionSlot(
                     child: SizedBox.square(
-                      key: const ValueKey<String>('edit-cancel'),
-                      dimension: 34,
+                      key: ValueKey<String>('$keyPrefix-cancel'),
+                      dimension: 34.0,
                       child: Material(
                         color: AppColors.white,
-                        shape: const CircleBorder(
+                        shape: CircleBorder(
                           side: BorderSide(color: AppColors.grey200),
                         ),
                         clipBehavior: Clip.antiAlias,
                         child: InkWell(
                           customBorder: const CircleBorder(),
-                          onTap: onCancelEdit,
+                          onTap: onCancel,
                           child: const Icon(
-                            Icons.close_rounded,
-                            size: 20,
+                            AppIcons.close,
+                            size: 20.0,
                             color: AppColors.grey700,
                           ),
                         ),
@@ -20070,53 +18989,28 @@ final class _MessageComposer extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 5),
+              const SizedBox(height: 5.0),
               ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 50),
+                constraints: const BoxConstraints(minHeight: 50.0),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Expanded(
                       child: _buildTextField(
-                        hintText: '',
-                        horizontalContentPadding: 0,
+                        hintText: hintText,
+                        textStyle: ChatComposerStyle.contextInput,
+                        hintStyle: ChatComposerStyle.contextInput.copyWith(
+                          color: AppColors.textTertiary,
+                        ),
+                        contentPadding: EdgeInsets.symmetric(
+                          vertical: AppSpacing.space12,
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: AppSpacing.space4),
                     _ComposerLastLineAction(
-                      child: _ReplyActionSlot(
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 140),
-                          switchInCurve: Curves.easeOut,
-                          switchOutCurve: Curves.easeIn,
-                          transitionBuilder:
-                              (Widget child, Animation<double> animation) {
-                                return FadeTransition(
-                                  opacity: animation,
-                                  child: ScaleTransition(
-                                    scale: animation,
-                                    child: child,
-                                  ),
-                                );
-                              },
-                          child: canSaveEdit
-                              ? _ComposerCircleButton(
-                                  buttonKey: const ValueKey<String>(
-                                    'edit-save',
-                                  ),
-                                  tooltip: 'Save edit',
-                                  icon: Icons.check_rounded,
-                                  iconSize: 24,
-                                  backgroundColor: AppColors.grey900,
-                                  foregroundColor: AppColors.white,
-                                  onPressed: onSaveEdit,
-                                )
-                              : const SizedBox.shrink(
-                                  key: ValueKey<String>(
-                                    'edit-action-placeholder',
-                                  ),
-                                ),
-                        ),
+                      child: _ComposerActionSlot(
+                        child: _buildComposerActionSwitcher(action),
                       ),
                     ),
                   ],
@@ -20131,11 +19025,9 @@ final class _MessageComposer extends StatelessWidget {
 
   Widget _buildTextField({
     required String hintText,
-    double horizontalContentPadding = 4,
-    double verticalContentPadding = 12,
-    TextStyle textStyle = AppTypography.subTypography10,
-    Color textColor = AppColors.grey900,
-    Color hintColor = AppColors.grey500,
+    required TextStyle textStyle,
+    required TextStyle hintStyle,
+    required EdgeInsets contentPadding,
   }) {
     return KeyedSubtree(
       key: inputHostKey,
@@ -20149,24 +19041,15 @@ final class _MessageComposer extends StatelessWidget {
         maxLines: 4,
         keyboardType: TextInputType.multiline,
         textInputAction: TextInputAction.newline,
-        cursorColor: AppColors.blue500,
-        style: textStyle.copyWith(
-          color: textColor,
-          fontWeight: AppTypography.regular,
-        ),
+        cursorColor: AppColors.primary,
+        style: textStyle,
         decoration: InputDecoration(
           hintText: hintText,
-          hintStyle: textStyle.copyWith(
-            color: hintColor,
-            fontWeight: AppTypography.regular,
-          ),
+          hintStyle: hintStyle,
           filled: false,
           fillColor: Colors.transparent,
           isDense: true,
-          contentPadding: EdgeInsets.symmetric(
-            horizontal: horizontalContentPadding,
-            vertical: verticalContentPadding,
-          ),
+          contentPadding: contentPadding,
           border: InputBorder.none,
           enabledBorder: InputBorder.none,
           focusedBorder: InputBorder.none,
@@ -20179,14 +19062,17 @@ final class _MessageComposer extends StatelessWidget {
   }
 }
 
-final class _ReplyActionSlot extends StatelessWidget {
-  const _ReplyActionSlot({required this.child});
+final class _ComposerActionSlot extends StatelessWidget {
+  const _ComposerActionSlot({required this.child});
 
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox.square(dimension: 42, child: Center(child: child));
+    return SizedBox.square(
+      dimension: ChatComposerStyle.contextActionDimension,
+      child: Center(child: child),
+    );
   }
 }
 
@@ -20203,6 +19089,19 @@ final class _ComposerLastLineAction extends StatelessWidget {
 }
 
 final class _ComposerCircleButton extends StatelessWidget {
+  // 첨부·녹음·검색 이동은 같은 원형 버튼이며 아이콘과 동작만 달라요.
+  const _ComposerCircleButton.neutral({
+    required this.buttonKey,
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+    this.iconSize = ChatComposerStyle.neutralIconSize,
+  }) : dimension = ChatComposerStyle.defaultActionDimension,
+       backgroundColor = AppColors.white,
+       foregroundColor = onPressed == null
+           ? AppColors.textDisabled
+           : AppColors.textPrimary;
+
   const _ComposerCircleButton({
     required this.buttonKey,
     required this.tooltip,
@@ -20211,7 +19110,7 @@ final class _ComposerCircleButton extends StatelessWidget {
     required this.backgroundColor,
     required this.foregroundColor,
     required this.onPressed,
-    this.dimension = 42,
+    this.dimension = ChatComposerStyle.contextActionDimension,
   });
 
   final Key buttonKey;
@@ -20237,17 +19136,8 @@ final class _ComposerCircleButton extends StatelessWidget {
           child: InkWell(
             customBorder: const CircleBorder(),
             onTap: onPressed,
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 140),
-              switchInCurve: Curves.easeOut,
-              switchOutCurve: Curves.easeIn,
-              transitionBuilder: (Widget child, Animation<double> animation) {
-                return FadeTransition(
-                  opacity: animation,
-                  child: ScaleTransition(scale: animation, child: child),
-                );
-              },
-              child: Icon(
+            child: _buildComposerActionSwitcher(
+              Icon(
                 icon,
                 key: ValueKey<String>(
                   '${icon.codePoint}-'
@@ -20262,4 +19152,20 @@ final class _ComposerCircleButton extends StatelessWidget {
       ),
     );
   }
+}
+
+// 버튼 교체와 버튼 안의 아이콘 교체는 같은 페이드·크기 전환을 사용해요.
+Widget _buildComposerActionSwitcher(Widget child) {
+  return AnimatedSwitcher(
+    duration: Duration(milliseconds: 140),
+    switchInCurve: Curves.easeOut,
+    switchOutCurve: Curves.easeIn,
+    transitionBuilder: (Widget child, Animation<double> animation) {
+      return FadeTransition(
+        opacity: animation,
+        child: ScaleTransition(scale: animation, child: child),
+      );
+    },
+    child: child,
+  );
 }

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../app_colors.dart';
+import '../app_theme.dart';
+import 'app_logo.dart';
 
 final class AppLaunchGate extends StatefulWidget {
   const AppLaunchGate({required this.isReady, required this.child, super.key});
@@ -85,19 +87,11 @@ final class AppLaunchScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
+      value: AppTheme.lightSystemUi,
       child: Scaffold(
         backgroundColor: AppColors.launchBackground,
-        body: Center(
-          // iOS LaunchScreen.storyboard와 같은 이미지, 크기, 화면 중심을 사용해요.
-          child: Image.asset(
-            'ios/Runner/Assets.xcassets/LaunchImage.imageset/LaunchImage.png',
-            width: 144,
-            height: 144,
-            fit: BoxFit.contain,
-            semanticLabel: 'naru',
-          ),
-        ),
+        // 네이티브 시작 화면과 같은 원본, 144 크기, 화면 중심을 사용해요.
+        body: const Center(child: AppLogo()),
       ),
     );
   }
