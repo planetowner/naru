@@ -44,6 +44,11 @@ void recordPhotoSendDiagnostic(String line) {
   _mediaSendDiagnostics.record(line);
 }
 
+void recordPhotoSendFailure(Object error, StackTrace stackTrace) {
+  recordPhotoSendDiagnostic('[photo-send] stage=failed error=$error');
+  recordPhotoSendDiagnostic(stackTrace.toString());
+}
+
 Future<void> copyPhotoSendDiagnosticsToClipboard() async {
   await _mediaSendDiagnostics.copyToClipboard();
 }

@@ -1679,7 +1679,9 @@ final class _ChatConversationViewState extends State<ChatConversationView>
         photoCount: result.assets.length,
         loadedCount: attachments.length,
       );
-    } catch (_) {
+    } catch (error, stackTrace) {
+      recordPhotoSendFailure(error, stackTrace);
+
       if (!mounted) {
         return;
       }
@@ -1939,7 +1941,8 @@ final class _ChatConversationViewState extends State<ChatConversationView>
         }
 
         messageListState.addMessages(messages);
-      } catch (_) {
+      } catch (error, stackTrace) {
+        recordPhotoSendFailure(error, stackTrace);
         _showChatOperationFailure('Photo sending failed.');
         return;
       }

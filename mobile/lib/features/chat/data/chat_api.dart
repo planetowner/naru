@@ -814,23 +814,16 @@ final class ChatApi {
     final List<http.Response> uploadResponses = await Future.wait(
       uploadFutures,
     );
-    final http.Response uploadResponse = uploadResponses.first;
-
-    if (uploadResponse.statusCode < 200 || uploadResponse.statusCode >= 300) {
-      throw ChatApiException(
-        'Media upload failed with status code '
-        '${uploadResponse.statusCode}.',
-      );
-    }
-
-    if (hasThumbnail) {
-      final http.Response thumbnailUploadResponse = uploadResponses[1];
-
-      if (thumbnailUploadResponse.statusCode < 200 ||
-          thumbnailUploadResponse.statusCode >= 300) {
+    for (final (int index, http.Response response) in uploadResponses.indexed) {
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final String variant = index == 0 ? 'original' : 'thumbnail';
+        recordPhotoSendDiagnostic(
+          '[media-send] stage=upload_failed kind=$kind variant=$variant '
+          'status=${response.statusCode} response=${response.body}',
+        );
         throw ChatApiException(
-          'Media thumbnail upload failed with status code '
-          '${thumbnailUploadResponse.statusCode}.',
+          'Media ${index == 0 ? '' : 'thumbnail '}upload failed with status code '
+          '${response.statusCode}.',
         );
       }
     }
