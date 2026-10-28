@@ -18,11 +18,13 @@ import '../../auth/domain/app_user.dart';
 import '../../auth/domain/auth_session.dart';
 import '../data/chat_api.dart';
 import '../data/chat_api_exception.dart';
+import '../data/chat_archive_store.dart';
 import '../data/chat_message_cache.dart';
 import '../data/chat_realtime_service.dart';
 import '../domain/chat_history_direction.dart';
 import '../domain/chat_message.dart';
 import 'chat_conversation_view.dart';
+import 'chat_archive_tile.dart';
 import 'reply_navigation_diagnostics.dart';
 
 const Duration _chatRouteOpenDuration = Duration(milliseconds: 190);
@@ -85,6 +87,7 @@ final class ChatConversationHomeScreen extends StatefulWidget {
     required this.session,
     required this.controller,
     this.messageCache,
+    this.archiveStore = const ChatArchiveStore(),
     this.onInitialLoadComplete,
     this.onProfileUpdated,
     super.key,
@@ -95,6 +98,7 @@ final class ChatConversationHomeScreen extends StatefulWidget {
   final AuthSession session;
   final ChatConversationHomeController controller;
   final ChatMessageCache? messageCache;
+  final ChatArchiveStore archiveStore;
   final VoidCallback? onInitialLoadComplete;
   final Future<void> Function(AppUser)? onProfileUpdated;
 
@@ -116,6 +120,8 @@ final class _ChatConversationHomeScreenState
   final Set<String> _conversationCacheTrimmedUserIds = <String>{};
 
   List<_ChatListEntry>? _chatEntries;
+  Set<String> _archivedUserIds = {};
+  bool _archiveUpdating = false;
   List<FriendRequest> _friendRequests = const [];
   StreamSubscription<Map<String, dynamic>>? _friendEventSubscription;
   AppUser? _selectedUser;
@@ -132,6 +138,10 @@ final class _ChatConversationHomeScreenState
   String? _chatEntriesErrorMessage;
 
   ChatApi get _chatApi => widget.chatApi;
+
+  // 요청한 계정에서만 목록 보관과 아래로 당겨 전체 복원을 제공해요.
+  bool get _canArchive =>
+      widget.session.user.username.toLowerCase() == 'planetowner';
 
   @override
   void initState() {
@@ -243,6 +253,11 @@ final class _ChatConversationHomeScreenState
         _chatApi.listUsers(),
         _chatApi.listFriendRequests(),
       ).wait;
+      if (_canArchive && _chatEntries == null) {
+        _archivedUserIds = await widget.archiveStore.load(
+          widget.session.user.id,
+        );
+      }
       final List<AppUser> chatUsers = users
           .where((AppUser user) => user.id != widget.session.user.id)
           .toList(growable: false);
@@ -857,6 +872,23 @@ final class _ChatConversationHomeScreenState
     );
   }
 
+  Future<void> _saveArchivedUsers(Set<String> userIds) async {
+    if (_archiveUpdating) return;
+    setState(() => _archiveUpdating = true);
+    try {
+      await widget.archiveStore.save(widget.session.user.id, userIds);
+      if (mounted) setState(() => _archivedUserIds = userIds);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(context.l10n.requestFailed)));
+      }
+    } finally {
+      if (mounted) setState(() => _archiveUpdating = false);
+    }
+  }
+
   Widget _buildChatList() {
     if (_chatEntriesLoading && _chatEntries == null) {
       return const Scaffold(
@@ -879,8 +911,60 @@ final class _ChatConversationHomeScreenState
       );
     }
 
-    final List<_ChatListEntry> entries =
-        _chatEntries ?? const <_ChatListEntry>[];
+    final entries = (_chatEntries ?? const <_ChatListEntry>[])
+        .where(
+          (entry) => !_canArchive || !_archivedUserIds.contains(entry.user.id),
+        )
+        .toList(growable: false);
+    final list = CustomScrollView(
+      physics: _canArchive ? const AlwaysScrollableScrollPhysics() : null,
+      slivers: [
+        if (entries.isEmpty)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            // 전부 보관해도 아래로 당길 수 있어야 다시 표시할 수 있어요.
+            child: _chatEntries?.isEmpty ?? true
+                ? Center(
+                    child: Text(
+                      context.l10n.noChatUsers,
+                      style: AppTypography.typography7.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: AppTypography.regular,
+                      ),
+                    ),
+                  )
+                : const SizedBox.shrink(),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.space8),
+            sliver: SliverList.separated(
+              itemCount: entries.length,
+              separatorBuilder: (context, index) => const Divider(
+                height: 1,
+                indent: UserTile.textStartInset,
+                color: AppColors.grey100,
+              ),
+              itemBuilder: (context, index) {
+                final user = entries[index].user;
+                final tile = UserTile(
+                  user: user,
+                  unreadCount: widget.realtimeService.unreadCountFor(user.id),
+                  onTap: () => _openChat(user),
+                );
+                return _canArchive
+                    ? ChatArchiveTile(
+                        key: ValueKey(user.id),
+                        onArchive: () =>
+                            _saveArchivedUsers({..._archivedUserIds, user.id}),
+                        child: tile,
+                      )
+                    : tile;
+              },
+            ),
+          ),
+      ],
+    );
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -915,37 +999,17 @@ final class _ChatConversationHomeScreenState
           ),
         ),
       ),
-      body: entries.isEmpty
-          ? Center(
-              child: Text(
-                context.l10n.noChatUsers,
-                style: AppTypography.typography7.copyWith(
-                  color: AppColors.textSecondary,
-                  fontWeight: AppTypography.regular,
-                ),
+      body: _canArchive
+          ? IgnorePointer(
+              ignoring: _archiveUpdating,
+              child: RefreshIndicator(
+                color: AppColors.primary,
+                // 잠깐 펼쳐 보는 동작이 아니라 저장된 보관 상태도 해제해요.
+                onRefresh: () => _saveArchivedUsers({}),
+                child: list,
               ),
             )
-          : ListView.separated(
-              padding: const EdgeInsets.symmetric(vertical: AppSpacing.space8),
-              itemCount: entries.length,
-              separatorBuilder: (BuildContext context, int index) {
-                return const Divider(
-                  height: 1,
-                  indent: UserTile.textStartInset,
-                  color: AppColors.grey100,
-                );
-              },
-              itemBuilder: (BuildContext context, int index) {
-                final _ChatListEntry entry = entries[index];
-                final AppUser user = entry.user;
-
-                return UserTile(
-                  user: user,
-                  unreadCount: widget.realtimeService.unreadCountFor(user.id),
-                  onTap: () => _openChat(user),
-                );
-              },
-            ),
+          : list,
     );
   }
 }

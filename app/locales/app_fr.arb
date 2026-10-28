@@ -116,6 +116,7 @@
   "encoding": "Conversion…",
   "mediaPosition": "{current} sur {total}",
   "noChatUsers": "Vous n’avez pas encore ajouté d’amis.",
+  "archiveChat": "Archiver",
   "chatUsersFailed": "Impossible de charger les discussions.",
   "conversationFailed": "Impossible de charger la conversation.",
   "notificationPhoto": "A envoyé une photo.",

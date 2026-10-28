@@ -116,6 +116,7 @@
   "encoding": "Wird konvertiert…",
   "mediaPosition": "{current} von {total}",
   "noChatUsers": "Noch keine Freunde hinzugefügt.",
+  "archiveChat": "Archivieren",
   "chatUsersFailed": "Die Chatliste konnte nicht geladen werden.",
   "conversationFailed": "Die Unterhaltung konnte nicht geladen werden.",
   "notificationPhoto": "Hat ein Foto gesendet.",

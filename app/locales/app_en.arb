@@ -196,6 +196,7 @@
     }
   },
   "noChatUsers": "No friends added yet.",
+  "archiveChat": "Archive",
   "chatUsersFailed": "Chat user loading failed.",
   "conversationFailed": "Conversation loading failed.",
   "notificationPhoto": "Sent a photo.",

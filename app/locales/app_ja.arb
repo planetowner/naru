@@ -116,6 +116,7 @@
   "encoding": "変換中…",
   "mediaPosition": "{total}件中{current}件目",
   "noChatUsers": "まだ友だちがいません。",
+  "archiveChat": "アーカイブ",
   "chatUsersFailed": "チャット一覧を読み込めませんでした。",
   "conversationFailed": "会話を読み込めませんでした。",
   "notificationPhoto": "写真を送信しました。",

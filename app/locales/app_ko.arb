@@ -116,6 +116,7 @@
   "encoding": "변환 중…",
   "mediaPosition": "{total}개 중 {current}번째",
   "noChatUsers": "아직 추가한 친구가 없어요.",
+  "archiveChat": "보관",
   "chatUsersFailed": "채팅 목록을 불러오지 못했어요.",
   "conversationFailed": "대화를 불러오지 못했어요.",
   "notificationPhoto": "사진을 보냈습니다.",

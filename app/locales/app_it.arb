@@ -116,6 +116,7 @@
   "encoding": "Conversione…",
   "mediaPosition": "{current} di {total}",
   "noChatUsers": "Non hai ancora aggiunto amici.",
+  "archiveChat": "Archivia",
   "chatUsersFailed": "Impossibile caricare le chat.",
   "conversationFailed": "Impossibile caricare la conversazione.",
   "notificationPhoto": "Ha inviato una foto.",

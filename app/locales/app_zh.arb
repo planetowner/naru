@@ -116,6 +116,7 @@
   "encoding": "转换中…",
   "mediaPosition": "第{current}项，共{total}项",
   "noChatUsers": "尚未添加好友。",
+  "archiveChat": "归档",
   "chatUsersFailed": "无法加载聊天列表。",
   "conversationFailed": "无法加载聊天记录。",
   "notificationPhoto": "照片",
