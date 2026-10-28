@@ -27,6 +27,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     bool added = false;
+    bool requested = false;
     const me = AppUser(
       id: 'june',
       username: 'june',
@@ -41,13 +42,23 @@ void main() {
     );
     final api = apiFor((request) async {
       switch (request.url.path) {
+        case '/users/friend-requests':
+          return jsonResponse([]);
         case '/users':
           return jsonResponse(added ? [user.toJson()] : []);
         case '/users/search':
-          return jsonResponse({'user': user.toJson(), 'is_friend': added});
+          return jsonResponse({
+            'user': user.toJson(),
+            'is_friend': added,
+            'outgoing_request_id': requested ? 'request-1' : null,
+          });
         case '/users/friends/maya':
-          added = true;
-          return jsonResponse(user.toJson());
+          requested = true;
+          return jsonResponse({
+            'user': user.toJson(),
+            'is_friend': false,
+            'outgoing_request_id': 'request-1',
+          });
         case '/messages/conversation/maya':
           return jsonResponse([]);
         case '/messages/unread-counts':
@@ -118,9 +129,13 @@ void main() {
     await _capture(tester, imageKey, 'friend-result');
     await tester.tap(find.byIcon(AppIcons.add));
     await tester.pumpAndSettle();
-    expect(find.byIcon(AppIcons.check), findsOneWidget);
+    expect(find.text('Requested'), findsOneWidget);
     await _capture(tester, imageKey, 'friend-added');
     await tester.tap(find.byIcon(AppIcons.back));
+    await tester.pumpAndSettle();
+    expect(find.text('No friends added yet.'), findsOneWidget);
+    added = true;
+    controller.refreshFriends();
     await tester.pumpAndSettle();
     expect(find.text('Maya 🌿'), findsOneWidget);
     expect(find.text('@Maya'), findsOneWidget);

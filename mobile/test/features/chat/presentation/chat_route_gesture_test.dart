@@ -73,6 +73,9 @@ Future<ChatRealtimeService> _pumpConversationHome(
   AppUser currentUser = _currentUser,
 }) async {
   final MockClient client = MockClient((http.Request request) async {
+    if (request.url.path == '/users/friend-requests') {
+      return http.Response('[]', 200);
+    }
     if (request.method == 'GET' && request.url.path == '/users') {
       if (usersResponder != null) {
         return usersResponder(request);

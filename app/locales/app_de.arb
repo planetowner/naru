@@ -187,5 +187,11 @@
   "save": "Speichern",
   "done": "Fertig",
   "userNotFound": "Kein Benutzer gefunden.",
-  "friendAdded": "Freund hinzugefügt"
+  "friendAdded": "Freund hinzugefügt",
+  "friendRequest": "Freundschaftsanfrage",
+  "friendRequestSent": "Gesendet",
+  "viewFriendRequest": "Anfrage ansehen",
+  "accept": "Annehmen",
+  "decline": "Ablehnen",
+  "notificationFriendRequest": "Hat dir eine Freundschaftsanfrage gesendet."
 }

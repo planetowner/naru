@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 
 import '../../auth/domain/app_user.dart';
 import '../../account/domain/friend_search_result.dart';
+import '../../account/domain/friend_request.dart';
 import '../domain/chat_link.dart';
 import '../domain/chat_message.dart';
 import 'chat_api_exception.dart';
@@ -126,12 +127,39 @@ final class ChatApi {
         : FriendSearchResult.fromJson(data as Map<String, dynamic>);
   }
 
-  Future<AppUser> addFriend(String userId) async => _userFromResponse(
-    await _client.post(
+  Future<FriendSearchResult> sendFriendRequest(String userId) async {
+    final response = await _client.post(
       _baseUri.resolve('/users/friends/$userId'),
       headers: _headers,
-    ),
-  );
+    );
+    _checkUserResponse(response);
+    return FriendSearchResult.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  Future<List<FriendRequest>> listFriendRequests() async {
+    final response = await _client.get(
+      _baseUri.resolve('/users/friend-requests'),
+      headers: _headers,
+    );
+    _checkUserResponse(response);
+    return (jsonDecode(response.body) as List)
+        .map((item) => FriendRequest.fromJson(item as Map<String, dynamic>))
+        .toList(growable: false);
+  }
+
+  Future<void> respondToFriendRequest(
+    String requestId,
+    FriendRequestDecision decision,
+  ) async {
+    final response = await _client.post(
+      _baseUri.resolve('/users/friend-requests/$requestId/respond'),
+      headers: _jsonHeaders,
+      body: jsonEncode({'decision': decision.name}),
+    );
+    _checkUserResponse(response, expectedStatus: 204);
+  }
 
   Future<String> uploadProfilePhoto({
     required Uint8List bytes,
@@ -165,8 +193,8 @@ final class ChatApi {
     return AppUser.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
-  void _checkUserResponse(http.Response response) {
-    if (response.statusCode != 200) {
+  void _checkUserResponse(http.Response response, {int expectedStatus = 200}) {
+    if (response.statusCode != expectedStatus) {
       throw ChatApiException(
         _readErrorMessage(response, fallback: 'User request failed.'),
         statusCode: response.statusCode,

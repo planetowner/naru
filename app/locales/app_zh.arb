@@ -187,5 +187,11 @@
   "save": "保存",
   "done": "完成",
   "userNotFound": "未找到用户。",
-  "friendAdded": "已添加好友"
+  "friendAdded": "已添加好友",
+  "friendRequest": "好友请求",
+  "friendRequestSent": "已发送",
+  "viewFriendRequest": "查看请求",
+  "accept": "接受",
+  "decline": "拒绝",
+  "notificationFriendRequest": "向你发送了好友请求。"
 }

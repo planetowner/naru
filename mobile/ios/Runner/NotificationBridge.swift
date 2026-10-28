@@ -593,6 +593,13 @@ extension NotificationBridge: UNUserNotificationCenterDelegate {
     let notificationPayload = userInfo["naru"] as? [String: Any]
     let senderID = notificationPayload?["sender_id"] as? String
 
+    if let payload = notificationPayload, payload["type"] as? String == "friend_request" {
+      // 앱 안에서는 채팅 목록의 요청 카드로 보여주고, 같은 배너를 겹쳐 띄우지 않아요.
+      emit(["type": "notification.received", "payload": payload])
+      completionHandler([])
+      return
+    }
+
     if let senderID, senderID == activeChatSenderID {
       completionHandler([])
       return

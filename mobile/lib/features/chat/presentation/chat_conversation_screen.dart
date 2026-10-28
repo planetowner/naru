@@ -1,6 +1,8 @@
 import '../../account/presentation/user_tile.dart';
 import '../../account/presentation/add_friend_screen.dart';
 import '../../account/presentation/settings_screen.dart';
+import '../../account/presentation/friend_request_card.dart';
+import '../../account/domain/friend_request.dart';
 import '../../../core/l10n/app_strings.dart';
 import 'dart:async';
 
@@ -32,8 +34,32 @@ const int _conversationEntryCacheMessageLimit = 100;
 
 final class ChatConversationHomeController extends ChangeNotifier {
   String? _pendingUserId;
+  String? _pendingFriendRequestId;
 
   String? get pendingUserId => _pendingUserId;
+  String? get pendingFriendRequestId => _pendingFriendRequestId;
+
+  void openNotification(Map<String, dynamic> payload) {
+    if (payload['type'] == 'friend_request') {
+      final requestId = payload['request_id'] as String?;
+      if (requestId != null && requestId.isNotEmpty) {
+        openFriendRequest(requestId);
+      }
+    } else {
+      final senderId = payload['sender_id'] as String?;
+      if (senderId != null) openConversation(senderId);
+    }
+  }
+
+  void openFriendRequest(String requestId) {
+    _pendingUserId = null;
+    _pendingFriendRequestId = requestId;
+    notifyListeners();
+  }
+
+  void consumeFriendRequest() => _pendingFriendRequestId = null;
+
+  void refreshFriends() => notifyListeners();
 
   void openConversation(String userId) {
     if (userId.isEmpty || _pendingUserId == userId) {
@@ -41,6 +67,7 @@ final class ChatConversationHomeController extends ChangeNotifier {
     }
 
     _pendingUserId = userId;
+    _pendingFriendRequestId = null;
     notifyListeners();
   }
 
@@ -89,6 +116,8 @@ final class _ChatConversationHomeScreenState
   final Set<String> _conversationCacheTrimmedUserIds = <String>{};
 
   List<_ChatListEntry>? _chatEntries;
+  List<FriendRequest> _friendRequests = const [];
+  StreamSubscription<Map<String, dynamic>>? _friendEventSubscription;
   AppUser? _selectedUser;
   int? _chatRoutePointer;
   Offset? _chatRoutePointerStart;
@@ -120,8 +149,9 @@ final class _ChatConversationHomeScreenState
           currentUserId: widget.session.user.id,
         );
 
-    widget.controller.addListener(_openPendingConversation);
+    widget.controller.addListener(_handleHomeRequest);
     widget.realtimeService.addListener(_handleRealtimeStateChanged);
+    _listenForFriendEvents();
 
     unawaited(
       _loadChatEntries(showInitialLoading: true).whenComplete(() {
@@ -142,7 +172,8 @@ final class _ChatConversationHomeScreenState
       );
     }
 
-    widget.controller.removeListener(_openPendingConversation);
+    widget.controller.removeListener(_handleHomeRequest);
+    unawaited(_friendEventSubscription?.cancel());
     widget.realtimeService.removeListener(_handleRealtimeStateChanged);
     _chatRouteController.dispose();
     super.dispose();
@@ -153,14 +184,16 @@ final class _ChatConversationHomeScreenState
     super.didUpdateWidget(oldWidget);
 
     if (oldWidget.controller != widget.controller) {
-      oldWidget.controller.removeListener(_openPendingConversation);
-      widget.controller.addListener(_openPendingConversation);
+      oldWidget.controller.removeListener(_handleHomeRequest);
+      widget.controller.addListener(_handleHomeRequest);
       _openPendingConversation();
     }
 
     if (oldWidget.realtimeService != widget.realtimeService) {
       oldWidget.realtimeService.removeListener(_handleRealtimeStateChanged);
       widget.realtimeService.addListener(_handleRealtimeStateChanged);
+      unawaited(_friendEventSubscription?.cancel());
+      _listenForFriendEvents();
 
       final String? selectedUserId = _selectedUser?.id;
       if (selectedUserId != null) {
@@ -175,6 +208,19 @@ final class _ChatConversationHomeScreenState
     if (mounted) {
       setState(() {});
     }
+  }
+
+  void _listenForFriendEvents() {
+    _friendEventSubscription = widget.realtimeService.events.listen((event) {
+      // 재접속도 같은 조회 경로를 써서 앱이 꺼져 있을 때 받은 요청을 복원해요.
+      if (event['type'] == 'friends.changed' || event['type'] == 'connected') {
+        unawaited(_loadChatEntries(showInitialLoading: false));
+      }
+    });
+  }
+
+  void _handleHomeRequest() {
+    unawaited(_loadChatEntries(showInitialLoading: false));
   }
 
   Future<void> _loadChatEntries({required bool showInitialLoading}) async {
@@ -193,7 +239,10 @@ final class _ChatConversationHomeScreenState
     }
 
     try {
-      final List<AppUser> users = await _chatApi.listUsers();
+      final (users, requests) = await (
+        _chatApi.listUsers(),
+        _chatApi.listFriendRequests(),
+      ).wait;
       final List<AppUser> chatUsers = users
           .where((AppUser user) => user.id != widget.session.user.id)
           .toList(growable: false);
@@ -204,12 +253,13 @@ final class _ChatConversationHomeScreenState
           .map((AppUser user) => _ChatListEntry(user: user))
           .toList(growable: false);
 
-      if (!mounted) {
+      if (!mounted || _chatEntriesRefreshPending) {
         return;
       }
 
       setState(() {
         _chatEntries = List<_ChatListEntry>.unmodifiable(entries);
+        _friendRequests = requests;
         _chatEntriesLoading = false;
         _chatEntriesErrorMessage = null;
       });
@@ -329,6 +379,19 @@ final class _ChatConversationHomeScreenState
       return;
     }
 
+    final requestId = widget.controller.pendingFriendRequestId;
+    if (requestId != null && _chatEntries != null) {
+      widget.controller.consumeFriendRequest();
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      setState(() {
+        _friendRequests = [
+          ..._friendRequests.where((request) => request.id == requestId),
+          ..._friendRequests.where((request) => request.id != requestId),
+        ];
+      });
+      _requestCloseChat();
+      return;
+    }
     final String? userId = widget.controller.pendingUserId;
     final List<_ChatListEntry>? entries = _chatEntries;
     if (userId == null || entries == null) {
@@ -660,7 +723,36 @@ final class _ChatConversationHomeScreenState
     final Widget chatList = _buildChatList();
 
     if (selectedUser == null) {
-      return chatList;
+      final request = _friendRequests.firstOrNull;
+      return PopScope(
+        canPop: request == null,
+        child: Stack(
+          children: [
+            chatList,
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 150),
+              child: request == null
+                  ? const SizedBox.shrink()
+                  : Stack(
+                      key: ValueKey(request.id),
+                      children: [
+                        ModalBarrier(
+                          color: AppColors.black.withValues(alpha: 0.24),
+                          dismissible: false,
+                        ),
+                        Center(
+                          child: FriendRequestCard(
+                            request: request,
+                            onRespond: (decision) =>
+                                _respondToFriendRequest(request, decision),
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+          ],
+        ),
+      );
     }
 
     return Stack(
@@ -723,10 +815,34 @@ final class _ChatConversationHomeScreenState
   }
 
   Future<void> _openAddFriend() async {
-    await Navigator.of(context).push<void>(
+    final requestId = await Navigator.of(context).push<String>(
       MaterialPageRoute(builder: (_) => AddFriendScreen(chatApi: _chatApi)),
     );
-    if (mounted) await _loadChatEntries(showInitialLoading: false);
+    if (!mounted) return;
+    if (requestId != null) {
+      widget.controller.openFriendRequest(requestId);
+    } else {
+      await _loadChatEntries(showInitialLoading: false);
+    }
+  }
+
+  Future<void> _respondToFriendRequest(
+    FriendRequest request,
+    FriendRequestDecision decision,
+  ) async {
+    try {
+      await _chatApi.respondToFriendRequest(request.id, decision);
+    } on ChatApiException catch (error) {
+      // 다른 기기에서 먼저 처리했으면 같은 카드를 다시 응답하지 않아요.
+      if (error.statusCode != 404 && error.statusCode != 409) rethrow;
+    }
+    if (!mounted) return;
+    setState(
+      () => _friendRequests = _friendRequests
+          .where((r) => r.id != request.id)
+          .toList(),
+    );
+    await _loadChatEntries(showInitialLoading: false);
   }
 
   void _openSettings() {

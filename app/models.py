@@ -215,12 +215,38 @@ class UserFriend(Base):
         CheckConstraint("user_id <> friend_id", name="user_friends_not_self_check"),
     )
 
-    # 친구 추가는 단방향이에요. 상대방의 목록에는 자동으로 추가하지 않아요.
+    # 수락할 때 두 방향을 같은 트랜잭션으로 저장해요. 목록 조회 구조는 유지해요.
     user_id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True,
     )
     friend_id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True,
+    )
+
+
+class FriendRequest(Base):
+    __tablename__ = "friend_requests"
+    __table_args__ = (
+        CheckConstraint("sender_id <> recipient_id", name="friend_requests_not_self_check"),
+        CheckConstraint("status IN ('pending', 'accepted', 'declined')", name="friend_requests_status_check"),
+        # 서로 동시에 요청해도 두 사람 사이의 요청은 하나만 저장해요.
+        Index("friend_requests_pair_idx", text("LEAST(sender_id, recipient_id)"),
+              text("GREATEST(sender_id, recipient_id)"), unique=True),
+        Index("friend_requests_recipient_idx", "recipient_id", "status", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"),
+    )
+    sender_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False,
+    )
+    recipient_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False,
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="pending")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(),
     )
 
 

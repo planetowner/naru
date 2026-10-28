@@ -187,5 +187,11 @@
   "save": "保存",
   "done": "完了",
   "userNotFound": "ユーザーが見つかりません。",
-  "friendAdded": "追加済み"
+  "friendAdded": "追加済み",
+  "friendRequest": "友だちリクエスト",
+  "friendRequestSent": "送信済み",
+  "viewFriendRequest": "リクエストを見る",
+  "accept": "承認",
+  "decline": "拒否",
+  "notificationFriendRequest": "友だちリクエストが届きました。"
 }

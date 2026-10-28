@@ -63,6 +63,17 @@ class ProfileUpdate(DisplayNameUpdate):
 class FriendSearchRead(BaseModel):
     user: UserRead
     is_friend: bool
+    outgoing_request_id: Optional[UUID] = None
+    incoming_request_id: Optional[UUID] = None
+
+
+class FriendRequestRead(BaseModel):
+    id: UUID
+    sender: UserRead
+
+
+class FriendRequestResponse(BaseModel):
+    decision: Literal["accept", "decline"]
 
 
 class PasswordChangeRequest(BaseModel):

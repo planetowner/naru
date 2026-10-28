@@ -23,6 +23,7 @@ from app.models import (
     CallOutcome,
     ConversationMember,
     DirectConversation,
+    FriendRequest,
     MediaAsset,
     Message,
     MessageAttachment,
@@ -494,31 +495,60 @@ async def send_message_notification(message_id: UUID) -> None:
                 "naru": custom_data,
             }
         )
-        devices = list(
-            await session.scalars(
-                select(UserDevice).where(
-                    UserDevice.user_id == recipient_id,
-                    UserDevice.push_token.is_not(None),
-                    UserDevice.revoked_at.is_(None),
-                )
-            )
+        await _send_alert(session, settings=settings, client=client,
+                          recipient_id=recipient_id, payload=payload)
+        await session.commit()
+
+
+async def _send_alert(
+    session: AsyncSession, *, settings: APNSSettings, client: APNSClient,
+    recipient_id: UUID, payload: dict[str, Any],
+) -> None:
+    # 메시지와 친구 요청이 기기 조회·APNs 전송·만료 토큰 정리를 공유해요.
+    devices = list(await session.scalars(select(UserDevice).where(
+        UserDevice.user_id == recipient_id,
+        UserDevice.push_token.is_not(None), UserDevice.revoked_at.is_(None),
+    )))
+    for device in devices:
+        assert device.push_token is not None
+        result = await client.send(
+            device_token=device.push_token, payload=payload,
+            environment=device.apns_environment, push_type="alert",
+            topic=settings.bundle_id, expiration=int(time.time()) + 24 * 60 * 60,
         )
+        if result.reason in INVALID_DEVICE_TOKEN_REASONS:
+            await _revoke_invalid_token(session, device=device, token_kind="alert")
 
-        for device in devices:
-            assert device.push_token is not None
-            result = await client.send(
-                device_token=device.push_token,
-                payload=payload,
-                environment=device.apns_environment,
-                push_type="alert",
-                topic=settings.bundle_id,
-                expiration=int(time.time()) + 24 * 60 * 60,
-            )
-            if result.reason in INVALID_DEVICE_TOKEN_REASONS:
-                await _revoke_invalid_token(
-                    session,
-                    device=device,
-                    token_kind="alert",
-                )
 
+async def send_friend_request_notification(request_id: UUID) -> None:
+    settings = load_apns_settings()
+    if settings is None:
+        logger.info("APNs is not configured; skipping friend request notification")
+        return
+    async with SessionLocal() as session:
+        request = await session.get(FriendRequest, request_id)
+        if request is None or request.status != "pending":
+            return
+        sender = await session.get(User, request.sender_id)
+        recipient = await session.get(User, request.recipient_id)
+        if (sender is None or recipient is None
+                or sender.disabled_at is not None or recipient.disabled_at is not None):
+            return
+        payload = _bounded_alert_payload({
+            "aps": {
+                "alert": {
+                    "title": sender.display_name,
+                    "body": localized_text(recipient.preferred_language, "notificationFriendRequest"),
+                },
+                "sound": "default",
+                "thread-id": "friend-requests",
+            },
+            "naru": {
+                "type": "friend_request", "request_id": str(request.id),
+                "sender_id": str(sender.id), "sender_name": sender.display_name,
+                "language": recipient.preferred_language,
+            },
+        })
+        await _send_alert(session, settings=settings, client=APNSClient(settings),
+                          recipient_id=recipient.id, payload=payload)
         await session.commit()

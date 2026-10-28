@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:naru/features/auth/domain/app_user.dart';
 import 'package:naru/features/auth/domain/auth_session.dart';
+import 'package:naru/features/account/domain/friend_request.dart';
 import 'package:naru/features/chat/data/chat_api.dart';
 import 'package:naru/features/chat/data/chat_api_exception.dart';
 
@@ -46,19 +47,48 @@ void main() {
     },
   );
 
-  test('friend add sends only target id and propagates failures', () async {
+  test('friend request sends only target id and propagates failures', () async {
     final api = apiFor((request) async {
       expect(request.method, 'POST');
       expect(request.url.path, '/users/friends/maya');
       expect(request.body, isEmpty);
-      return jsonResponse(user.toJson());
+      return jsonResponse({
+        'user': user.toJson(),
+        'is_friend': false,
+        'outgoing_request_id': 'request-1',
+      });
     });
-    expect((await api.addFriend('maya')).id, 'maya');
+    final sent = await api.sendFriendRequest('maya');
+    expect(sent.isFriend, isFalse);
+    expect(sent.outgoingRequestId, 'request-1');
     await expectLater(
-      apiFor((_) async => jsonResponse({}, 500)).addFriend('maya'),
+      apiFor((_) async => jsonResponse({}, 500)).sendFriendRequest('maya'),
       throwsA(isA<ChatApiException>()),
     );
   });
+
+  test(
+    'request decisions reuse authenticated JSON requests and require 204',
+    () async {
+      final api = apiFor((request) async {
+        expect(request.url.path, '/users/friend-requests/request-1/respond');
+        expect(request.method, 'POST');
+        expect(request.headers['Authorization'], 'Bearer token');
+        expect(jsonDecode(request.body), {'decision': 'accept'});
+        return http.Response('', 204);
+      });
+      await api.respondToFriendRequest(
+        'request-1',
+        FriendRequestDecision.accept,
+      );
+      await expectLater(
+        apiFor(
+          (_) async => jsonResponse({}),
+        ).respondToFriendRequest('request-1', FriendRequestDecision.decline),
+        throwsA(isA<ChatApiException>()),
+      );
+    },
+  );
 
   test(
     'profile upload reuses create, PUT, complete before profile PATCH',

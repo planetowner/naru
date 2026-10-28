@@ -284,5 +284,11 @@
   "save": "Save",
   "done": "Done",
   "userNotFound": "No user found.",
-  "friendAdded": "Friend added"
+  "friendAdded": "Friend added",
+  "friendRequest": "Friend request",
+  "friendRequestSent": "Requested",
+  "viewFriendRequest": "View request",
+  "accept": "Accept",
+  "decline": "Decline",
+  "notificationFriendRequest": "Sent you a friend request."
 }

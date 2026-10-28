@@ -110,6 +110,10 @@ final class _NaruAppState extends State<NaruApp> with WidgetsBindingObserver {
   }
 
   void _handleNotificationEvent(Map<String, dynamic> event) {
+    if (event['type'] == 'notification.received') {
+      _chatController.refreshFriends();
+      return;
+    }
     if (event['type'] != 'notification.opened') {
       return;
     }
@@ -120,10 +124,7 @@ final class _NaruAppState extends State<NaruApp> with WidgetsBindingObserver {
     }
 
     final Map<String, dynamic> payload = Map<String, dynamic>.from(rawPayload);
-    final String? senderId = payload['sender_id'] as String?;
-    if (senderId != null && senderId.isNotEmpty) {
-      _chatController.openConversation(senderId);
-    }
+    _chatController.openNotification(payload);
   }
 
   Future<void> _restoreSession() async {

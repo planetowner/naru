@@ -60,17 +60,21 @@ final class _AddFriendScreenState extends State<AddFriendScreen> {
 
   Future<void> _addFriend() async {
     final result = _result;
-    if (result == null || result.isFriend || _adding) return;
+    if (result == null ||
+        result.isFriend ||
+        result.outgoingRequestId != null ||
+        result.incomingRequestId != null ||
+        _adding) {
+      return;
+    }
     setState(() {
       _adding = true;
       _error = null;
     });
     try {
-      final user = await widget.chatApi.addFriend(result.user.id);
+      final updated = await widget.chatApi.sendFriendRequest(result.user.id);
       if (mounted) {
-        setState(
-          () => _result = FriendSearchResult(user: user, isFriend: true),
-        );
+        setState(() => _result = updated);
       }
     } catch (_) {
       if (mounted) setState(() => _error = context.l10n.requestFailed);
@@ -140,6 +144,22 @@ final class _AddFriendScreenState extends State<AddFriendScreen> {
                                     color: AppColors.textPrimary,
                                   ),
                                 ),
+                              )
+                            : result.outgoingRequestId != null
+                            ? AppButton(
+                                label: context.l10n.friendRequestSent,
+                                onPressed: null,
+                                expand: false,
+                                secondary: true,
+                              )
+                            : result.incomingRequestId != null
+                            ? AppButton(
+                                label: context.l10n.viewFriendRequest,
+                                onPressed: () => Navigator.of(
+                                  context,
+                                ).pop(result.incomingRequestId),
+                                expand: false,
+                                secondary: true,
                               )
                             : AppRoundIconButton(
                                 icon: AppIcons.add,

@@ -159,11 +159,22 @@ To change a user's password:
 python -m scripts.set_user_password USERNAME NEW_PASSWORD
 ```
 
-The chat list (`GET /users`) includes only friends added by the current user.
+The chat list (`GET /users`) includes only saved friendships.
 `GET /users/search?username=...` finds an exact, case-insensitive username;
-`POST /users/friends/{friend_id}` adds a one-way, idempotent relationship.
-Existing accounts are not automatically added as friends. The `user_friends`
-table is created by the existing startup schema initialization on deployment.
+`POST /users/friends/{friend_id}` sends a friend request and returns the same
+friend/pending state as username search. Sending a request does not add a friend.
+`GET /users/friend-requests` lists the current user's pending incoming requests.
+`POST /users/friend-requests/{request_id}/respond` takes `{"decision":"accept"}`
+or `{"decision":"decline"}`. Only the recipient can respond; accepting saves
+both friendship directions in one transaction. Existing saved friendships remain.
+The existing startup schema initialization creates the `friend_requests` table.
+Update the app and server together because the send endpoint response changed.
+
+The shared WebSocket emits `friends.changed` to both users after request changes.
+The app reloads the list and inbox on that event and on reconnect. Friend request
+pushes use the recipient's saved language from the shared eight-language catalogs;
+tapping one opens the request card on the chat list. While the app is foreground,
+the card replaces the system banner. APNs configuration is shared with messages.
 
 Settings saves display name, preferred language, and an optional owned photo
 asset through `PATCH /users/me`. Photos use the existing media upload/complete

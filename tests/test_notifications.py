@@ -1,7 +1,8 @@
 import os
 import unittest
 from types import SimpleNamespace
-from uuid import UUID
+from unittest.mock import AsyncMock, Mock, create_autospec, patch
+from uuid import UUID, uuid4
 
 
 os.environ.setdefault(
@@ -9,12 +10,20 @@ os.environ.setdefault(
     "postgresql+asyncpg://postgres:postgres@localhost:5432/naru_test",
 )
 
-from app.models import CallOutcome, MessageKind
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models import (
+    CallOutcome, ConversationMember, DirectConversation, Message, MessageKind,
+    User, UserDevice,
+)
 from app.notifications import (
     APNS_MAX_PAYLOAD_BYTES,
+    APNSResult,
+    APNSSettings,
     _bounded_alert_payload,
     _encoded_payload_size,
     localized_message_body,
+    send_message_notification,
 )
 from app.schemas import DeviceRegistrationUpdate
 from app.unread_counts import build_unread_counts_snapshot
@@ -204,6 +213,48 @@ class NotificationPayloadTests(unittest.TestCase):
         )
         self.assertEqual(snapshot["total_unread_count"], 5)
         self.assertEqual(snapshot["cause_message_id"], str(message_id))
+
+
+class MessageNotificationDeliveryTests(unittest.IsolatedAsyncioTestCase):
+    async def test_message_alert_still_reaches_recipient_through_shared_delivery(self):
+        sender = User(id=uuid4(), display_name="Sender", preferred_language="ko")
+        recipient = User(id=uuid4(), preferred_language="es")
+        conversation_id = uuid4()
+        message = Message(id=uuid4(), conversation_id=conversation_id,
+                          sender_id=sender.id, kind=MessageKind.TEXT, body="Hello")
+        conversation = DirectConversation(conversation_id=conversation_id,
+                                          user_one_id=sender.id, user_two_id=recipient.id)
+        member = ConversationMember(conversation_id=conversation_id, user_id=recipient.id)
+        objects = {
+            (Message, message.id): message,
+            (DirectConversation, conversation_id): conversation,
+            (User, sender.id): sender,
+            (User, recipient.id): recipient,
+            (ConversationMember, (conversation_id, recipient.id)): member,
+        }
+        # 실제 메서드의 인자 규격도 검사해 DB 조회 전에 생기는 오류를 잡아요.
+        session = create_autospec(AsyncSession, instance=True)
+        session.get.side_effect = lambda model, key: objects.get((model, key))
+        session.scalars.return_value = [UserDevice(
+            user_id=recipient.id, push_token="recipient-token", apns_environment="development",
+        )]
+        client = Mock()
+        client.send = AsyncMock(return_value=APNSResult(succeeded=True, status_code=200))
+        settings = APNSSettings("key", "team", "test.naru", "test-private-key")
+        with patch("app.notifications.load_apns_settings", return_value=settings), \
+             patch("app.notifications.SessionLocal") as factory, \
+             patch("app.notifications.APNSClient", return_value=client), \
+             patch("app.notifications.load_unread_counts_by_sender",
+                   new=AsyncMock(return_value={sender.id: 2})):
+            factory.return_value.__aenter__.return_value = session
+            await send_message_notification(message.id)
+        client.send.assert_awaited_once()
+        delivery = client.send.call_args.kwargs
+        self.assertEqual(delivery["device_token"], "recipient-token")
+        self.assertEqual(delivery["payload"]["aps"]["alert"], {"title": "Sender", "body": "Hello"})
+        self.assertEqual(delivery["payload"]["aps"]["badge"], 2)
+        self.assertEqual(delivery["payload"]["naru"]["language"], "es")
+        session.commit.assert_awaited_once()
 
 
 if __name__ == "__main__":

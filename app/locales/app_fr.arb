@@ -187,5 +187,11 @@
   "save": "Enregistrer",
   "done": "Terminé",
   "userNotFound": "Aucun utilisateur trouvé.",
-  "friendAdded": "Ami ajouté"
+  "friendAdded": "Ami ajouté",
+  "friendRequest": "Demande d’amitié",
+  "friendRequestSent": "Envoyée",
+  "viewFriendRequest": "Voir la demande",
+  "accept": "Accepter",
+  "decline": "Refuser",
+  "notificationFriendRequest": "Vous a envoyé une demande d’amitié."
 }

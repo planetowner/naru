@@ -21,7 +21,7 @@ void main() {
   setUpAll(loadAppFonts);
 
   testWidgets(
-    'keyboard search shows shared row, add once becomes check, new search clears old result',
+    'keyboard search shows shared row, send once becomes requested, new search clears old result',
     (tester) async {
       int adds = 0;
       final pending = Completer<http.Response>();
@@ -57,9 +57,16 @@ void main() {
             .onPressed,
         isNull,
       );
-      pending.complete(jsonResponse(user.toJson()));
+      pending.complete(
+        jsonResponse({
+          'user': user.toJson(),
+          'is_friend': false,
+          'outgoing_request_id': 'request-1',
+        }),
+      );
       await tester.pumpAndSettle();
-      expect(find.byIcon(AppIcons.check), findsOneWidget);
+      expect(find.text('Requested'), findsOneWidget);
+      expect(find.byIcon(AppIcons.check), findsNothing);
       expect(find.byIcon(AppIcons.add), findsNothing);
       await tester.enterText(find.byType(TextFormField), 'unknown');
       await tester.pump();
@@ -100,6 +107,47 @@ void main() {
       await tester.testTextInput.receiveAction(TextInputAction.search);
       await tester.pumpAndSettle();
       expect(find.byIcon(AppIcons.check), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'an incoming request opens its card instead of sending a reverse request',
+    (tester) async {
+      String? openedRequest;
+      final api = apiFor((request) async {
+        expect(request.method, 'GET');
+        return jsonResponse({
+          'user': user.toJson(),
+          'is_friend': false,
+          'incoming_request_id': 'received-request',
+        });
+      });
+      await tester.pumpWidget(
+        LocalizedTestApp(
+          theme: AppTheme.light,
+          home: Builder(
+            builder: (context) => TextButton(
+              onPressed: () async {
+                openedRequest = await Navigator.of(context).push<String>(
+                  MaterialPageRoute(
+                    builder: (_) => AddFriendScreen(chatApi: api),
+                  ),
+                );
+              },
+              child: const Text('Open'),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextFormField), 'Maya');
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle();
+      expect(find.byIcon(AppIcons.add), findsNothing);
+      await tester.tap(find.text('View request'));
+      await tester.pumpAndSettle();
+      expect(openedRequest, 'received-request');
     },
   );
 
