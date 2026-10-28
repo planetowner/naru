@@ -1,12 +1,12 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:juliatalk/core/notifications/notification_service.dart';
+import 'package:naru/core/notifications/notification_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const MethodChannel channel = MethodChannel('juliatalk/notifications');
+  const MethodChannel channel = MethodChannel('naru/notifications');
 
   tearDown(() async {
     debugDefaultTargetPlatformOverride = null;

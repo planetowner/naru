@@ -1,4 +1,4 @@
-package com.planetowner.juliatalk
+package com.planetowner.naru
 
 import io.flutter.embedding.android.FlutterActivity
 

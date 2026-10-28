@@ -2,10 +2,10 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:juliatalk/design_system/app_theme.dart';
-import 'package:juliatalk/features/chat/data/chat_photo_library.dart';
-import 'package:juliatalk/features/chat/domain/chat_message.dart';
-import 'package:juliatalk/features/chat/presentation/chat_conversation_view.dart';
+import 'package:naru/design_system/app_theme.dart';
+import 'package:naru/features/chat/data/chat_photo_library.dart';
+import 'package:naru/features/chat/domain/chat_message.dart';
+import 'package:naru/features/chat/presentation/chat_conversation_view.dart';
 
 final Uint8List _testPng = base64Decode(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB'
@@ -104,13 +104,13 @@ final class TestChatPhotoLibrary implements ChatPhotoLibrary {
   Future<void> openSettings() async {}
 }
 
-final class JuliaTalkPreviewApp extends StatelessWidget {
-  const JuliaTalkPreviewApp({super.key});
+final class NaruPreviewApp extends StatelessWidget {
+  const NaruPreviewApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'JuliaTalk',
+      title: 'naru',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       home: ChatConversationView(

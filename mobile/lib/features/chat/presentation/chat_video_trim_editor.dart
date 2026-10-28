@@ -37,7 +37,7 @@ final class ChatVideoTrimEditor extends StatefulWidget {
 final class _ChatVideoTrimEditorState extends State<ChatVideoTrimEditor>
     with AutomaticKeepAliveClientMixin {
   static const MethodChannel _channel = MethodChannel(
-    'juliatalk/video-transcoder',
+    'naru/video-transcoder',
   );
 
   VideoPlayerController? _controller;

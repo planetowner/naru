@@ -13,22 +13,22 @@ import UIKit
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     if let registrar = engineBridge.pluginRegistry.registrar(
-      forPlugin: "JuliaTalkNotificationBridge"
+      forPlugin: "naruNotificationBridge"
     ) {
       NotificationBridge.register(with: registrar)
     }
     if let registrar = engineBridge.pluginRegistry.registrar(
-      forPlugin: "JuliaTalkVideoTranscodeBridge"
+      forPlugin: "naruVideoTranscodeBridge"
     ) {
       VideoTranscodeBridge.register(with: registrar)
     }
     if let registrar = engineBridge.pluginRegistry.registrar(
-      forPlugin: "JuliaTalkPencilKitEditorBridge"
+      forPlugin: "naruPencilKitEditorBridge"
     ) {
       PencilKitEditorBridge.register(with: registrar)
     }
     if let registrar = engineBridge.pluginRegistry.registrar(
-      forPlugin: "JuliaTalkMediaFileBridge"
+      forPlugin: "naruMediaFileBridge"
     ) {
       MediaFileBridge.register(with: registrar)
     }

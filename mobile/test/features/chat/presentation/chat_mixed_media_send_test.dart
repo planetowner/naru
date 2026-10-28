@@ -3,10 +3,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:juliatalk/features/chat/data/chat_photo_library.dart';
-import 'package:juliatalk/features/chat/data/chat_video_transcoder.dart';
-import 'package:juliatalk/features/chat/domain/chat_message.dart';
-import 'package:juliatalk/features/chat/presentation/chat_conversation_view.dart';
+import 'package:naru/features/chat/data/chat_photo_library.dart';
+import 'package:naru/features/chat/data/chat_video_transcoder.dart';
+import 'package:naru/features/chat/domain/chat_message.dart';
+import 'package:naru/features/chat/presentation/chat_conversation_view.dart';
 
 final Uint8List _testPng = base64Decode(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB'

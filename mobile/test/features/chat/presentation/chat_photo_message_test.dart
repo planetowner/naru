@@ -5,8 +5,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:juliatalk/features/chat/domain/chat_message.dart';
-import 'package:juliatalk/features/chat/presentation/chat_conversation_view.dart';
+import 'package:naru/features/chat/domain/chat_message.dart';
+import 'package:naru/features/chat/presentation/chat_conversation_view.dart';
 
 final Uint8List _testPng = base64Decode(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAABmJLR0QA'
@@ -90,7 +90,7 @@ const MethodChannel _photoManagerChannel = MethodChannel(
   'com.fluttercandies/photo_manager',
 );
 
-const MethodChannel _mediaShareChannel = MethodChannel('juliatalk/media-file');
+const MethodChannel _mediaShareChannel = MethodChannel('naru/media-file');
 
 void _setUpPhotoSave({ValueChanged<MethodCall>? onCall}) {
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -452,7 +452,7 @@ void main() {
     WidgetTester tester,
   ) async {
     final Directory cacheDirectory = _setUpPhotoCacheDirectory(
-      'juliatalk-photo-cache-test-',
+      'naru-photo-cache-test-',
     );
 
     const String mediaAssetId = 'cached-route-photo';
@@ -519,7 +519,7 @@ void main() {
   testWidgets('visible photo messages start original prefetch before a tap', (
     WidgetTester tester,
   ) async {
-    _setUpPhotoCacheDirectory('juliatalk-photo-original-prefetch-test-');
+    _setUpPhotoCacheDirectory('naru-photo-original-prefetch-test-');
 
     final Completer<Uri> originalAccessUrl = Completer<Uri>();
     int originalAccessUrlRequests = 0;
@@ -569,7 +569,7 @@ void main() {
     WidgetTester tester,
   ) async {
     final Directory cacheDirectory = _setUpPhotoCacheDirectory(
-      'juliatalk-photo-original-cache-test-',
+      'naru-photo-original-cache-test-',
     );
 
     const String mediaAssetId = 'prefetched-original-media';
@@ -680,7 +680,7 @@ void main() {
     WidgetTester tester,
   ) async {
     final Directory cacheDirectory = _setUpPhotoCacheDirectory(
-      'juliatalk-photo-viewer-thumbnail-test-',
+      'naru-photo-viewer-thumbnail-test-',
     );
 
     const String mediaAssetId = 'viewer-thumbnail-media';
@@ -822,7 +822,7 @@ void main() {
   ) async {
     const String mediaAssetId = 'persisted-sent-photo-media';
     final Directory cacheDirectory = _setUpPhotoCacheDirectory(
-      'juliatalk-sent-photo-preview-cache-test-',
+      'naru-sent-photo-preview-cache-test-',
     );
     final GlobalKey<_PhotoRefreshHarnessState> harnessKey =
         GlobalKey<_PhotoRefreshHarnessState>();
@@ -1346,7 +1346,7 @@ void main() {
     WidgetTester tester,
   ) async {
     final Directory temporaryDirectory = Directory.systemTemp.createTempSync(
-      'juliatalk-photo-share-test-',
+      'naru-photo-share-test-',
     );
     String? sharedPath;
     Uint8List? sharedBytes;

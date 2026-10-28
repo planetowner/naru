@@ -10,7 +10,7 @@ from app.passwords import hash_password
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Create a local JuliaTalk user."
+        description="Create a local naru user."
     )
     parser.add_argument("username")
     parser.add_argument("password")

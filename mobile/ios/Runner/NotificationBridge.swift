@@ -7,15 +7,15 @@ import UIKit
 import UserNotifications
 
 private enum NotificationConstants {
-  static let methodChannel = "juliatalk/notifications"
-  static let eventChannel = "juliatalk/notification-events"
-  static let replyCategory = "JULIATALK_REPLY"
-  static let photoCategory = "JULIATALK_PHOTO"
-  static let replyAction = "JULIATALK_REPLY_ACTION"
+  static let methodChannel = "naru/notifications"
+  static let eventChannel = "naru/notification-events"
+  static let replyCategory = "NARU_REPLY"
+  static let photoCategory = "NARU_PHOTO"
+  static let replyAction = "NARU_REPLY_ACTION"
   static let credentialsKey = "notification-credentials"
   static let installationKey = "notification-installation-id"
-  static let pushTokenKey = "juliatalk.push-token"
-  static let voipPushTokenKey = "juliatalk.voip-push-token"
+  static let pushTokenKey = "naru.push-token"
+  static let voipPushTokenKey = "naru.voip-push-token"
 }
 
 private struct NotificationCredentials: Codable {
@@ -29,7 +29,7 @@ private enum KeychainStore {
   static func save(_ data: Data, key: String) {
     let query: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword,
-      kSecAttrService as String: Bundle.main.bundleIdentifier ?? "JuliaTalk",
+      kSecAttrService as String: Bundle.main.bundleIdentifier ?? "naru",
       kSecAttrAccount as String: key,
     ]
     // SecItemAdd는 기존 항목을 덮어쓰지 않아 먼저 지운 뒤 새 값으로 저장해요.
@@ -44,7 +44,7 @@ private enum KeychainStore {
   static func load(key: String) -> Data? {
     let query: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword,
-      kSecAttrService as String: Bundle.main.bundleIdentifier ?? "JuliaTalk",
+      kSecAttrService as String: Bundle.main.bundleIdentifier ?? "naru",
       kSecAttrAccount as String: key,
       kSecReturnData as String: true,
       kSecMatchLimit as String: kSecMatchLimitOne,
@@ -71,7 +71,7 @@ final class NotificationBridge: NSObject, FlutterPlugin, FlutterStreamHandler {
   private let callProvider: CXProvider
 
   override init() {
-    let configuration = CXProviderConfiguration(localizedName: "JuliaTalk")
+    let configuration = CXProviderConfiguration(localizedName: "naru")
     configuration.supportsVideo = true
     configuration.maximumCallGroups = 1
     configuration.maximumCallsPerCallGroup = 1
@@ -378,7 +378,7 @@ final class NotificationBridge: NSObject, FlutterPlugin, FlutterStreamHandler {
     completion: @escaping () -> Void
   ) {
     guard
-      let payload = userInfo["juliatalk"] as? [String: Any],
+      let payload = userInfo["naru"] as? [String: Any],
       let senderID = payload["sender_id"] as? String,
       let credentials = credentials(),
       let baseURL = URL(string: credentials.apiBaseURL)
@@ -569,7 +569,7 @@ extension NotificationBridge: UNUserNotificationCenterDelegate {
     withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
   ) {
     let userInfo = notification.request.content.userInfo
-    let notificationPayload = userInfo["juliatalk"] as? [String: Any]
+    let notificationPayload = userInfo["naru"] as? [String: Any]
     let senderID = notificationPayload?["sender_id"] as? String
 
     if let senderID, senderID == activeChatSenderID {
@@ -602,7 +602,7 @@ extension NotificationBridge: UNUserNotificationCenterDelegate {
       return
     }
 
-    if let payload = userInfo["juliatalk"] as? [String: Any] {
+    if let payload = userInfo["naru"] as? [String: Any] {
       emit(["type": "notification.opened", "payload": payload])
     }
     completionHandler()
@@ -640,7 +640,7 @@ extension NotificationBridge: PKPushRegistryDelegate {
   ) {
     guard
       type == .voIP,
-      let call = payload.dictionaryPayload["juliatalk_call"] as? [String: Any],
+      let call = payload.dictionaryPayload["naru_call"] as? [String: Any],
       let uuidString = call["call_uuid"] as? String,
       let uuid = UUID(uuidString: uuidString)
     else {
@@ -648,7 +648,7 @@ extension NotificationBridge: PKPushRegistryDelegate {
       return
     }
 
-    let callerName = call["caller_name"] as? String ?? "JuliaTalk"
+    let callerName = call["caller_name"] as? String ?? "naru"
     let update = CXCallUpdate()
     update.remoteHandle = CXHandle(type: .generic, value: callerName)
     update.localizedCallerName = callerName

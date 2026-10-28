@@ -2,10 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:juliatalk/features/chat/domain/chat_message.dart';
-import 'package:juliatalk/features/chat/presentation/chat_conversation_view.dart';
+import 'package:naru/features/chat/domain/chat_message.dart';
+import 'package:naru/features/chat/presentation/chat_conversation_view.dart';
 
-import '../../../support/juliatalk_preview_app.dart';
+import '../../../support/naru_preview_app.dart';
 
 Future<void> _scrollConversationToStart(WidgetTester tester) async {
   final Finder messageListFinder = find.byKey(
@@ -299,7 +299,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
 
     await tester.pumpAndSettle();
 
@@ -347,7 +347,7 @@ void main() {
         await tester.binding.setSurfaceSize(null);
       });
 
-      await tester.pumpWidget(const JuliaTalkPreviewApp());
+      await tester.pumpWidget(const NaruPreviewApp());
 
       await tester.pumpAndSettle();
 
@@ -665,7 +665,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
 
     await tester.pumpAndSettle();
 
@@ -705,7 +705,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
 
     await tester.pumpAndSettle();
 

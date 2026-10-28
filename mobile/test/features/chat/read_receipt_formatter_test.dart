@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:juliatalk/features/chat/presentation/read_receipt_formatter.dart';
+import 'package:naru/features/chat/presentation/read_receipt_formatter.dart';
 
 void main() {
   final DateTime now = DateTime(2026, 6, 30, 12);

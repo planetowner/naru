@@ -1,6 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:juliatalk/features/chat/data/photo_send_diagnostics.dart';
+import 'package:naru/features/chat/data/photo_send_diagnostics.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

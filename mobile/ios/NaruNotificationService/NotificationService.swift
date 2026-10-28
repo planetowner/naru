@@ -38,7 +38,7 @@ final class NotificationService: UNNotificationServiceExtension {
   private func makeCommunicationContent(
     from content: UNMutableNotificationContent
   ) async -> UNNotificationContent {
-    guard let payload = content.userInfo["juliatalk"] as? [String: Any] else {
+    guard let payload = content.userInfo["naru"] as? [String: Any] else {
       return content
     }
 
@@ -96,7 +96,7 @@ final class NotificationService: UNNotificationServiceExtension {
       content: content.body,
       speakableGroupName: nil,
       conversationIdentifier: conversationIdentifier,
-      serviceName: "JuliaTalk",
+      serviceName: "naru",
       sender: sender,
       attachments: nil
     )
@@ -136,7 +136,7 @@ final class NotificationService: UNNotificationServiceExtension {
     let localURL = directory.appendingPathComponent("attachment.\(fileExtension)")
     try data.write(to: localURL, options: .atomic)
     return try UNNotificationAttachment(
-      identifier: "juliatalk-photo",
+      identifier: "naru-photo",
       url: localURL,
       options: nil
     )

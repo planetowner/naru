@@ -95,7 +95,7 @@ final class AppLaunchScreen extends StatelessWidget {
             width: 144,
             height: 144,
             fit: BoxFit.contain,
-            semanticLabel: 'JuliaTalk',
+            semanticLabel: 'naru',
           ),
         ),
       ),

@@ -1,6 +1,6 @@
-# JuliaTalk
+# naru
 
-JuliaTalk is a private two-person chat app with a FastAPI backend and a
+naru is a private two-person chat app with a FastAPI backend and a
 Flutter client.
 
 It supports real-time direct messaging between Korean- and Simplified
@@ -103,7 +103,7 @@ Configure these in the hosted backend environment:
 - `OPENAI_MODEL`: OpenAI model name (defaults to `gpt-5.4-mini`)
 - `APNS_KEY_ID`: Apple APNs signing key ID
 - `APNS_TEAM_ID`: Apple Developer team ID
-- `APNS_BUNDLE_ID`: `com.planetowner.juliatalk`
+- `APNS_BUNDLE_ID`: `com.planetowner.naru`
 - `APNS_PRIVATE_KEY` or `APNS_PRIVATE_KEY_PATH`: APNs `.p8` private key
 
 `DATABASE_URL` must point to PostgreSQL. `postgresql://` and `postgres://`

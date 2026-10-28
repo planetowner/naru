@@ -5,15 +5,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:juliatalk/core/notifications/notification_service.dart';
-import 'package:juliatalk/design_system/components/app_launch_screen.dart';
-import 'package:juliatalk/features/auth/domain/app_user.dart';
-import 'package:juliatalk/features/auth/domain/auth_session.dart';
-import 'package:juliatalk/features/chat/data/chat_api.dart';
-import 'package:juliatalk/features/chat/data/chat_message_cache.dart';
-import 'package:juliatalk/features/chat/data/chat_realtime_service.dart';
-import 'package:juliatalk/features/chat/presentation/chat_conversation_screen.dart';
-import 'package:juliatalk/features/chat/presentation/chat_conversation_view.dart';
+import 'package:naru/core/notifications/notification_service.dart';
+import 'package:naru/design_system/components/app_launch_screen.dart';
+import 'package:naru/features/auth/domain/app_user.dart';
+import 'package:naru/features/auth/domain/auth_session.dart';
+import 'package:naru/features/chat/data/chat_api.dart';
+import 'package:naru/features/chat/data/chat_message_cache.dart';
+import 'package:naru/features/chat/data/chat_realtime_service.dart';
+import 'package:naru/features/chat/presentation/chat_conversation_screen.dart';
+import 'package:naru/features/chat/presentation/chat_conversation_view.dart';
 
 const AppUser _currentUser = AppUser(
   id: 'current-user',

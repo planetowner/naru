@@ -98,7 +98,7 @@ final class _LoginScreenState extends State<LoginScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const SizedBox(height: AppSpacing.space40),
-                    Text('JuliaTalk', style: textTheme.displayMedium),
+                    Text('naru', style: textTheme.displayMedium),
                     const SizedBox(height: AppSpacing.space12),
                     Text(
                       'Talk naturally, in each other’s language.',

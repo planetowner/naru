@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:juliatalk/features/auth/domain/app_user.dart';
-import 'package:juliatalk/features/chat/data/chat_api.dart';
+import 'package:naru/features/auth/domain/app_user.dart';
+import 'package:naru/features/chat/data/chat_api.dart';
 
 void main() {
   test(

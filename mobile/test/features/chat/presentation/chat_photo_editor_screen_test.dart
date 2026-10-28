@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:juliatalk/design_system/components/app_media_viewer_chrome.dart';
-import 'package:juliatalk/features/chat/presentation/chat_photo_editor_screen.dart';
+import 'package:naru/design_system/components/app_media_viewer_chrome.dart';
+import 'package:naru/features/chat/presentation/chat_photo_editor_screen.dart';
 
 Widget _buildTopBar({
   required int currentIndex,

@@ -6,8 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:juliatalk/features/chat/data/chat_api.dart';
-import 'package:juliatalk/features/chat/domain/chat_message.dart';
+import 'package:naru/features/chat/data/chat_api.dart';
+import 'package:naru/features/chat/domain/chat_message.dart';
 
 const MethodChannel _pathProviderChannel = MethodChannel(
   'plugins.flutter.io/path_provider',
@@ -206,7 +206,7 @@ void main() {
       final Uint8List thumbnailBytes = Uint8List.fromList(<int>[5, 6]);
       final DateTime createdAt = DateTime.utc(2026, 8, 17, 6, 29, 58);
       final Directory temporaryDirectory = await Directory.systemTemp
-          .createTemp('juliatalk-video-upload-test-');
+          .createTemp('naru-video-upload-test-');
       addTearDown(() => temporaryDirectory.delete(recursive: true));
       final Directory cacheDirectory = Directory(
         '${temporaryDirectory.path}/cache',

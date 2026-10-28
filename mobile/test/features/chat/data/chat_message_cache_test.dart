@@ -3,9 +3,9 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:juliatalk/features/chat/data/chat_api.dart';
-import 'package:juliatalk/features/chat/data/chat_message_cache.dart';
-import 'package:juliatalk/features/chat/domain/chat_message.dart';
+import 'package:naru/features/chat/data/chat_api.dart';
+import 'package:naru/features/chat/data/chat_message_cache.dart';
+import 'package:naru/features/chat/domain/chat_message.dart';
 
 void main() {
   late Directory cacheDirectory;
@@ -13,7 +13,7 @@ void main() {
 
   setUp(() async {
     cacheDirectory = await Directory.systemTemp.createTemp(
-      'juliatalk-message-cache-test-',
+      'naru-message-cache-test-',
     );
     chatApi = ChatApi(
       client: MockClient((http.Request request) async {

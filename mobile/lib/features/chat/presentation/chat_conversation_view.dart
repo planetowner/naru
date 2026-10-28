@@ -5659,7 +5659,7 @@ final class _VoiceMemoSheetState extends State<_VoiceMemoSheet> {
     final Directory temporaryDirectory = await getTemporaryDirectory();
     final int timestamp = DateTime.now().microsecondsSinceEpoch;
 
-    return '${temporaryDirectory.path}/juliatalk_voice_$timestamp.m4a';
+    return '${temporaryDirectory.path}/naru_voice_$timestamp.m4a';
   }
 
   void _showVoiceMemoFailure(String message) {
@@ -10332,7 +10332,7 @@ final class _MessageListState extends State<_MessageList>
       final String fileName = _safeLocalFileName(attachment.name);
       // 이름이 같은 첨부 파일도 서로 덮어쓰지 않도록 첨부 ID별로 보관해요.
       final Directory attachmentDirectory = Directory(
-        '${temporaryDirectory.path}/juliatalk-files/$mediaAssetId',
+        '${temporaryDirectory.path}/naru-files/$mediaAssetId',
       );
       await attachmentDirectory.create(recursive: true);
       final File file = File('${attachmentDirectory.path}/$fileName');
@@ -15845,7 +15845,7 @@ final class _PhotoViewerScreenState extends State<_PhotoViewerScreen> {
     final Uint8List bytes = imageBytes ?? await imageFile!.readAsBytes();
     final String extension = _photoFileExtension(attachment);
     final String fileName = _safeLocalFileName(
-      attachment.fileName ?? 'juliatalk-${attachment.assetId}.$extension',
+      attachment.fileName ?? 'naru-${attachment.assetId}.$extension',
     );
     final String mimeType =
         attachment.mimeType ??
@@ -15942,7 +15942,7 @@ final class _PhotoViewerScreenState extends State<_PhotoViewerScreen> {
       final ChatPhotoFile sourceFile = await _loadPhotoSource(attachment);
       final Directory temporaryDirectory = await getTemporaryDirectory();
       final Directory shareDirectory = Directory(
-        '${temporaryDirectory.path}/juliatalk-media-shares',
+        '${temporaryDirectory.path}/naru-media-shares',
       );
       await shareDirectory.create(recursive: true);
       final String extension = _photoFileExtension(attachment);
@@ -16007,14 +16007,14 @@ final class _PhotoViewerScreenState extends State<_PhotoViewerScreen> {
           );
           await PhotoManager.editor.saveImageWithPath(
             photoLibraryInputFile.path,
-            title: 'juliatalk-$timestamp.$extension',
+            title: 'naru-$timestamp.$extension',
             creationDate: DateTime.now(),
           );
         } else {
           await PhotoManager.editor.saveImage(
             imageBytes,
-            filename: 'juliatalk-$timestamp.jpg',
-            title: 'JuliaTalk Photo',
+            filename: 'naru-$timestamp.jpg',
+            title: 'naru Photo',
             creationDate: DateTime.now(),
           );
         }
@@ -16492,7 +16492,7 @@ final class _VideoViewerScreenState extends State<_VideoViewerScreen> {
           'viewer-video-${DateTime.now().microsecondsSinceEpoch}';
       final String fileName = _safeLocalFileName(
         attachment.fileName ??
-            'juliatalk-video.${_videoFileExtension(attachment.fileName)}',
+            'naru-video.${_videoFileExtension(attachment.fileName)}',
       );
       final ChatPhotoFile sourceFile = ChatPhotoFile(
         bytes: Uint8List(0),
@@ -16592,7 +16592,7 @@ final class _VideoViewerScreenState extends State<_VideoViewerScreen> {
       try {
         await PhotoManager.editor.saveVideo(
           widget.videoFile,
-          title: 'juliatalk-$timestamp.$extension',
+          title: 'naru-$timestamp.$extension',
           creationDate: DateTime.now(),
         );
         photoLibraryStopwatch.stop();
@@ -18456,7 +18456,7 @@ final class _VoiceMemoMessageBubbleState
     if (audioBytes != null && audioBytes.isNotEmpty) {
       final Directory temporaryDirectory = await getTemporaryDirectory();
       final File audioFile = File(
-        '${temporaryDirectory.path}/juliatalk_voice_${widget.messageId}.m4a',
+        '${temporaryDirectory.path}/naru_voice_${widget.messageId}.m4a',
       );
 
       await audioFile.writeAsBytes(audioBytes, flush: true);
@@ -18498,7 +18498,7 @@ final class _VoiceMemoMessageBubbleState
 
       final Directory temporaryDirectory = await getTemporaryDirectory();
       final File audioFile = File(
-        '${temporaryDirectory.path}/juliatalk_voice_'
+        '${temporaryDirectory.path}/naru_voice_'
         '${_safeVoiceMemoCacheKey(mediaAssetId)}.m4a',
       );
 

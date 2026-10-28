@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:juliatalk/features/chat/data/chat_api.dart';
-import 'package:juliatalk/features/chat/domain/chat_message.dart';
+import 'package:naru/features/chat/data/chat_api.dart';
+import 'package:naru/features/chat/domain/chat_message.dart';
 
 const String _fmkoreaUrl = 'https://m.fmkorea.com/10166678809';
 const String _fmkoreaCanonicalUrl = 'https://www.fmkorea.com/10166678809';

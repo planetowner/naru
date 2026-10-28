@@ -5,8 +5,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:juliatalk/features/chat/domain/chat_message.dart';
-import 'package:juliatalk/features/chat/presentation/chat_conversation_view.dart';
+import 'package:naru/features/chat/domain/chat_message.dart';
+import 'package:naru/features/chat/presentation/chat_conversation_view.dart';
 import 'package:video_player/video_player.dart';
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 
@@ -24,7 +24,7 @@ const MethodChannel _photoManagerChannel = MethodChannel(
   'com.fluttercandies/photo_manager',
 );
 
-const MethodChannel _mediaShareChannel = MethodChannel('juliatalk/media-file');
+const MethodChannel _mediaShareChannel = MethodChannel('naru/media-file');
 
 void _setUpVideoSave() {
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -273,7 +273,7 @@ void main() {
     videoPlatform = _FakeVideoPlayerPlatform();
     VideoPlayerPlatform.instance = videoPlatform;
     tempDirectory = Directory.systemTemp.createTempSync(
-      'juliatalk-video-viewer-test-',
+      'naru-video-viewer-test-',
     );
     videoFile = File('${tempDirectory.path}/video.mp4')
       ..writeAsBytesSync(const <int>[0]);
@@ -491,7 +491,7 @@ void main() {
     WidgetTester tester,
   ) async {
     final Directory cacheDirectory = _setUpVideoCacheDirectory(
-      'juliatalk-video-restart-cache-test-',
+      'naru-video-restart-cache-test-',
     );
     final Directory videoDirectory = Directory(
       '${cacheDirectory.path}/chat-videos',
@@ -528,7 +528,7 @@ void main() {
     WidgetTester tester,
   ) async {
     final Directory cacheDirectory = _setUpVideoCacheDirectory(
-      'juliatalk-video-viewer-background-test-',
+      'naru-video-viewer-background-test-',
     );
     final Directory videoDirectory = Directory(
       '${cacheDirectory.path}/chat-videos',
@@ -577,7 +577,7 @@ void main() {
     WidgetTester tester,
   ) async {
     final Directory cacheDirectory = _setUpVideoCacheDirectory(
-      'juliatalk-video-retry-test-',
+      'naru-video-retry-test-',
     );
     int accessUrlRequests = 0;
 

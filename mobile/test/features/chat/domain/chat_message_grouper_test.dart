@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:juliatalk/features/chat/domain/chat_message.dart';
-import 'package:juliatalk/features/chat/domain/chat_message_grouper.dart';
+import 'package:naru/features/chat/domain/chat_message.dart';
+import 'package:naru/features/chat/domain/chat_message_grouper.dart';
 
 void main() {
   test('groups consecutive messages from the same sender and minute', () {

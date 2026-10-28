@@ -1,10 +1,10 @@
 # Launch Screen Assets
 
-`LaunchImage.png` is the shared JuliaTalk launch logo. The iOS asset catalog
+`LaunchImage.png` is the shared naru launch logo. The iOS asset catalog
 loads it before Flutter starts, and `mobile/pubspec.yaml` bundles the same file
 for `AppLaunchScreen` while the saved session is restored.
 
-The 864 × 864 transparent PNG comes from the user-provided `juliatalk.png`.
+The 864 × 864 transparent PNG comes from the user-provided `naru.png`.
 Only the dark background connected to the outer edges was removed. Enclosed
 details such as the cats' eyes and all retained foreground colors are preserved
 from the original pixels.

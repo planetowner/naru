@@ -9,7 +9,7 @@ final class AuthSessionStore {
     FlutterSecureStorage storage = const FlutterSecureStorage(),
   }) : _storage = storage;
 
-  static const String _sessionKey = 'juliatalk.auth_session.v1';
+  static const String _sessionKey = 'naru.auth_session.v1';
 
   final FlutterSecureStorage _storage;
 

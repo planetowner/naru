@@ -1,6 +1,6 @@
 # iOS Notifications
 
-JuliaTalk uses iOS-rendered notification and call interfaces. It does not draw
+naru uses iOS-rendered notification and call interfaces. It does not draw
 a look-alike notification view inside Flutter. The implementation is split
 between the FastAPI APNs sender, the Runner notification bridge, a Notification
 Service Extension, and PushKit/CallKit.
@@ -25,7 +25,7 @@ Service Extension, and PushKit/CallKit.
 - The app badge is the recipient's current unread message count.
 - Tapping an alert opens the direct conversation for its sender after login.
 - Lock-screen preview hiding and Face ID reveal are controlled by the user's
-  iOS **Show Previews** setting. JuliaTalk does not bypass that privacy policy.
+  iOS **Show Previews** setting. naru does not bypass that privacy policy.
 - An initial call event is sent with a PushKit token and immediately reported
   to CallKit. After that initial VoIP push, call termination is delivered over
   the authenticated `/ws` connection. A missed or unanswered call is then sent
@@ -49,14 +49,14 @@ The repository contains the targets and entitlement files, but the matching
 App ID capabilities and provisioning profiles must also exist in the Apple
 Developer account for team `57X5XDTF4Q`.
 
-1. For `com.planetowner.juliatalk`, enable **Push Notifications** and
+1. For `com.planetowner.naru`, enable **Push Notifications** and
    **Communication Notifications**.
 2. Keep the Runner background modes for **Voice over IP** and
    **Remote notifications** enabled.
 3. Create or refresh the Runner development and distribution provisioning
    profiles after enabling those capabilities.
 4. Create the extension App ID
-   `com.planetowner.juliatalk.NotificationService`, enable
+   `com.planetowner.naru.NotificationService`, enable
    **Communication Notifications**, and create its provisioning profiles.
 5. Create an APNs token-signing key (`.p8`) that can send notifications for the
    app. Keep the key out of Git.
@@ -71,7 +71,7 @@ Set the following on the backend:
 ```text
 APNS_KEY_ID=YOUR_KEY_ID
 APNS_TEAM_ID=57X5XDTF4Q
-APNS_BUNDLE_ID=com.planetowner.juliatalk
+APNS_BUNDLE_ID=com.planetowner.naru
 APNS_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
 ```
 
@@ -122,13 +122,13 @@ here because the project instructions require the developer, not Codex, to
 execute terminal commands.
 
 ```bash
-cd /Users/june/Desktop/projects/juliatalk
+cd /Users/june/Desktop/projects/naru
 python3 -m pip install -r requirements.txt
 python3 -m compileall app scripts
 python3 -m unittest tests.test_translation tests.test_notifications
 git diff --check
 
-cd /Users/june/Desktop/projects/juliatalk/mobile
+cd /Users/june/Desktop/projects/naru/mobile
 flutter pub get
 dart format --output=none --set-exit-if-changed lib test
 flutter analyze

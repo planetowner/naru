@@ -1,8 +1,8 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:juliatalk/features/auth/data/auth_session_store.dart';
-import 'package:juliatalk/features/auth/domain/app_user.dart';
-import 'package:juliatalk/features/auth/domain/auth_session.dart';
+import 'package:naru/features/auth/data/auth_session_store.dart';
+import 'package:naru/features/auth/domain/app_user.dart';
+import 'package:naru/features/auth/domain/auth_session.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -72,7 +72,7 @@ void main() {
 
   test('clears a legacy session without a refresh token', () async {
     FlutterSecureStorage.setMockInitialValues(<String, String>{
-      'juliatalk.auth_session.v1':
+      'naru.auth_session.v1':
           '{"access_token":"legacy","token_type":"bearer","user":'
           '{"id":"11111111-1111-4111-8111-111111111111",'
           '"username":"test-user","display_name":"June",'

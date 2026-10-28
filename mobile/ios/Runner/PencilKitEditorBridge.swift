@@ -20,8 +20,8 @@ private enum PencilKitEditorError: LocalizedError {
 }
 
 final class PencilKitEditorBridge: NSObject, FlutterPlugin {
-  private static let channelName = "juliatalk/pencil-kit-editor"
-  private static let viewType = "juliatalk/pencil-kit-editor"
+  private static let channelName = "naru/pencil-kit-editor"
+  private static let viewType = "naru/pencil-kit-editor"
 
   private var sessions: [String: PencilKitEditorSession] = [:]
   private var activeEditorId: String?
@@ -349,7 +349,7 @@ private final class PencilKitEditorSession {
     }
 
     let directory = FileManager.default.temporaryDirectory
-      .appendingPathComponent("juliatalk-pencil-kit-output", isDirectory: true)
+      .appendingPathComponent("naru-pencil-kit-output", isDirectory: true)
     try FileManager.default.createDirectory(
       at: directory,
       withIntermediateDirectories: true

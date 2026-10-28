@@ -49,7 +49,7 @@ private enum VideoTranscodeError: LocalizedError {
 }
 
 final class VideoTranscodeBridge: NSObject, FlutterPlugin {
-  private static let channelName = "juliatalk/video-transcoder"
+  private static let channelName = "naru/video-transcoder"
   private static let videoBitRate = 3_080_000
   private static let audioBitRate = 92_000
   private static let audioSampleRate = 44_100
@@ -453,7 +453,7 @@ final class VideoTranscodeBridge: NSObject, FlutterPlugin {
       }
 
       group.enter()
-      let videoQueue = DispatchQueue(label: "juliatalk.video-encoder.video")
+      let videoQueue = DispatchQueue(label: "naru.video-encoder.video")
       var videoFinished = false
       videoInput.requestMediaDataWhenReady(on: videoQueue) {
         guard !videoFinished else { return }
@@ -477,7 +477,7 @@ final class VideoTranscodeBridge: NSObject, FlutterPlugin {
 
       if let audioOutput, let audioInput {
         group.enter()
-        let audioQueue = DispatchQueue(label: "juliatalk.video-encoder.audio")
+        let audioQueue = DispatchQueue(label: "naru.video-encoder.audio")
         var audioFinished = false
         audioInput.requestMediaDataWhenReady(on: audioQueue) {
           guard !audioFinished else { return }

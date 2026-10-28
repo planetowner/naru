@@ -676,7 +676,7 @@ final class ChatMessageCache {
     final String currentUserKey = _safeFileName(_currentUserId);
     final String otherUserKey = _safeFileName(otherUserId);
     return File(
-      '${supportDirectory.path}/juliatalk/message-cache/'
+      '${supportDirectory.path}/naru/message-cache/'
       '$currentUserKey/$otherUserKey.json',
     );
   }

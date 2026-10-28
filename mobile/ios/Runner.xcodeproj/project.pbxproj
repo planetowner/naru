@@ -21,7 +21,7 @@
 		C10000000000000000000001 /* PencilKitEditorBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000010 /* PencilKitEditorBridge.swift */; };
 		D10000000000000000000001 /* MediaFileBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10000000000000000000010 /* MediaFileBridge.swift */; };
 		A10000000000000000000002 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000012 /* NotificationService.swift */; };
-		A10000000000000000000003 /* JuliaTalkNotificationService.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A10000000000000000000015 /* JuliaTalkNotificationService.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A10000000000000000000003 /* NaruNotificationService.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A10000000000000000000015 /* NaruNotificationService.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -37,7 +37,7 @@
 			containerPortal = 97C146E61CF9000F007C117D /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = A10000000000000000000040;
-			remoteInfo = JuliaTalkNotificationService;
+			remoteInfo = NaruNotificationService;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -58,7 +58,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				A10000000000000000000003 /* JuliaTalkNotificationService.appex in Embed App Extensions */,
+				A10000000000000000000003 /* NaruNotificationService.appex in Embed App Extensions */,
 			);
 			name = "Embed App Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -90,8 +90,8 @@
 		A10000000000000000000011 /* Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
 		A10000000000000000000012 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		A10000000000000000000013 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		A10000000000000000000014 /* JuliaTalkNotificationService.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = JuliaTalkNotificationService.entitlements; sourceTree = "<group>"; };
-		A10000000000000000000015 /* JuliaTalkNotificationService.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = JuliaTalkNotificationService.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000000000000000000014 /* NaruNotificationService.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NaruNotificationService.entitlements; sourceTree = "<group>"; };
+		A10000000000000000000015 /* NaruNotificationService.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NaruNotificationService.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -140,7 +140,7 @@
 				97C146F01CF9000F007C117D /* Runner */,
 				97C146EF1CF9000F007C117D /* Products */,
 				331C8082294A63A400263BE5 /* RunnerTests */,
-				A10000000000000000000020 /* JuliaTalkNotificationService */,
+				A10000000000000000000020 /* NaruNotificationService */,
 			);
 			sourceTree = "<group>";
 		};
@@ -149,7 +149,7 @@
 			children = (
 				97C146EE1CF9000F007C117D /* Runner.app */,
 				331C8081294A63A400263BE5 /* RunnerTests.xctest */,
-				A10000000000000000000015 /* JuliaTalkNotificationService.appex */,
+				A10000000000000000000015 /* NaruNotificationService.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -175,14 +175,14 @@
 			path = Runner;
 			sourceTree = "<group>";
 		};
-		A10000000000000000000020 /* JuliaTalkNotificationService */ = {
+		A10000000000000000000020 /* NaruNotificationService */ = {
 			isa = PBXGroup;
 			children = (
 				A10000000000000000000012 /* NotificationService.swift */,
 				A10000000000000000000013 /* Info.plist */,
-				A10000000000000000000014 /* JuliaTalkNotificationService.entitlements */,
+				A10000000000000000000014 /* NaruNotificationService.entitlements */,
 			);
-			path = JuliaTalkNotificationService;
+			path = NaruNotificationService;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -230,9 +230,9 @@
 			productReference = 97C146EE1CF9000F007C117D /* Runner.app */;
 			productType = "com.apple.product-type.application";
 		};
-		A10000000000000000000040 /* JuliaTalkNotificationService */ = {
+		A10000000000000000000040 /* NaruNotificationService */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A10000000000000000000041 /* Build configuration list for PBXNativeTarget "JuliaTalkNotificationService" */;
+			buildConfigurationList = A10000000000000000000041 /* Build configuration list for PBXNativeTarget "NaruNotificationService" */;
 			buildPhases = (
 				A10000000000000000000032 /* Sources */,
 				A10000000000000000000030 /* Frameworks */,
@@ -242,9 +242,9 @@
 			);
 			dependencies = (
 			);
-			name = JuliaTalkNotificationService;
-			productName = JuliaTalkNotificationService;
-			productReference = A10000000000000000000015 /* JuliaTalkNotificationService.appex */;
+			name = NaruNotificationService;
+			productName = NaruNotificationService;
+			productReference = A10000000000000000000015 /* NaruNotificationService.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
@@ -288,7 +288,7 @@
 			targets = (
 				97C146ED1CF9000F007C117D /* Runner */,
 				331C8080294A63A400263BE5 /* RunnerTests */,
-				A10000000000000000000040 /* JuliaTalkNotificationService */,
+				A10000000000000000000040 /* NaruNotificationService */,
 			);
 		};
 /* End PBXProject section */
@@ -396,7 +396,7 @@
 		};
 		A10000000000000000000051 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = A10000000000000000000040 /* JuliaTalkNotificationService */;
+			target = A10000000000000000000040 /* NaruNotificationService */;
 			targetProxy = A10000000000000000000050 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -489,7 +489,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.planetowner.juliatalk;
+				PRODUCT_BUNDLE_IDENTIFIER = com.planetowner.naru;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
@@ -505,7 +505,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.planetowner.juliatalk.RunnerTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.planetowner.naru.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -522,7 +522,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.planetowner.juliatalk.RunnerTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.planetowner.naru.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Runner.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Runner";
@@ -537,7 +537,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.planetowner.juliatalk.RunnerTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.planetowner.naru.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Runner.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Runner";
@@ -671,7 +671,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.planetowner.juliatalk;
+				PRODUCT_BUNDLE_IDENTIFIER = com.planetowner.naru;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
@@ -697,7 +697,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.planetowner.juliatalk;
+				PRODUCT_BUNDLE_IDENTIFIER = com.planetowner.naru;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
@@ -710,12 +710,12 @@
 			baseConfigurationReference = 9740EEB21CF90195004384FC /* Debug.xcconfig */;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
-				CODE_SIGN_ENTITLEMENTS = JuliaTalkNotificationService/JuliaTalkNotificationService.entitlements;
+				CODE_SIGN_ENTITLEMENTS = NaruNotificationService/NaruNotificationService.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
 				DEVELOPMENT_TEAM = 57X5XDTF4Q;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = JuliaTalkNotificationService/Info.plist;
+				INFOPLIST_FILE = NaruNotificationService/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -723,7 +723,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
-				PRODUCT_BUNDLE_IDENTIFIER = com.planetowner.juliatalk.NotificationService;
+				PRODUCT_BUNDLE_IDENTIFIER = com.planetowner.naru.NotificationService;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
@@ -738,12 +738,12 @@
 			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
-				CODE_SIGN_ENTITLEMENTS = JuliaTalkNotificationService/JuliaTalkNotificationService.entitlements;
+				CODE_SIGN_ENTITLEMENTS = NaruNotificationService/NaruNotificationService.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
 				DEVELOPMENT_TEAM = 57X5XDTF4Q;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = JuliaTalkNotificationService/Info.plist;
+				INFOPLIST_FILE = NaruNotificationService/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -751,7 +751,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
-				PRODUCT_BUNDLE_IDENTIFIER = com.planetowner.juliatalk.NotificationService;
+				PRODUCT_BUNDLE_IDENTIFIER = com.planetowner.naru.NotificationService;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 5.0;
@@ -764,12 +764,12 @@
 			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
-				CODE_SIGN_ENTITLEMENTS = JuliaTalkNotificationService/JuliaTalkNotificationService.entitlements;
+				CODE_SIGN_ENTITLEMENTS = NaruNotificationService/NaruNotificationService.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
 				DEVELOPMENT_TEAM = 57X5XDTF4Q;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = JuliaTalkNotificationService/Info.plist;
+				INFOPLIST_FILE = NaruNotificationService/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -777,7 +777,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
-				PRODUCT_BUNDLE_IDENTIFIER = com.planetowner.juliatalk.NotificationService;
+				PRODUCT_BUNDLE_IDENTIFIER = com.planetowner.naru.NotificationService;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 5.0;
@@ -818,7 +818,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A10000000000000000000041 /* Build configuration list for PBXNativeTarget "JuliaTalkNotificationService" */ = {
+		A10000000000000000000041 /* Build configuration list for PBXNativeTarget "NaruNotificationService" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A10000000000000000000042 /* Debug */,

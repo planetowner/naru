@@ -1,6 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:juliatalk/features/chat/data/chat_photo_library.dart';
+import 'package:naru/features/chat/data/chat_photo_library.dart';
 import 'package:photo_manager/photo_manager.dart';
 
 const MethodChannel _photoManagerChannel = MethodChannel(

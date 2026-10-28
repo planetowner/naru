@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../../support/juliatalk_preview_app.dart';
+import '../../../support/naru_preview_app.dart';
 
 Future<void> _scrollConversationToStart(WidgetTester tester) async {
   final Finder messageListFinder = find.byKey(
@@ -32,7 +32,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
 
     await tester.pumpAndSettle();
 

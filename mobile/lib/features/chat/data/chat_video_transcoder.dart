@@ -73,7 +73,7 @@ final class MethodChannelChatVideoTranscoder implements ChatVideoTranscoder {
   const MethodChannelChatVideoTranscoder();
 
   static const MethodChannel _channel = MethodChannel(
-    'juliatalk/video-transcoder',
+    'naru/video-transcoder',
   );
 
   @override

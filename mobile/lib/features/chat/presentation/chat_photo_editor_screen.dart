@@ -87,7 +87,7 @@ final class _PreparedChatPhotoEditor {
 
     final Directory temporaryDirectory = await getTemporaryDirectory();
     final Directory editorInputDirectory = Directory(
-      '${temporaryDirectory.path}/juliatalk-pencil-kit-inputs',
+      '${temporaryDirectory.path}/naru-pencil-kit-inputs',
     );
     await editorInputDirectory.create(recursive: true);
 
@@ -216,7 +216,7 @@ final class ChatPhotoEditorScreen extends StatefulWidget {
 
 final class _ChatPhotoEditorScreenState extends State<ChatPhotoEditorScreen> {
   static const MethodChannel _channel = MethodChannel(
-    'juliatalk/pencil-kit-editor',
+    'naru/pencil-kit-editor',
   );
 
   late final PageController _pageController;
@@ -501,7 +501,7 @@ final class _ChatPhotoEditorScreenState extends State<ChatPhotoEditorScreen> {
                       key: ValueKey<String>(
                         'photo-editor-canvas-${input.asset.id}',
                       ),
-                      viewType: 'juliatalk/pencil-kit-editor',
+                      viewType: 'naru/pencil-kit-editor',
                       creationParams: <String, Object>{
                         'editor_id': input.editorId,
                         'input_path': input.inputPath,

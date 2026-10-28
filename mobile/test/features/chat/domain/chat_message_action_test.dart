@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:juliatalk/features/chat/domain/chat_message_action.dart';
+import 'package:naru/features/chat/domain/chat_message_action.dart';
 
 void main() {
   group('availableChatMessageActions', () {

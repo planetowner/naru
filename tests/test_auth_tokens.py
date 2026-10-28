@@ -10,7 +10,7 @@ from fastapi import HTTPException
 
 os.environ.setdefault(
     "DATABASE_URL",
-    "postgresql+asyncpg://postgres:postgres@localhost:5432/juliatalk_test",
+    "postgresql+asyncpg://postgres:postgres@localhost:5432/naru_test",
 )
 os.environ.setdefault(
     "JWT_SECRET",

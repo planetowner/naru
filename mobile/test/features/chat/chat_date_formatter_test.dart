@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:juliatalk/features/chat/presentation/chat_date_formatter.dart';
+import 'package:naru/features/chat/presentation/chat_date_formatter.dart';
 
 void main() {
   test('formats the date in English weekday month day year order', () {

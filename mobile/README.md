@@ -1,6 +1,6 @@
-# JuliaTalk Mobile
+# naru Mobile
 
-Flutter client for JuliaTalk.
+Flutter client for naru.
 
 ## Run Against Deployed Backend
 

@@ -9,7 +9,7 @@ from urllib.request import Request
 
 os.environ.setdefault(
     "DATABASE_URL",
-    "postgresql+asyncpg://postgres:postgres@localhost:5432/juliatalk_test",
+    "postgresql+asyncpg://postgres:postgres@localhost:5432/naru_test",
 )
 os.environ.setdefault("OPENAI_API_KEY", "test-openai-api-key")
 os.environ.setdefault("JWT_SECRET", "test-jwt-secret")

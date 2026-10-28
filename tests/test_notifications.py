@@ -6,7 +6,7 @@ from uuid import UUID
 
 os.environ.setdefault(
     "DATABASE_URL",
-    "postgresql+asyncpg://postgres:postgres@localhost:5432/juliatalk_test",
+    "postgresql+asyncpg://postgres:postgres@localhost:5432/naru_test",
 )
 
 from app.models import CallOutcome, MessageKind
@@ -99,7 +99,7 @@ class NotificationPayloadTests(unittest.TestCase):
                 "alert": {"title": "june", "body": "긴 메시지" * 3000},
                 "mutable-content": 1,
             },
-            "juliatalk": {
+            "naru": {
                 "sender_id": "sender-id",
                 "sender_image_url": "https://example.com/" + "a" * 5000,
                 "photo_url": "https://example.com/" + "b" * 5000,
@@ -119,7 +119,7 @@ class NotificationPayloadTests(unittest.TestCase):
                 "installation_id": "device-id",
                 "platform": "ios",
                 "voip_push_token": None,
-                "app_bundle_id": "com.planetowner.juliatalk",
+                "app_bundle_id": "com.planetowner.naru",
                 "apns_environment": "development",
             }
         )

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:juliatalk/design_system/components/app_launch_screen.dart';
+import 'package:naru/design_system/components/app_launch_screen.dart';
 
 Widget _buildLaunchGate(ValueNotifier<bool> ready) {
   return MaterialApp(

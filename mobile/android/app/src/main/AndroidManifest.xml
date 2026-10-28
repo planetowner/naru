@@ -16,7 +16,7 @@
         android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
 
     <application
-        android:label="juliatalk"
+        android:label="naru"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

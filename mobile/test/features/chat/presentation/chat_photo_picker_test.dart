@@ -4,10 +4,10 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:juliatalk/design_system/app_colors.dart';
-import 'package:juliatalk/design_system/components/app_media_viewer_chrome.dart';
-import 'package:juliatalk/features/chat/data/chat_photo_library.dart';
-import 'package:juliatalk/features/chat/presentation/chat_photo_picker.dart';
+import 'package:naru/design_system/app_colors.dart';
+import 'package:naru/design_system/components/app_media_viewer_chrome.dart';
+import 'package:naru/features/chat/data/chat_photo_library.dart';
+import 'package:naru/features/chat/presentation/chat_photo_picker.dart';
 
 final Uint8List _testPng = base64Decode(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB'

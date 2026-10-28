@@ -136,7 +136,7 @@ def _bounded_alert_payload(payload: dict[str, Any]) -> dict[str, Any]:
     if payload_size <= APNS_MAX_PAYLOAD_BYTES:
         return payload
 
-    custom_data = payload.get("juliatalk")
+    custom_data = payload.get("naru")
     if isinstance(custom_data, dict):
         # 알림 본문을 줄이기 전에 표시 품질에만 영향을 주는 이미지 URL부터 빼요.
         for optional_key in ("sender_image_url", "photo_url"):
@@ -366,7 +366,7 @@ async def _send_voip_event(
     )
     payload = {
         "aps": {"content-available": 1},
-        "juliatalk_call": {
+        "naru_call": {
             "action": "incoming",
             "call_uuid": str(message.id),
             "caller_id": str(sender.id),
@@ -502,12 +502,12 @@ async def send_message_notification(message_id: UUID) -> None:
                     "mutable-content": 1,
                     "thread-id": f"direct.{message.conversation_id}",
                     "category": (
-                        "JULIATALK_PHOTO"
+                        "NARU_PHOTO"
                         if message.kind == MessageKind.PHOTO
-                        else "JULIATALK_REPLY"
+                        else "NARU_REPLY"
                     ),
                 },
-                "juliatalk": custom_data,
+                "naru": custom_data,
             }
         )
         devices = list(

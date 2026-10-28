@@ -3,7 +3,7 @@ import QuickLook
 import UIKit
 
 final class MediaFileBridge: NSObject, FlutterPlugin {
-  private static let channelName = "juliatalk/media-file"
+  private static let channelName = "naru/media-file"
 
   static func register(with registrar: FlutterPluginRegistrar) {
     let channel = FlutterMethodChannel(

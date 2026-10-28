@@ -313,7 +313,7 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
           _selectedAlbum = null;
           _selectedAssets.clear();
           _errorMessage = _accessState == ChatPhotoAccessState.limited
-              ? 'No photos are currently shared with JuliaTalk.'
+              ? 'No photos are currently shared with naru.'
               : 'No photos are available on this device.';
           _nextPage = 0;
           _hasMoreAssets = false;
@@ -561,7 +561,7 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
           _accessState = accessState;
           _initializing = false;
           _errorMessage = accessState == ChatPhotoAccessState.limited
-              ? 'No photos are currently shared with JuliaTalk.'
+              ? 'No photos are currently shared with naru.'
               : 'No photos are available on this device.';
         });
 

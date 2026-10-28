@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.planetowner.juliatalk"
+    namespace = "com.planetowner.naru"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -20,7 +20,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.planetowner.juliatalk"
+        applicationId = "com.planetowner.naru"
         minSdk = 23
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

@@ -5,10 +5,10 @@ import '../../features/auth/domain/auth_session.dart';
 
 final class NotificationService {
   static const MethodChannel _methodChannel = MethodChannel(
-    'juliatalk/notifications',
+    'naru/notifications',
   );
   static const EventChannel _eventChannel = EventChannel(
-    'juliatalk/notification-events',
+    'naru/notification-events',
   );
 
   bool get _isSupported {

@@ -3,9 +3,9 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:juliatalk/features/auth/data/auth_api.dart';
-import 'package:juliatalk/features/auth/data/auth_login_exception.dart';
-import 'package:juliatalk/features/auth/data/auth_refresh_exception.dart';
+import 'package:naru/features/auth/data/auth_api.dart';
+import 'package:naru/features/auth/data/auth_login_exception.dart';
+import 'package:naru/features/auth/data/auth_refresh_exception.dart';
 
 void main() {
   const String username = 'test-user';

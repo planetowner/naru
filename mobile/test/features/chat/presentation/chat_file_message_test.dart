@@ -8,10 +8,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:juliatalk/design_system/app_colors.dart';
-import 'package:juliatalk/design_system/app_typography.dart';
-import 'package:juliatalk/features/chat/domain/chat_message.dart';
-import 'package:juliatalk/features/chat/presentation/chat_conversation_view.dart';
+import 'package:naru/design_system/app_colors.dart';
+import 'package:naru/design_system/app_typography.dart';
+import 'package:naru/features/chat/domain/chat_message.dart';
+import 'package:naru/features/chat/presentation/chat_conversation_view.dart';
 
 final class _ControlledFilePicker extends FilePicker {
   final Completer<FilePickerResult?> selection = Completer<FilePickerResult?>();
@@ -191,13 +191,13 @@ void main() {
     'reopens an iOS attachment after its previous access URL expires',
     (WidgetTester tester) async {
       const MethodChannel previewChannel = MethodChannel(
-        'juliatalk/media-file',
+        'naru/media-file',
       );
       const MethodChannel pathChannel = MethodChannel(
         'plugins.flutter.io/path_provider',
       );
       final Directory temporaryDirectory = Directory.systemTemp.createTempSync(
-        'juliatalk-file-preview-test-',
+        'naru-file-preview-test-',
       );
       final List<MethodCall> previewCalls = <MethodCall>[];
       final List<MethodCall> clipboardCalls = <MethodCall>[];
@@ -296,7 +296,7 @@ void main() {
       ]);
       final String path =
           (previewCalls.last.arguments as Map)['path'] as String;
-      expect(path, endsWith('/juliatalk-files/file-asset/수업 자료.pdf'));
+      expect(path, endsWith('/naru-files/file-asset/수업 자료.pdf'));
       expect(File(path).readAsBytesSync(), [10, 20, 30]);
       expect(clipboardCalls, isEmpty);
       expect(find.text('File downloaded. Path copied.'), findsNothing);

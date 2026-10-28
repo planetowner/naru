@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Juliatalk</string>
+	<string>naru</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>juliatalk</string>
+	<string>naru</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -81,18 +81,18 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>JuliaTalk needs access to your photo library so you can choose and send photos in chats.</string>
+	<string>naru needs access to your photo library so you can choose and send photos in chats.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>JuliaTalk accesses location information embedded in photos you choose only to send those photos in chats.</string>
+	<string>naru accesses location information embedded in photos you choose only to send those photos in chats.</string>
 
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>JuliaTalk needs permission to save chat photos to your photo library.</string>
+	<string>naru needs permission to save chat photos to your photo library.</string>
 
 	<key>NSCameraUsageDescription</key>
-	<string>JuliaTalk needs access to your camera so you can take and send photos in chats.</string>
+	<string>naru needs access to your camera so you can take and send photos in chats.</string>
 
 	<key>NSMicrophoneUsageDescription</key>
-	<string>JuliaTalk needs access to your microphone so you can record and send voice memos in chats.</string>
+	<string>naru needs access to your microphone so you can record and send voice memos in chats.</string>
 
 	<key>PHPhotoLibraryPreventAutomaticLimitedAccessAlert</key>
 	<true/>

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:juliatalk/features/chat/data/chat_realtime_event_state.dart';
+import 'package:naru/features/chat/data/chat_realtime_event_state.dart';
 
 void main() {
   group('UnreadCountsSnapshot', () {

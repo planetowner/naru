@@ -5,11 +5,11 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:juliatalk/design_system/app_colors.dart';
-import 'package:juliatalk/features/chat/domain/chat_message.dart';
-import 'package:juliatalk/features/chat/presentation/chat_conversation_view.dart';
+import 'package:naru/design_system/app_colors.dart';
+import 'package:naru/features/chat/domain/chat_message.dart';
+import 'package:naru/features/chat/presentation/chat_conversation_view.dart';
 
-import '../../../support/juliatalk_preview_app.dart';
+import '../../../support/naru_preview_app.dart';
 
 double _expectedLastLineCenterY(WidgetTester tester) {
   final Finder inputFinder = find.byKey(
@@ -159,7 +159,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     await _showMessage(tester, find.text('欧巴我快要登机了'));
@@ -199,7 +199,7 @@ void main() {
       messenger.setMockMethodCallHandler(SystemChannels.platform, null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     const String message = '欧巴我快要登机了';
@@ -268,7 +268,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     final Finder bubbleFinder = find.byKey(
@@ -340,7 +340,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     await tester.longPress(find.text('더 번식 안 하고 너만 있는거면 내가 잘 키워줄게'));
@@ -361,7 +361,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     const String message = '더 번식 안 하고 너만 있는거면 내가 잘 키워줄게';
@@ -391,7 +391,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     await _showMessage(tester, find.text('我等你继续说呢'));
@@ -410,7 +410,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     await _showMessage(tester, find.text('欧巴我快要登机了'));
@@ -449,7 +449,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     await _showMessage(tester, find.text('너는 계속 얘기해도 돼'));
@@ -469,7 +469,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     await _showMessage(tester, find.text('欧巴我快要登机了'));
@@ -496,7 +496,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     await _showMessage(tester, find.text('너는 계속 얘기해도 돼'));
@@ -548,7 +548,7 @@ void main() {
         await tester.binding.setSurfaceSize(null);
       });
 
-      await tester.pumpWidget(const JuliaTalkPreviewApp());
+      await tester.pumpWidget(const NaruPreviewApp());
       await tester.pumpAndSettle();
 
       await _showMessage(tester, find.text('너는 계속 얘기해도 돼'));
@@ -622,7 +622,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
     await _scrollChatToBottom(tester);
 
@@ -679,7 +679,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     final Finder composerFinder = find.byKey(
@@ -777,7 +777,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     final Finder composerFinder = find.byKey(
@@ -832,7 +832,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     await tester.enterText(
@@ -922,7 +922,7 @@ void main() {
         await tester.binding.setSurfaceSize(null);
       });
 
-      await tester.pumpWidget(const JuliaTalkPreviewApp());
+      await tester.pumpWidget(const NaruPreviewApp());
       await tester.pumpAndSettle();
 
       await _showMessage(tester, find.text('欧巴我快要登机了'));
@@ -979,7 +979,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     await tester.enterText(
@@ -1022,7 +1022,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     await _showMessage(tester, find.text('欧巴我快要登机了'));
@@ -1067,7 +1067,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     await _showMessage(tester, find.text('너는 계속 얘기해도 돼'));
@@ -1113,7 +1113,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     await _showMessage(tester, find.text('너는 계속 얘기해도 돼'));
@@ -1156,7 +1156,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     await _showMessage(tester, find.text('너는 계속 얘기해도 돼'));
@@ -1207,7 +1207,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     await _showMessage(tester, find.text('너는 계속 얘기해도 돼'));
@@ -1278,7 +1278,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     await _showMessage(tester, find.text('너는 계속 얘기해도 돼'));
@@ -1343,7 +1343,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     await _showMessage(tester, find.text('너는 계속 얘기해도 돼'));
@@ -1379,7 +1379,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     await _scrollChatToBottom(tester);
@@ -1419,7 +1419,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     await _scrollChatToBottom(tester);
@@ -1492,7 +1492,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     await _showMessage(tester, find.text('너는 계속 얘기해도 돼'));
@@ -1541,7 +1541,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     await tester.enterText(
@@ -1581,7 +1581,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey<String>('message-input')));
@@ -1614,7 +1614,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey<String>('message-input')));
@@ -1642,7 +1642,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     await _showMessage(tester, find.text('我等你继续说呢'));
@@ -1673,7 +1673,7 @@ void main() {
         await tester.binding.setSurfaceSize(null);
       });
 
-      await tester.pumpWidget(const JuliaTalkPreviewApp());
+      await tester.pumpWidget(const NaruPreviewApp());
       await tester.pumpAndSettle();
 
       await _showMessage(tester, find.text('너는 계속 얘기해도 돼'));
@@ -1733,7 +1733,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     const String messageContent = '첫번째줄\n두번째줄\n세번째줄\n';
@@ -1770,7 +1770,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     await _showMessage(tester, find.text('너는 계속 얘기해도 돼'));
@@ -1822,7 +1822,7 @@ void main() {
         await tester.binding.setSurfaceSize(null);
       });
 
-      await tester.pumpWidget(const JuliaTalkPreviewApp());
+      await tester.pumpWidget(const NaruPreviewApp());
       await tester.pumpAndSettle();
 
       await tester.enterText(
@@ -1863,7 +1863,7 @@ void main() {
         await tester.binding.setSurfaceSize(null);
       });
 
-      await tester.pumpWidget(const JuliaTalkPreviewApp());
+      await tester.pumpWidget(const NaruPreviewApp());
       await tester.pumpAndSettle();
 
       await _showMessage(tester, find.text('欧巴我快要登机了'));
@@ -1916,7 +1916,7 @@ void main() {
         await tester.binding.setSurfaceSize(null);
       });
 
-      await tester.pumpWidget(const JuliaTalkPreviewApp());
+      await tester.pumpWidget(const NaruPreviewApp());
       await tester.pumpAndSettle();
 
       await _showMessage(tester, find.text('너는 계속 얘기해도 돼'));
@@ -1973,7 +1973,7 @@ void main() {
         await tester.binding.setSurfaceSize(null);
       });
 
-      await tester.pumpWidget(const JuliaTalkPreviewApp());
+      await tester.pumpWidget(const NaruPreviewApp());
       await tester.pumpAndSettle();
 
       await _scrollChatToBottom(tester);
@@ -2015,7 +2015,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     expect(find.text('Wednesday, July 1, 2026'), findsOneWidget);
@@ -2050,7 +2050,7 @@ void main() {
         await tester.binding.setSurfaceSize(null);
       });
 
-      await tester.pumpWidget(const JuliaTalkPreviewApp());
+      await tester.pumpWidget(const NaruPreviewApp());
       await tester.pumpAndSettle();
 
       await _scrollChatToBottom(tester);
@@ -2081,7 +2081,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     await _showMessage(tester, find.text('너는 계속 얘기해도 돼'));
@@ -2204,7 +2204,7 @@ void main() {
         await tester.binding.setSurfaceSize(null);
       });
 
-      await tester.pumpWidget(const JuliaTalkPreviewApp());
+      await tester.pumpWidget(const NaruPreviewApp());
       await tester.pumpAndSettle();
 
       final Finder originalMessageFinder = find.text('抱歉啦欧巴');
@@ -2356,7 +2356,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     expect(
@@ -2403,7 +2403,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey<String>('message-attachment')));
@@ -2456,7 +2456,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     await tester.enterText(
@@ -2531,7 +2531,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey<String>('message-attachment')));
@@ -2570,7 +2570,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey<String>('message-attachment')));
@@ -2597,7 +2597,7 @@ void main() {
         await tester.binding.setSurfaceSize(null);
       });
 
-      await tester.pumpWidget(const JuliaTalkPreviewApp());
+      await tester.pumpWidget(const NaruPreviewApp());
       await tester.pumpAndSettle();
 
       await tester.tap(
@@ -2636,7 +2636,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const JuliaTalkPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
     await _showMessage(tester, find.text('抱歉啦欧巴'));

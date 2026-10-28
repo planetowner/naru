@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:juliatalk/features/chat/presentation/chat_scrollbar_range_tracker.dart';
+import 'package:naru/features/chat/presentation/chat_scrollbar_range_tracker.dart';
 
 void main() {
   test('an inserted older page extends the stable range by message count', () {

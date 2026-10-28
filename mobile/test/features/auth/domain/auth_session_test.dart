@@ -1,8 +1,8 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:juliatalk/features/auth/domain/app_user.dart';
-import 'package:juliatalk/features/auth/domain/auth_session.dart';
+import 'package:naru/features/auth/domain/app_user.dart';
+import 'package:naru/features/auth/domain/auth_session.dart';
 
 void main() {
   const AppUser user = AppUser(

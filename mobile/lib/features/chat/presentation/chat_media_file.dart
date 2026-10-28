@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 final class ChatMediaFile {
   const ChatMediaFile._();
 
-  static const MethodChannel _channel = MethodChannel('juliatalk/media-file');
+  static const MethodChannel _channel = MethodChannel('naru/media-file');
 
   static Future<void> previewFile(String path) {
     return _channel.invokeMethod<void>('preview-file', <String, Object>{

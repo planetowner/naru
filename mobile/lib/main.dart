@@ -21,21 +21,21 @@ import 'features/chat/presentation/chat_conversation_screen.dart';
 void main() {
   final AppConfig appConfig = AppConfig.fromEnvironment();
 
-  runApp(JuliaTalkApp(appConfig: appConfig));
+  runApp(NaruApp(appConfig: appConfig));
 }
 
-final class JuliaTalkApp extends StatefulWidget {
-  const JuliaTalkApp({required this.appConfig, super.key});
+final class NaruApp extends StatefulWidget {
+  const NaruApp({required this.appConfig, super.key});
 
   final AppConfig appConfig;
 
   @override
-  State<JuliaTalkApp> createState() {
-    return _JuliaTalkAppState();
+  State<NaruApp> createState() {
+    return _NaruAppState();
   }
 }
 
-final class _JuliaTalkAppState extends State<JuliaTalkApp>
+final class _NaruAppState extends State<NaruApp>
     with WidgetsBindingObserver {
   static const Duration _accessTokenRefreshLeadTime = Duration(days: 1);
   static const Duration _accessTokenRefreshRetryDelay = Duration(minutes: 5);
@@ -394,7 +394,7 @@ final class _JuliaTalkAppState extends State<JuliaTalkApp>
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'JuliaTalk',
+      title: 'naru',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       // 남색 시작 화면을 벗어나면 밝은 앱 화면에 맞는 상태 막대 색으로 돌아와요.
