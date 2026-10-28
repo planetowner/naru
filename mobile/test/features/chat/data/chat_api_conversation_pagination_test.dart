@@ -132,48 +132,94 @@ void main() {
     expect(context.hasMoreNewer, isFalse);
   });
 
-  test('marks only transient conversation failures as retryable', () async {
-    final List<int> statusCodes = <int>[503, 401];
-    final MockClient client = MockClient((http.Request request) async {
-      return http.Response('{}', statusCodes.removeAt(0));
-    });
-    final ChatApi chatApi = ChatApi(
-      client: client,
-      baseUri: Uri.parse('https://api.example.com'),
-      accessToken: 'test-token',
-    );
+  for (final bool aroundMessage in <bool>[false, true]) {
+    final String operation = aroundMessage
+        ? 'Message context loading'
+        : 'Conversation loading';
 
-    await expectLater(
-      chatApi.listConversation(otherUserId: 'other-user'),
-      throwsA(
-        isA<ChatApiException>()
-            .having(
-              (ChatApiException error) => error.retryable,
-              'retryable',
-              isTrue,
-            )
-            .having(
-              (ChatApiException error) => error.statusCode,
-              'statusCode',
-              503,
-            ),
-      ),
-    );
-    await expectLater(
-      chatApi.listConversation(otherUserId: 'other-user'),
-      throwsA(
-        isA<ChatApiException>()
-            .having(
-              (ChatApiException error) => error.retryable,
-              'retryable',
-              isFalse,
-            )
-            .having(
-              (ChatApiException error) => error.statusCode,
-              'statusCode',
-              401,
-            ),
-      ),
-    );
-  });
+    Future<Object> load(ChatApi api) => aroundMessage
+        ? api.getConversationMessageContext(
+            otherUserId: 'other-user',
+            messageId: 'message-101',
+          )
+        : api.listConversation(otherUserId: 'other-user');
+
+    test('$operation marks only transient failures as retryable', () async {
+      for (final int statusCode in <int>[429, 503, 401, 400]) {
+        final ChatApi api = ChatApi(
+          client: MockClient((_) async => http.Response('{}', statusCode)),
+          baseUri: Uri.parse('https://api.example.com'),
+          accessToken: 'test-token',
+        );
+
+        await expectLater(
+          load(api),
+          throwsA(
+            isA<ChatApiException>()
+                .having(
+                  (ChatApiException error) => error.retryable,
+                  'retryable',
+                  statusCode == 429 || statusCode == 503,
+                )
+                .having(
+                  (ChatApiException error) => error.statusCode,
+                  'statusCode',
+                  statusCode,
+                )
+                .having(
+                  (ChatApiException error) => error.message,
+                  'message',
+                  '$operation failed with status code $statusCode.',
+                ),
+          ),
+        );
+      }
+    });
+
+    test('$operation preserves server error details', () async {
+      final ChatApi api = ChatApi(
+        client: MockClient(
+          (_) async => http.Response('{"detail":"Message not found"}', 404),
+        ),
+        baseUri: Uri.parse('https://api.example.com'),
+        accessToken: 'test-token',
+      );
+
+      await expectLater(
+        load(api),
+        throwsA(
+          isA<ChatApiException>().having(
+            (ChatApiException error) => error.message,
+            'message',
+            'Message not found',
+          ),
+        ),
+      );
+    });
+
+    test('$operation keeps network failures retryable', () async {
+      final ChatApi api = ChatApi(
+        client: MockClient((_) async => throw http.ClientException('offline')),
+        baseUri: Uri.parse('https://api.example.com'),
+        accessToken: 'test-token',
+      );
+
+      await expectLater(
+        load(api),
+        throwsA(
+          isA<ChatApiException>()
+              .having(
+                (ChatApiException error) => error.retryable,
+                'retryable',
+                true,
+              )
+              .having(
+                (ChatApiException error) => error.message,
+                'message',
+                '$operation failed because of a network error.',
+              ),
+        ),
+      );
+    });
+  }
 }

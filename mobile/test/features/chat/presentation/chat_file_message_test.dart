@@ -188,7 +188,7 @@ void main() {
     expect(find.text('File sending failed.'), findsOneWidget);
   });
 
-  for (final fromSearch in [false]) {
+  for (final fromSearch in [false, true]) {
     testWidgets(
       'reopens an iOS attachment from ${fromSearch ? 'search' : 'chat'} after its previous access URL expires',
       (WidgetTester tester) async {

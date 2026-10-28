@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:naru/features/chat/data/chat_api.dart';
 import 'package:naru/features/chat/data/chat_message_cache.dart';
+import 'package:naru/features/chat/domain/chat_history_direction.dart';
 import 'package:naru/features/chat/domain/chat_message.dart';
 
 void main() {
@@ -82,11 +83,12 @@ void main() {
       messages: <ChatMessage>[second, third],
       hasMoreOlder: true,
     );
-    await cache.mergeOlderPage(
+    await cache.mergeMessagePage(
+      direction: ChatHistoryDirection.older,
       otherUserId: '22222222-2222-4222-8222-222222222222',
-      beforeMessageId: second.id,
+      cursorMessageId: second.id,
       messages: <ChatMessage>[first],
-      hasMoreOlder: false,
+      hasMore: false,
     );
 
     final ChatMessageCache reloadedCache = createCache();
@@ -100,9 +102,10 @@ void main() {
           newerLimit: 1,
         );
     final ChatCachedConversation? olderPage = await reloadedCache
-        .readMessagesBefore(
+        .readMessagePage(
+          direction: ChatHistoryDirection.older,
           otherUserId: '22222222-2222-4222-8222-222222222222',
-          beforeMessageId: third.id,
+          cursorMessageId: third.id,
           limit: 1,
         );
 
@@ -205,41 +208,114 @@ void main() {
       oldMessage.id,
     ]);
     expect(oldContext?.hasMoreNewer, isTrue);
+    for (final ChatHistoryDirection direction in ChatHistoryDirection.values) {
+      expect(
+        await reloadedCache.readMessagePage(
+          otherUserId: '22222222-2222-4222-8222-222222222222',
+          cursorMessageId: direction == ChatHistoryDirection.newer
+              ? oldMessage.id
+              : newMessage.id,
+          direction: direction,
+          limit: 10,
+        ),
+        isNull,
+      );
+    }
   });
 
-  test('an explicitly connected older page extends the archive', () async {
-    final ChatMessage older = message(
-      id: '33333333-3333-4333-8333-333333333331',
-      minute: 1,
-    );
-    final ChatMessage latest = message(
-      id: '33333333-3333-4333-8333-333333333332',
-      minute: 2,
-    );
-    final ChatMessageCache cache = createCache();
+  for (final ChatHistoryDirection direction in ChatHistoryDirection.values) {
+    final bool newer = direction == ChatHistoryDirection.newer;
+    const String otherUserId = '22222222-2222-4222-8222-222222222222';
 
-    await cache.mergeLatestConversation(
-      otherUserId: '22222222-2222-4222-8222-222222222222',
-      messages: <ChatMessage>[latest],
-      hasMoreOlder: true,
-    );
-    await cache.mergeOlderPage(
-      otherUserId: '22222222-2222-4222-8222-222222222222',
-      beforeMessageId: latest.id,
-      messages: <ChatMessage>[older],
-      hasMoreOlder: false,
+    test(
+      'an explicitly connected ${direction.name} page extends the archive',
+      () async {
+        final ChatMessage older = message(
+          id: '33333333-3333-4333-8333-333333333331',
+          minute: 1,
+        );
+        final ChatMessage latest = message(
+          id: '33333333-3333-4333-8333-333333333332',
+          minute: 2,
+        );
+        final ChatMessageCache cache = createCache();
+
+        await cache.mergeConversationContext(
+          otherUserId: otherUserId,
+          messages: <ChatMessage>[newer ? older : latest],
+          hasMoreOlder: !newer,
+          hasMoreNewer: newer,
+        );
+        await cache.mergeMessagePage(
+          direction: direction,
+          otherUserId: otherUserId,
+          cursorMessageId: newer ? older.id : latest.id,
+          messages: <ChatMessage>[newer ? latest : older],
+          hasMore: false,
+        );
+
+        final ChatCachedConversation conversation = await createCache()
+            .readConversation(otherUserId);
+        expect(
+          conversation.messages.map((ChatMessage item) => item.id),
+          <String>[older.id, latest.id],
+        );
+        expect(conversation.hasMoreOlder, isFalse);
+        expect(conversation.hasMoreNewer, isFalse);
+      },
     );
 
-    final ChatCachedConversation conversation = await cache.readConversation(
-      '22222222-2222-4222-8222-222222222222',
-    );
+    test(
+      '${direction.name} boundary updates only affect the current edge',
+      () async {
+        final List<ChatMessage> messages = List<ChatMessage>.generate(
+          3,
+          (int index) => message(
+            id: '33333333-3333-4333-8333-33333333333${index + 3}',
+            minute: index,
+          ),
+        );
+        final ChatMessageCache cache = createCache();
+        await cache.mergeConversationContext(
+          otherUserId: otherUserId,
+          messages: messages,
+          hasMoreOlder: true,
+          hasMoreNewer: true,
+        );
+        await cache.updatePageBoundary(
+          otherUserId: otherUserId,
+          boundaryMessageId: messages[1].id,
+          direction: direction,
+          hasMore: false,
+        );
+        final ChatCachedConversation? unchanged = await createCache()
+            .readConversationAround(
+              otherUserId: otherUserId,
+              messageId: messages[1].id,
+              olderLimit: 10,
+              newerLimit: 10,
+            );
+        expect(unchanged?.hasMoreOlder, isTrue);
+        expect(unchanged?.hasMoreNewer, isTrue);
 
-    expect(conversation.messages.map((ChatMessage item) => item.id), <String>[
-      older.id,
-      latest.id,
-    ]);
-    expect(conversation.hasMoreOlder, isFalse);
-  });
+        await cache.updatePageBoundary(
+          otherUserId: otherUserId,
+          boundaryMessageId: newer ? messages.last.id : messages.first.id,
+          direction: direction,
+          hasMore: false,
+        );
+        final ChatCachedConversation? updated = await createCache()
+            .readConversationAround(
+              otherUserId: otherUserId,
+              messageId: messages[1].id,
+              olderLimit: 10,
+              newerLimit: 10,
+            );
+        expect(updated?.hasMoreOlder, newer);
+        expect(updated?.hasMoreNewer, !newer);
+      },
+    );
+  }
 
   test('reads cached messages after a context cursor', () async {
     final ChatMessage first = message(
@@ -263,9 +339,10 @@ void main() {
       hasMoreNewer: true,
     );
 
-    final ChatCachedConversation? newerPage = await cache.readMessagesAfter(
+    final ChatCachedConversation? newerPage = await cache.readMessagePage(
+      direction: ChatHistoryDirection.newer,
       otherUserId: '22222222-2222-4222-8222-222222222222',
-      afterMessageId: first.id,
+      cursorMessageId: first.id,
       limit: 1,
     );
 

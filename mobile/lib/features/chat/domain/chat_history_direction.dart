@@ -1,0 +1,1 @@
+enum ChatHistoryDirection { older, newer }

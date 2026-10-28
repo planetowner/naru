@@ -14,6 +14,7 @@ import '../data/chat_api.dart';
 import '../data/chat_api_exception.dart';
 import '../data/chat_message_cache.dart';
 import '../data/chat_realtime_service.dart';
+import '../domain/chat_history_direction.dart';
 import '../domain/chat_message.dart';
 import 'chat_conversation_view.dart';
 import 'reply_navigation_diagnostics.dart';
@@ -800,7 +801,7 @@ final class _ChatConversationHomeScreenState
         title: Text(
           'Chats',
           style: AppTypography.typography5.copyWith(
-            color: AppColors.grey900,
+            color: AppColors.textPrimary,
             fontWeight: AppTypography.bold,
           ),
         ),
@@ -843,14 +844,14 @@ final class _ChatConversationHomeScreenState
                   title: Text(
                     _displayNameFor(user),
                     style: AppTypography.typography6.copyWith(
-                      color: AppColors.grey900,
+                      color: AppColors.textPrimary,
                       fontWeight: AppTypography.bold,
                     ),
                   ),
                   subtitle: Text(
                     '@${user.username}',
                     style: AppTypography.subTypography12.copyWith(
-                      color: AppColors.grey500,
+                      color: AppColors.textTertiary,
                       fontWeight: AppTypography.regular,
                     ),
                   ),
@@ -911,21 +912,21 @@ final class ChatConversationScreen extends StatefulWidget {
 final class _ChatConversationScreenState extends State<ChatConversationScreen> {
   static const int _replyNavigationContextRadius = 30;
   static const int _conversationPageSize = 100;
-  static const List<Duration> _olderMessagesRetryDelays = <Duration>[
+  static const List<Duration> _historyRequestRetryDelays = <Duration>[
     Duration(milliseconds: 400),
     Duration(milliseconds: 1200),
   ];
 
   StreamSubscription<Map<String, dynamic>>? _realtimeEventSubscription;
   late final ChatConversationViewController _conversationViewController;
-  Future<void>? _olderMessagesLoadFuture;
-  Future<void>? _newerMessagesLoadFuture;
+  final Map<ChatHistoryDirection, Future<void>> _messagePageLoads =
+      <ChatHistoryDirection, Future<void>>{};
   int _messageWindowGeneration = 0;
   late bool _loading;
   String? _errorMessage;
   bool _syncingAfterReconnect = false;
-  bool _loadingOlderMessages = false;
-  bool _loadingNewerMessages = false;
+  final Set<ChatHistoryDirection> _loadingMessagePages =
+      <ChatHistoryDirection>{};
   late bool _hasMoreMessages;
   bool _hasMoreNewerMessages = false;
   late List<ChatMessage> _messages;
@@ -1228,77 +1229,57 @@ final class _ChatConversationScreenState extends State<ChatConversationScreen> {
 
   Future<ChatConversationContext?> _requestMessageContextWithRetry(
     String messageId,
-  ) async {
-    int retryAttempt = 0;
-
-    while (true) {
-      try {
-        return await widget.chatApi.getConversationMessageContext(
-          otherUserId: widget.otherUser.id,
-          messageId: messageId,
-          olderLimit: _replyNavigationContextRadius,
-          newerLimit: _replyNavigationContextRadius,
-        );
-      } on ChatApiException catch (error) {
-        ReplyNavigationDiagnostics.record(
-          '[reply-navigation] context-error '
-          'target=$messageId status=${error.statusCode} '
-          'retryable=${error.retryable}',
-        );
-        if (!error.retryable ||
-            retryAttempt >= _olderMessagesRetryDelays.length) {
-          return null;
-        }
-      } catch (_) {
-        return null;
-      }
-
-      final Duration retryDelay = _olderMessagesRetryDelays[retryAttempt];
-      retryAttempt += 1;
-      await Future<void>.delayed(retryDelay);
-
-      if (!mounted) {
-        return null;
-      }
-    }
+  ) {
+    return _requestHistoryWithRetry(
+      () => widget.chatApi.getConversationMessageContext(
+        otherUserId: widget.otherUser.id,
+        messageId: messageId,
+        olderLimit: _replyNavigationContextRadius,
+        newerLimit: _replyNavigationContextRadius,
+      ),
+      diagnosticContext: 'context-error target=$messageId',
+    );
   }
 
-  Future<void> _loadOlderMessages() async {
-    final Future<void>? inFlightLoad = _olderMessagesLoadFuture;
-
+  Future<void> _loadMessagePage(ChatHistoryDirection direction) async {
+    final Future<void>? inFlightLoad = _messagePageLoads[direction];
     if (inFlightLoad != null) {
       await inFlightLoad;
       return;
     }
 
-    final Future<void> loadFuture = _performOlderMessagesLoad();
-    _olderMessagesLoadFuture = loadFuture;
-
+    final Future<void> loadFuture = _performMessagePageLoad(direction);
+    _messagePageLoads[direction] = loadFuture;
     try {
       await loadFuture;
     } finally {
-      if (identical(_olderMessagesLoadFuture, loadFuture)) {
-        _olderMessagesLoadFuture = null;
+      if (identical(_messagePageLoads[direction], loadFuture)) {
+        _messagePageLoads.remove(direction);
       }
     }
   }
 
-  Future<void> _performOlderMessagesLoad() async {
-    if (!_hasMoreMessages || _messages.isEmpty || !mounted) {
+  Future<void> _performMessagePageLoad(ChatHistoryDirection direction) async {
+    final bool newer = direction == ChatHistoryDirection.newer;
+    final bool hasMore = newer ? _hasMoreNewerMessages : _hasMoreMessages;
+    if (!hasMore || _messages.isEmpty || !mounted) {
       return;
     }
 
     final int messageWindowGeneration = _messageWindowGeneration;
     setState(() {
-      _loadingOlderMessages = true;
+      _loadingMessagePages.add(direction);
     });
-    final String beforeMessageId = _messages.first.id;
+    final String cursorMessageId = newer
+        ? _messages.last.id
+        : _messages.first.id;
 
     try {
       final ChatCachedConversation? cachedPage = await widget.messageCache
-          .readMessagesBefore(
+          .readMessagePage(
             otherUserId: widget.otherUser.id,
-            beforeMessageId: beforeMessageId,
+            cursorMessageId: cursorMessageId,
+            direction: direction,
             limit: _conversationPageSize,
           );
 
@@ -1307,20 +1288,26 @@ final class _ChatConversationScreenState extends State<ChatConversationScreen> {
       }
 
       if (cachedPage != null && cachedPage.messages.isNotEmpty) {
-        setState(() {
-          _showingLatestWindow = false;
-          _messages = _mergeMessageLists(cachedPage.messages, _messages);
-          _hasMoreMessages = cachedPage.hasMoreOlder;
-        });
+        _applyMessagePage(
+          direction,
+          cachedPage.messages,
+          hasMore: newer ? cachedPage.hasMoreNewer : cachedPage.hasMoreOlder,
+        );
         _notifyMessagesChanged(persistToMessageCache: false);
         return;
       }
 
-      final ChatConversationPage? page =
-          await _requestConversationPageWithRetry(
-            beforeMessageId: beforeMessageId,
-            limit: _conversationPageSize,
-          );
+      final ChatConversationPage? page = await _requestHistoryWithRetry(
+        () => widget.chatApi.listConversation(
+          otherUserId: widget.otherUser.id,
+          beforeMessageId: newer ? null : cursorMessageId,
+          afterMessageId: newer ? cursorMessageId : null,
+          limit: _conversationPageSize,
+        ),
+        diagnosticContext:
+            'page-error direction=${direction.name} '
+            'cursor=$cursorMessageId limit=$_conversationPageSize',
+      );
 
       if (!mounted ||
           page == null ||
@@ -1328,182 +1315,92 @@ final class _ChatConversationScreenState extends State<ChatConversationScreen> {
         return;
       }
 
+      _applyMessagePage(direction, page.messages, hasMore: page.hasMore);
       if (page.messages.isEmpty) {
-        setState(() {
-          _hasMoreMessages = false;
-        });
         unawaited(
-          widget.messageCache.updateOlderBoundary(
+          widget.messageCache.updatePageBoundary(
             otherUserId: widget.otherUser.id,
-            boundaryMessageId: beforeMessageId,
-            hasMoreOlder: false,
+            boundaryMessageId: cursorMessageId,
+            direction: direction,
+            hasMore: false,
           ),
         );
         return;
       }
 
-      setState(() {
+      unawaited(
+        widget.messageCache.mergeMessagePage(
+          otherUserId: widget.otherUser.id,
+          cursorMessageId: cursorMessageId,
+          direction: direction,
+          messages: page.messages,
+          hasMore: page.hasMore,
+        ),
+      );
+      _notifyMessagesChanged(persistToMessageCache: false);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingMessagePages.remove(direction);
+        });
+      } else {
+        _loadingMessagePages.remove(direction);
+      }
+    }
+  }
+
+  void _applyMessagePage(
+    ChatHistoryDirection direction,
+    List<ChatMessage> messages, {
+    required bool hasMore,
+  }) {
+    final bool newer = direction == ChatHistoryDirection.newer;
+    setState(() {
+      final bool pageHasMore = messages.isNotEmpty && hasMore;
+      if (newer) {
+        _hasMoreNewerMessages = pageHasMore;
+      } else {
+        _hasMoreMessages = pageHasMore;
+      }
+      if (messages.isEmpty) {
+        return;
+      }
+
+      // 이전 페이지와 겹치면 현재 메시지를, 이후 페이지와 겹치면 새 페이지를 유지해요.
+      _messages = newer
+          ? _mergeMessageLists(_messages, messages)
+          : _mergeMessageLists(messages, _messages);
+      if (!newer) {
         _showingLatestWindow = false;
-        _messages = _mergeMessageLists(page.messages, _messages);
-        _hasMoreMessages = page.hasMore;
-      });
-      unawaited(
-        widget.messageCache.mergeOlderPage(
-          otherUserId: widget.otherUser.id,
-          beforeMessageId: beforeMessageId,
-          messages: page.messages,
-          hasMoreOlder: page.hasMore,
-        ),
-      );
-      _notifyMessagesChanged(persistToMessageCache: false);
-    } finally {
-      if (mounted) {
-        setState(() {
-          _loadingOlderMessages = false;
-        });
-      } else {
-        _loadingOlderMessages = false;
       }
-    }
-  }
-
-  Future<void> _loadNewerMessages() async {
-    final Future<void>? inFlightLoad = _newerMessagesLoadFuture;
-
-    if (inFlightLoad != null) {
-      await inFlightLoad;
-      return;
-    }
-
-    final Future<void> loadFuture = _performNewerMessagesLoad();
-    _newerMessagesLoadFuture = loadFuture;
-
-    try {
-      await loadFuture;
-    } finally {
-      if (identical(_newerMessagesLoadFuture, loadFuture)) {
-        _newerMessagesLoadFuture = null;
-      }
-    }
-  }
-
-  Future<void> _performNewerMessagesLoad() async {
-    if (!_hasMoreNewerMessages || _messages.isEmpty || !mounted) {
-      return;
-    }
-
-    final int messageWindowGeneration = _messageWindowGeneration;
-    setState(() {
-      _loadingNewerMessages = true;
     });
-    final String afterMessageId = _messages.last.id;
-
-    try {
-      final ChatCachedConversation? cachedPage = await widget.messageCache
-          .readMessagesAfter(
-            otherUserId: widget.otherUser.id,
-            afterMessageId: afterMessageId,
-            limit: _conversationPageSize,
-          );
-
-      if (!mounted || messageWindowGeneration != _messageWindowGeneration) {
-        return;
-      }
-
-      if (cachedPage != null && cachedPage.messages.isNotEmpty) {
-        setState(() {
-          _messages = _mergeMessageLists(_messages, cachedPage.messages);
-          _hasMoreNewerMessages = cachedPage.hasMoreNewer;
-        });
-        _notifyMessagesChanged(persistToMessageCache: false);
-        return;
-      }
-
-      final ChatConversationPage? page =
-          await _requestConversationPageWithRetry(
-            afterMessageId: afterMessageId,
-            limit: _conversationPageSize,
-          );
-
-      if (!mounted ||
-          page == null ||
-          messageWindowGeneration != _messageWindowGeneration) {
-        return;
-      }
-
-      if (page.messages.isEmpty) {
-        setState(() {
-          _hasMoreNewerMessages = false;
-        });
-        unawaited(
-          widget.messageCache.updateNewerBoundary(
-            otherUserId: widget.otherUser.id,
-            boundaryMessageId: afterMessageId,
-            hasMoreNewer: false,
-          ),
-        );
-        return;
-      }
-
-      setState(() {
-        _messages = _mergeMessageLists(_messages, page.messages);
-        _hasMoreNewerMessages = page.hasMore;
-      });
-      unawaited(
-        widget.messageCache.mergeNewerPage(
-          otherUserId: widget.otherUser.id,
-          afterMessageId: afterMessageId,
-          messages: page.messages,
-          hasMoreNewer: page.hasMore,
-        ),
-      );
-      _notifyMessagesChanged(persistToMessageCache: false);
-    } finally {
-      if (mounted) {
-        setState(() {
-          _loadingNewerMessages = false;
-        });
-      } else {
-        _loadingNewerMessages = false;
-      }
-    }
   }
 
-  Future<ChatConversationPage?> _requestConversationPageWithRetry({
-    String? beforeMessageId,
-    String? afterMessageId,
-    required int limit,
+  // 페이지와 답장 주변 조회는 같은 지연 간격과 오류 기준으로 재시도해요.
+  Future<T?> _requestHistoryWithRetry<T>(
+    Future<T> Function() request, {
+    required String diagnosticContext,
   }) async {
     int retryAttempt = 0;
-    final String? cursorMessageId = beforeMessageId ?? afterMessageId;
-    final String direction = beforeMessageId == null ? 'newer' : 'older';
-
     while (true) {
       try {
-        return await widget.chatApi.listConversation(
-          otherUserId: widget.otherUser.id,
-          beforeMessageId: beforeMessageId,
-          afterMessageId: afterMessageId,
-          limit: limit,
-        );
+        return await request();
       } on ChatApiException catch (error) {
         ReplyNavigationDiagnostics.record(
-          '[reply-navigation] page-error '
-          'direction=$direction cursor=$cursorMessageId limit=$limit '
+          '[reply-navigation] $diagnosticContext '
           'status=${error.statusCode} retryable=${error.retryable}',
         );
         if (!error.retryable ||
-            retryAttempt >= _olderMessagesRetryDelays.length) {
+            retryAttempt >= _historyRequestRetryDelays.length) {
           return null;
         }
       } catch (_) {
         return null;
       }
 
-      final Duration retryDelay = _olderMessagesRetryDelays[retryAttempt];
+      final Duration retryDelay = _historyRequestRetryDelays[retryAttempt];
       retryAttempt += 1;
       await Future<void>.delayed(retryDelay);
-
       if (!mounted) {
         return null;
       }
@@ -1687,38 +1584,8 @@ final class _ChatConversationScreenState extends State<ChatConversationScreen> {
   }
 
   void _upsertMessage(ChatMessage message) {
-    final bool isNewLatestMessage = !_latestMessages.any(
-      (ChatMessage existingMessage) => existingMessage.id == message.id,
-    );
-    final List<ChatMessage> untrimmedLatestMessages = _mergeMessageLists(
-      _latestMessages,
-      <ChatMessage>[message],
-    );
-    final List<ChatMessage> nextLatestMessages = _trimLatestMessages(
-      untrimmedLatestMessages,
-    );
-    final bool revealNewestWindow =
-        _showingLatestWindow ||
-        (isNewLatestMessage && message.senderId == widget.currentUser.id);
-    final bool updateVisibleContext =
-        !revealNewestWindow &&
-        (_containsMessage(message.id) || !_hasMoreNewerMessages);
-
-    setState(() {
-      _latestMessages = nextLatestMessages;
-      _latestHasMoreMessages =
-          _latestHasMoreMessages ||
-          untrimmedLatestMessages.length > _conversationEntryCacheMessageLimit;
-      if (revealNewestWindow) {
-        _showingLatestWindow = true;
-        _messages = _latestMessages;
-        _hasMoreMessages = _latestHasMoreMessages;
-        _hasMoreNewerMessages = false;
-      } else if (updateVisibleContext) {
-        _messages = _mergeMessageLists(_messages, <ChatMessage>[message]);
-      }
-    });
-    _notifyMessagesChanged();
+    // 단건도 같은 경로로 갱신해 최신 캐시와 현재 대화의 규칙을 맞춰요.
+    _upsertMessages(<ChatMessage>[message]);
   }
 
   void _upsertMessages(List<ChatMessage> messages) {
@@ -2048,7 +1915,7 @@ final class _ChatConversationScreenState extends State<ChatConversationScreen> {
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (bool didPop, Object? result) {
-        if (!didPop) {
+        if (!didPop && !_conversationViewController.closeSearch()) {
           widget.onBack();
         }
       },
@@ -2058,10 +1925,20 @@ final class _ChatConversationScreenState extends State<ChatConversationScreen> {
         showingLatestWindow: _showingLatestWindow,
         hasMoreMessages: _hasMoreMessages,
         hasMoreNewerMessages: _hasMoreNewerMessages,
-        loadingOlderMessages: _loadingOlderMessages,
-        loadingNewerMessages: _loadingNewerMessages,
-        onLoadOlderMessages: _loadOlderMessages,
-        onLoadNewerMessages: _loadNewerMessages,
+        loadingOlderMessages: _loadingMessagePages.contains(
+          ChatHistoryDirection.older,
+        ),
+        loadingNewerMessages: _loadingMessagePages.contains(
+          ChatHistoryDirection.newer,
+        ),
+        onLoadSearchPage: ({String? beforeMessageId}) =>
+            widget.chatApi.listConversation(
+              otherUserId: widget.otherUser.id,
+              beforeMessageId: beforeMessageId,
+              limit: _conversationPageSize,
+            ),
+        onLoadOlderMessages: () => _loadMessagePage(ChatHistoryDirection.older),
+        onLoadNewerMessages: () => _loadMessagePage(ChatHistoryDirection.newer),
         onShowLatestMessages: _showLatestMessages,
         onEnsureMessageLoaded: _ensureMessageLoaded,
         showLatestReadReceipt: !_hasMoreNewerMessages,
@@ -2150,7 +2027,6 @@ final class _ChatUnreadBadge extends StatelessWidget {
           color: AppColors.white,
           fontWeight: AppTypography.bold,
           height: 1,
-          fontSize: 11,
         ),
       ),
     );

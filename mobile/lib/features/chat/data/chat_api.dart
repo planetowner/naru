@@ -158,38 +158,10 @@ final class ChatApi {
           },
         );
 
-    final http.Response response;
-
-    try {
-      response = await _client
-          .get(requestUri, headers: _headers)
-          .timeout(_conversationRequestTimeout);
-    } on TimeoutException {
-      throw const ChatApiException(
-        'Conversation loading timed out.',
-        retryable: true,
-      );
-    } on http.ClientException {
-      throw const ChatApiException(
-        'Conversation loading failed because of a network error.',
-        retryable: true,
-      );
-    }
-
-    if (response.statusCode != 200) {
-      throw ChatApiException(
-        _readErrorMessage(
-          response,
-          fallback:
-              'Conversation loading failed with status code '
-              '${response.statusCode}.',
-        ),
-        retryable:
-            response.statusCode == 429 ||
-            (response.statusCode >= 500 && response.statusCode < 600),
-        statusCode: response.statusCode,
-      );
-    }
+    final http.Response response = await _getConversationResponse(
+      requestUri,
+      operation: 'Conversation loading',
+    );
 
     final Object? decodedBody = jsonDecode(response.body);
 
@@ -199,17 +171,7 @@ final class ChatApi {
       );
     }
 
-    final List<ChatMessage> messages = decodedBody
-        .map((dynamic item) {
-          if (item is! Map<String, dynamic>) {
-            throw const ChatApiException(
-              'The server returned an invalid message.',
-            );
-          }
-
-          return messageFromJson(item);
-        })
-        .toList(growable: false);
+    final List<ChatMessage> messages = _messagesFromJson(decodedBody);
 
     final String? hasMoreHeader = response.headers['x-has-more'];
     final bool hasMore =
@@ -233,38 +195,10 @@ final class ChatApi {
             'newer_limit': newerLimit.toString(),
           },
         );
-    final http.Response response;
-
-    try {
-      response = await _client
-          .get(requestUri, headers: _headers)
-          .timeout(_conversationRequestTimeout);
-    } on TimeoutException {
-      throw const ChatApiException(
-        'Message context loading timed out.',
-        retryable: true,
-      );
-    } on http.ClientException {
-      throw const ChatApiException(
-        'Message context loading failed because of a network error.',
-        retryable: true,
-      );
-    }
-
-    if (response.statusCode != 200) {
-      throw ChatApiException(
-        _readErrorMessage(
-          response,
-          fallback:
-              'Message context loading failed with status code '
-              '${response.statusCode}.',
-        ),
-        retryable:
-            response.statusCode == 429 ||
-            (response.statusCode >= 500 && response.statusCode < 600),
-        statusCode: response.statusCode,
-      );
-    }
+    final http.Response response = await _getConversationResponse(
+      requestUri,
+      operation: 'Message context loading',
+    );
 
     final Object? decodedBody = jsonDecode(response.body);
 
@@ -277,18 +211,9 @@ final class ChatApi {
       );
     }
 
-    final List<ChatMessage> messages =
-        (decodedBody['messages'] as List<dynamic>)
-            .map((dynamic item) {
-              if (item is! Map<String, dynamic>) {
-                throw const ChatApiException(
-                  'The server returned an invalid message.',
-                );
-              }
-
-              return messageFromJson(item);
-            })
-            .toList(growable: false);
+    final List<ChatMessage> messages = _messagesFromJson(
+      decodedBody['messages'] as List<dynamic>,
+    );
 
     return ChatConversationContext(
       messages: messages,
@@ -297,110 +222,54 @@ final class ChatApi {
     );
   }
 
-  Future<List<ChatMessage>> searchConversation({
-    required String otherUserId,
-    required String query,
-    int limit = 100,
+  // 목록과 답장 주변 조회는 같은 시간 제한과 재시도 기준을 써요.
+  Future<http.Response> _getConversationResponse(
+    Uri requestUri, {
+    required String operation,
   }) async {
-    final Uri requestUri = _baseUri
-        .resolve('/messages/conversation/$otherUserId/search')
-        .replace(
-          queryParameters: <String, String>{
-            'query': query,
-            'limit': limit.toString(),
-          },
-        );
+    final http.Response response;
 
-    final http.Response response = await _client.get(
-      requestUri,
-      headers: _headers,
-    );
+    try {
+      response = await _client
+          .get(requestUri, headers: _headers)
+          .timeout(_conversationRequestTimeout);
+    } on TimeoutException {
+      throw ChatApiException('$operation timed out.', retryable: true);
+    } on http.ClientException {
+      throw ChatApiException(
+        '$operation failed because of a network error.',
+        retryable: true,
+      );
+    }
 
     if (response.statusCode != 200) {
       throw ChatApiException(
         _readErrorMessage(
           response,
           fallback:
-              'Message search failed with status code '
-              '${response.statusCode}.',
+              '$operation failed with status code ${response.statusCode}.',
         ),
+        retryable:
+            response.statusCode == 429 ||
+            (response.statusCode >= 500 && response.statusCode < 600),
+        statusCode: response.statusCode,
       );
     }
 
-    final Object? decodedBody = jsonDecode(response.body);
+    return response;
+  }
 
-    if (decodedBody is! List<dynamic>) {
-      throw const ChatApiException(
-        'The server returned an invalid search result.',
-      );
-    }
-
-    return decodedBody
+  List<ChatMessage> _messagesFromJson(List<dynamic> items) {
+    return items
         .map((dynamic item) {
           if (item is! Map<String, dynamic>) {
             throw const ChatApiException(
               'The server returned an invalid message.',
             );
           }
-
           return messageFromJson(item);
         })
         .toList(growable: false);
-  }
-
-  Future<int> countUnreadMessages({
-    String? excludeUserId,
-    String? fromUserId,
-  }) async {
-    final Map<String, String> queryParameters = <String, String>{};
-
-    if (excludeUserId != null) {
-      queryParameters['exclude_user_id'] = excludeUserId;
-    }
-
-    if (fromUserId != null) {
-      queryParameters['from_user_id'] = fromUserId;
-    }
-
-    final Uri requestUri = _baseUri
-        .resolve('/messages/unread-count')
-        .replace(
-          queryParameters: queryParameters.isEmpty ? null : queryParameters,
-        );
-
-    final http.Response response = await _client.get(
-      requestUri,
-      headers: _headers,
-    );
-
-    if (response.statusCode != 200) {
-      throw ChatApiException(
-        _readErrorMessage(
-          response,
-          fallback:
-              'Unread count loading failed with status code '
-              '${response.statusCode}.',
-        ),
-      );
-    }
-
-    final Object? decodedBody = jsonDecode(response.body);
-
-    if (decodedBody is! Map<String, dynamic>) {
-      throw const ChatApiException(
-        'The server returned an invalid unread count.',
-      );
-    }
-
-    final Object? unreadCount = decodedBody['unread_count'];
-
-    if (unreadCount is int && unreadCount >= 0) {
-      return unreadCount;
-    }
-
-    throw const ChatApiException(
-      'The server returned an invalid unread count.',
-    );
   }
 
   Future<Map<String, int>> listUnreadMessageCounts() async {
@@ -469,13 +338,7 @@ final class ChatApi {
       );
     }
 
-    final Object? decodedBody = jsonDecode(response.body);
-
-    if (decodedBody is! Map<String, dynamic>) {
-      throw const ChatApiException('The server returned an invalid message.');
-    }
-
-    return messageFromJson(decodedBody);
+    return _messageFromResponse(response);
   }
 
   Future<ChatMessage> sendTextMessage({
@@ -1299,12 +1162,7 @@ final class ChatApi {
       );
     }
 
-    final Object? decodedBody = jsonDecode(response.body);
-    if (decodedBody is! Map<String, dynamic>) {
-      throw const ChatApiException('The server returned an invalid call.');
-    }
-
-    return messageFromJson(decodedBody);
+    return _messageFromResponse(response, invalidKind: 'call');
   }
 
   Future<ChatMessage> editTextMessage({
@@ -1328,13 +1186,7 @@ final class ChatApi {
       );
     }
 
-    final Object? decodedBody = jsonDecode(response.body);
-
-    if (decodedBody is! Map<String, dynamic>) {
-      throw const ChatApiException('The server returned an invalid message.');
-    }
-
-    return messageFromJson(decodedBody);
+    return _messageFromResponse(response);
   }
 
   Future<void> deleteMessage({required String messageId}) async {
@@ -1415,12 +1267,17 @@ final class ChatApi {
       );
     }
 
+    return _messageFromResponse(response);
+  }
+
+  ChatMessage _messageFromResponse(
+    http.Response response, {
+    String invalidKind = 'message',
+  }) {
     final Object? decodedBody = jsonDecode(response.body);
-
     if (decodedBody is! Map<String, dynamic>) {
-      throw const ChatApiException('The server returned an invalid message.');
+      throw ChatApiException('The server returned an invalid $invalidKind.');
     }
-
     return messageFromJson(decodedBody);
   }
 

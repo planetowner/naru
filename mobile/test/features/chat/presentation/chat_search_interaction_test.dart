@@ -1,6 +1,10 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:naru/design_system/app_colors.dart';
+import 'package:naru/features/chat/data/chat_api.dart';
 import 'package:naru/features/chat/domain/chat_message.dart';
 import 'package:naru/features/chat/presentation/chat_conversation_view.dart';
 
@@ -50,6 +54,45 @@ Color? _matchBackgroundColor(
 
   return null;
 }
+
+List<ChatMessage> _messagesWithPhotoBeforeMatches(int historyCount) =>
+    <ChatMessage>[
+      for (int index = 0; index < historyCount; index++)
+        ChatMessage(
+          id: 'history-$index',
+          senderId: '2',
+          recipientId: '1',
+          content: index == 2 ? '에바 이전 메시지' : 'Earlier message $index',
+          createdAt: DateTime(2026, 10, 25, 12, index),
+        ),
+      ChatMessage(
+        id: 'photo-before-matches',
+        senderId: '1',
+        recipientId: '2',
+        content: '',
+        createdAt: DateTime(2026, 10, 26, 22, 27),
+        photoAttachments: [
+          ChatPhotoAttachment(
+            assetId: 'search-photo',
+            width: 1200,
+            height: 1200,
+            previewBytes: base64Decode(
+              'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAABmJLR0QA'
+              '/wD/AP+gvaeTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH5gMQ'
+              'FwcdLl4wmwAAAAtJREFUCNdjYAACAAAFAAHiJgWbAAAAAElFTkSuQmCC',
+            ),
+          ),
+        ],
+      ),
+      for (int index = 0; index < 2; index++)
+        ChatMessage(
+          id: 'match-$index',
+          senderId: '1',
+          recipientId: '2',
+          content: '에바',
+          createdAt: DateTime(2026, 10, 27, 1, 27, index),
+        ),
+    ];
 
 void main() {
   testWidgets('search navigation follows KakaoTalk result direction', (
@@ -266,7 +309,7 @@ void main() {
         );
       }
 
-      await tester.tap(find.text('Cancel'));
+      await tester.tap(find.byTooltip('Close search'));
       await tester.pump(const Duration(milliseconds: 80));
 
       for (final double keyboardHeight in <double>[240, 180, 120, 60, 0]) {
@@ -287,6 +330,173 @@ void main() {
       }
     }
   });
+
+  testWidgets('opening search keeps a short conversation in place', (
+    WidgetTester tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.viewPadding = const FakeViewPadding(top: 59, bottom: 34);
+    tester.view.padding = const FakeViewPadding(top: 59, bottom: 34);
+    addTearDown(tester.view.reset);
+    final messages = _messagesWithPhotoBeforeMatches(1);
+    final history = Completer<ChatConversationPage>();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ChatConversationView(
+          initialMessages: messages,
+          onLoadSearchPage: ({beforeMessageId}) => history.future,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final bubble = find.byKey(const ValueKey('outgoing-bubble-match-1'));
+    final double initialBottom = tester.getBottomLeft(bubble).dy;
+    final double composerTop = tester
+        .getTopLeft(find.byKey(const ValueKey('message-composer-default')))
+        .dy;
+    expect(composerTop - initialBottom, greaterThan(12));
+
+    await tester.tap(find.byTooltip('Search'));
+    for (int frame = 0; frame < 4; frame++) {
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(
+        tester.getBottomLeft(bubble).dy,
+        closeTo(initialBottom, 0.5),
+        reason: '검색 상단이나 로딩 안내가 나타나도 대화를 아래로 밀면 안 돼요.',
+      );
+    }
+    expect(find.text('Searching chat history…'), findsOneWidget);
+    history.complete(ChatConversationPage(messages: messages, hasMore: false));
+    await tester.pumpAndSettle();
+    expect(tester.getBottomLeft(bubble).dy, closeTo(initialBottom, 0.5));
+    expect(find.text('Searching chat history…'), findsNothing);
+
+    await tester.tap(find.byTooltip('Close search'));
+    await tester.pumpAndSettle();
+    expect(tester.getBottomLeft(bubble).dy, closeTo(initialBottom, 0.5));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'search matches remain between the header and toolbar as the keyboard closes',
+    (WidgetTester tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(393, 852);
+      tester.view.viewPadding = const FakeViewPadding(top: 59, bottom: 34);
+      tester.view.padding = const FakeViewPadding(top: 59, bottom: 34);
+      addTearDown(tester.view.reset);
+
+      final messages = _messagesWithPhotoBeforeMatches(20);
+      await tester.pumpWidget(
+        MaterialApp(home: ChatConversationView(initialMessages: messages)),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Search'));
+      await tester.pumpAndSettle();
+
+      void expectMessageVisible(String bubbleKey) {
+        final Rect bubble = tester.getRect(find.byKey(ValueKey(bubbleKey)));
+        final Rect header = tester.getRect(
+          find.byKey(const ValueKey('chat-search-top-bar')),
+        );
+        final Rect toolbar = tester.getRect(
+          find.byKey(const ValueKey('chat-search-toolbar')),
+        );
+        expect(bubble.top, greaterThanOrEqualTo(header.bottom));
+        expect(bubble.bottom, lessThan(toolbar.top));
+      }
+
+      for (final double height in [60, 120, 180, 240, 300, 346]) {
+        tester.view.viewInsets = FakeViewPadding(bottom: height);
+        tester.view.padding = const FakeViewPadding(top: 59);
+        await tester.pump(const Duration(milliseconds: 80));
+      }
+      await tester.enterText(
+        find.byKey(const ValueKey('chat-search-input')),
+        '에바',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle();
+      expect(find.text('1/3'), findsOneWidget);
+      expectMessageVisible('outgoing-bubble-match-1');
+
+      final toolbar = find.byKey(const ValueKey('chat-search-toolbar'));
+      final double initialGap =
+          tester.getTopLeft(toolbar).dy -
+          tester
+              .getBottomLeft(
+                find.byKey(const ValueKey('outgoing-bubble-match-1')),
+              )
+              .dy;
+      double previousToolbarBottom = tester.getBottomLeft(toolbar).dy;
+      // 홈 인디케이터보다 낮은 키보드 프레임에서도 내려갔다 다시 튀면 안 돼요.
+      for (final double height in [
+        300,
+        240,
+        180,
+        120,
+        60,
+        44,
+        40,
+        34,
+        24,
+        10,
+        1,
+        0,
+      ]) {
+        tester.view.viewInsets = FakeViewPadding(bottom: height);
+        if (height == 0) {
+          tester.view.padding = const FakeViewPadding(top: 59, bottom: 34);
+        }
+        await tester.pump(const Duration(milliseconds: 80));
+        expectMessageVisible('outgoing-bubble-match-1');
+        final double toolbarBottom = tester.getBottomLeft(toolbar).dy;
+        expect(
+          toolbarBottom,
+          lessThanOrEqualTo(852 - 34),
+          reason: '검색 바가 홈 인디케이터 영역 안으로 내려가면 안 돼요.',
+        );
+        expect(
+          toolbarBottom,
+          greaterThanOrEqualTo(previousToolbarBottom),
+          reason: '키보드가 닫힐 때 검색 바가 반대 방향으로 튀면 안 돼요.',
+        );
+        expect(
+          tester.getTopLeft(toolbar).dy -
+              tester
+                  .getBottomLeft(
+                    find.byKey(const ValueKey('outgoing-bubble-match-1')),
+                  )
+                  .dy,
+          closeTo(initialGap, 0.5),
+          reason: '메시지와 검색 바가 같은 이동을 따라야 해요.',
+        );
+        previousToolbarBottom = toolbarBottom;
+      }
+      await tester.pumpAndSettle();
+
+      for (final bubbleKey in [
+        'outgoing-bubble-match-0',
+        'incoming-bubble-history-2',
+      ]) {
+        await tester.tap(find.byKey(const ValueKey('chat-search-older')));
+        await tester.pumpAndSettle();
+        expectMessageVisible(bubbleKey);
+      }
+      expect(find.text('3/3'), findsOneWidget);
+      for (final bubbleKey in [
+        'outgoing-bubble-match-0',
+        'outgoing-bubble-match-1',
+      ]) {
+        await tester.tap(find.byKey(const ValueKey('chat-search-newer')));
+        await tester.pumpAndSettle();
+        expectMessageVisible(bubbleKey);
+      }
+      expect(find.text('1/3'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'search results stay hidden until the edited query is submitted',

@@ -23,7 +23,7 @@ from fastapi import (
     Response,
     status,
 )
-from sqlalchemy import and_, desc, func, or_, select
+from sqlalchemy import Select, and_, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import SessionLocal
@@ -96,6 +96,7 @@ CALL_KINDS = {
     "video",
 }
 
+
 UNSEND_WINDOW = timedelta(minutes=5)
 LINK_PREVIEW_FETCH_TIMEOUT_SECONDS = 4
 LINK_PREVIEW_MAX_BYTES = 2 * 1024 * 1024
@@ -107,6 +108,8 @@ LINK_PREVIEW_USER_AGENT = (
 LINK_PREVIEW_ACCEPT_LANGUAGE = "ko-KR,ko;q=0.8,en-US;q=0.6,en;q=0.4"
 URL_PATTERN = re.compile(r"(?i)\b(?:https?://|www\.)[^\s<>'\"]+")
 TRAILING_URL_PUNCTUATION = ".,!?;:)]}…"
+
+
 
 
 def normalize_utc(value: datetime) -> datetime:
@@ -425,6 +428,10 @@ async def send_to_direct_participants(
             user_id=user_id,
             data=data,
         )
+
+
+
+
 
 
 async def get_direct_conversation(
@@ -1079,6 +1086,8 @@ async def execute_message_translation(
     return True
 
 
+
+
 async def translate_and_publish_message(message_id: UUID) -> None:
     async with SessionLocal() as session:
         message = await session.get(Message, message_id)
@@ -1125,6 +1134,8 @@ async def translate_and_publish_message(message_id: UUID) -> None:
         direct_conversation,
         websocket_event,
     )
+
+
 
 
 @router.post(
@@ -1637,6 +1648,63 @@ async def count_unread_messages(
     return UnreadMessageCountRead(unread_count=int(unread_count or 0))
 
 
+def _visible_conversation_messages(
+    *,
+    conversation_id: UUID,
+    user_id: UUID,
+) -> Select[tuple[Message]]:
+    # 목록, 답장 주변 조회, 검색에서 삭제하거나 숨긴 메시지를 같은 기준으로 제외해요.
+    hidden_message_ids = select(MessageDeletion.message_id).where(
+        MessageDeletion.conversation_id == conversation_id,
+        MessageDeletion.user_id == user_id,
+    )
+    return select(Message).where(
+        Message.conversation_id == conversation_id,
+        Message.deleted_at.is_(None),
+        Message.id.not_in(hidden_message_ids),
+    )
+
+
+async def _load_message_page(
+    session: AsyncSession,
+    statement: Select[tuple[Message]],
+    *,
+    limit: int,
+    cursor: Optional[Message] = None,
+    newer: bool = False,
+) -> tuple[list[Message], bool]:
+    if cursor is not None:
+        # 같은 시각의 메시지도 빠지거나 겹치지 않도록 UUID를 두 번째 정렬 기준으로 써요.
+        created_at_comparison = (
+            Message.created_at > cursor.created_at
+            if newer
+            else Message.created_at < cursor.created_at
+        )
+        id_comparison = Message.id > cursor.id if newer else Message.id < cursor.id
+        statement = statement.where(
+            or_(
+                created_at_comparison,
+                and_(Message.created_at == cursor.created_at, id_comparison),
+            )
+        )
+
+    ordering = (
+        (Message.created_at, Message.id)
+        if newer
+        else (desc(Message.created_at), desc(Message.id))
+    )
+    result = await session.scalars(statement.order_by(*ordering).limit(limit + 1))
+    messages = list(result)
+    has_more = len(messages) > limit
+    messages = messages[:limit]
+
+    # 어느 방향으로 읽어도 응답은 오래된 메시지부터 돌려줘요.
+    if not newer:
+        messages.reverse()
+
+    return messages, has_more
+
+
 @router.get(
     "/conversation/{other_user_id}",
     response_model=list[MessageRead],
@@ -1673,17 +1741,10 @@ async def list_conversation(
     if direct_conversation is None:
         return []
 
-    hidden_message_ids = select(MessageDeletion.message_id).where(
-        MessageDeletion.conversation_id
-        == direct_conversation.conversation_id,
-        MessageDeletion.user_id == current_user.id,
+    statement = _visible_conversation_messages(
+        conversation_id=direct_conversation.conversation_id,
+        user_id=current_user.id,
     )
-
-    message_filters = [
-        Message.conversation_id == direct_conversation.conversation_id,
-        Message.deleted_at.is_(None),
-        Message.id.not_in(hidden_message_ids),
-    ]
 
     if before_message_id is not None and after_message_id is not None:
         raise HTTPException(
@@ -1707,55 +1768,14 @@ async def list_conversation(
                 detail="Invalid conversation cursor",
             )
 
-    if before_message_id is not None:
-        assert cursor_message is not None
-        # 같은 시각의 메시지도 빠지거나 겹치지 않도록 UUID를 두 번째 정렬 기준으로 써요.
-        message_filters.append(
-            or_(
-                Message.created_at < cursor_message.created_at,
-                and_(
-                    Message.created_at == cursor_message.created_at,
-                    Message.id < cursor_message.id,
-                ),
-            )
-        )
-
-    if after_message_id is not None:
-        assert cursor_message is not None
-        message_filters.append(
-            or_(
-                Message.created_at > cursor_message.created_at,
-                and_(
-                    Message.created_at == cursor_message.created_at,
-                    Message.id > cursor_message.id,
-                ),
-            )
-        )
-        statement = (
-            select(Message)
-            .where(*message_filters)
-            .order_by(Message.created_at, Message.id)
-            .limit(limit + 1)
-        )
-    else:
-        statement = (
-            select(Message)
-            .where(*message_filters)
-            .order_by(desc(Message.created_at), desc(Message.id))
-            .limit(limit + 1)
-        )
-
-    result = await session.scalars(statement)
-
-    messages = list(result)
-    has_more = len(messages) > limit
-
-    if has_more:
-        messages = messages[:limit]
-
+    messages, has_more = await _load_message_page(
+        session,
+        statement,
+        limit=limit,
+        cursor=cursor_message,
+        newer=after_message_id is not None,
+    )
     response.headers["X-Has-More"] = "true" if has_more else "false"
-    if after_message_id is None:
-        messages.reverse()
 
     return await build_message_reads(
         session,
@@ -1802,22 +1822,11 @@ async def get_conversation_message_context(
             detail="Conversation not found",
         )
 
-    hidden_message_ids = select(MessageDeletion.message_id).where(
-        MessageDeletion.conversation_id
-        == direct_conversation.conversation_id,
-        MessageDeletion.user_id == current_user.id,
+    statement = _visible_conversation_messages(
+        conversation_id=direct_conversation.conversation_id,
+        user_id=current_user.id,
     )
-    visible_message_filters = [
-        Message.conversation_id == direct_conversation.conversation_id,
-        Message.deleted_at.is_(None),
-        Message.id.not_in(hidden_message_ids),
-    ]
-    target_message = await session.scalar(
-        select(Message).where(
-            *visible_message_filters,
-            Message.id == message_id,
-        )
-    )
+    target_message = await session.scalar(statement.where(Message.id == message_id))
 
     if target_message is None:
         raise HTTPException(
@@ -1829,53 +1838,24 @@ async def get_conversation_message_context(
     has_more_older = False
 
     if older_limit > 0:
-        older_result = await session.scalars(
-            select(Message)
-            .where(
-                *visible_message_filters,
-                or_(
-                    Message.created_at < target_message.created_at,
-                    and_(
-                        Message.created_at == target_message.created_at,
-                        Message.id < target_message.id,
-                    ),
-                ),
-            )
-            .order_by(desc(Message.created_at), desc(Message.id))
-            .limit(older_limit + 1)
+        older_messages, has_more_older = await _load_message_page(
+            session,
+            statement,
+            limit=older_limit,
+            cursor=target_message,
         )
-        older_messages = list(older_result)
-        has_more_older = len(older_messages) > older_limit
-
-        if has_more_older:
-            older_messages = older_messages[:older_limit]
-
-        older_messages.reverse()
 
     newer_messages: list[Message] = []
     has_more_newer = False
 
     if newer_limit > 0:
-        newer_result = await session.scalars(
-            select(Message)
-            .where(
-                *visible_message_filters,
-                or_(
-                    Message.created_at > target_message.created_at,
-                    and_(
-                        Message.created_at == target_message.created_at,
-                        Message.id > target_message.id,
-                    ),
-                ),
-            )
-            .order_by(Message.created_at, Message.id)
-            .limit(newer_limit + 1)
+        newer_messages, has_more_newer = await _load_message_page(
+            session,
+            statement,
+            limit=newer_limit,
+            cursor=target_message,
+            newer=True,
         )
-        newer_messages = list(newer_result)
-        has_more_newer = len(newer_messages) > newer_limit
-
-        if has_more_newer:
-            newer_messages = newer_messages[:newer_limit]
 
     messages = [*older_messages, target_message, *newer_messages]
     message_reads = await build_message_reads(
@@ -1934,19 +1914,12 @@ async def search_conversation(
     translated_match_ids = select(MessageTranslation.message_id).where(
         func.lower(MessageTranslation.translated_body).like(search_pattern)
     )
-    hidden_message_ids = select(MessageDeletion.message_id).where(
-        MessageDeletion.conversation_id
-        == direct_conversation.conversation_id,
-        MessageDeletion.user_id == current_user.id,
-    )
-
     result = await session.scalars(
-        select(Message)
+        _visible_conversation_messages(
+            conversation_id=direct_conversation.conversation_id,
+            user_id=current_user.id,
+        )
         .where(
-            Message.conversation_id
-            == direct_conversation.conversation_id,
-            Message.deleted_at.is_(None),
-            Message.id.not_in(hidden_message_ids),
             or_(
                 func.lower(Message.body).like(search_pattern),
                 Message.id.in_(translated_match_ids),
@@ -2081,6 +2054,8 @@ async def mark_conversation_as_read(
     return MessagesMarkedReadResponse(
         marked_read_count=len(unread_messages),
     )
+
+
 
 
 @router.post(

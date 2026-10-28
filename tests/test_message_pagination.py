@@ -20,6 +20,19 @@ from app.routes import messages as message_routes
 
 
 class ConversationPaginationTests(unittest.IsolatedAsyncioTestCase):
+    def assert_visible_conversation_query(
+        self, statement, *, user_id: UUID, conversation_id: UUID
+    ) -> None:
+        compiled = statement.compile()
+        statement_text = str(compiled)
+        self.assertIn("messages.deleted_at IS NULL", statement_text)
+        self.assertIn("messages.id NOT IN", statement_text)
+        self.assertIn("message_deletions.user_id =", statement_text)
+        self.assertIn("message_deletions.conversation_id =", statement_text)
+        self.assertEqual(compiled.params["user_id_1"], user_id)
+        self.assertEqual(compiled.params["conversation_id_1"], conversation_id)
+        self.assertEqual(compiled.params["conversation_id_2"], conversation_id)
+
     async def test_cursor_page_returns_only_older_messages_and_has_more(self) -> None:
         current_user_id = UUID("00000000-0000-0000-0000-000000000001")
         other_user_id = UUID("00000000-0000-0000-0000-000000000002")
@@ -97,6 +110,9 @@ class ConversationPaginationTests(unittest.IsolatedAsyncioTestCase):
         statement_text = str(statement)
         self.assertIn("messages.created_at <", statement_text)
         self.assertIn("messages.id <", statement_text)
+        self.assert_visible_conversation_query(
+            statement, user_id=current_user_id, conversation_id=conversation_id
+        )
 
     async def test_last_page_reports_no_more_messages(self) -> None:
         current_user = SimpleNamespace(
@@ -312,6 +328,46 @@ class ConversationPaginationTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertTrue(result.has_more_older)
         self.assertTrue(result.has_more_newer)
+
+        for statement in (
+            session.scalar.await_args.args[0],
+            *(call.args[0] for call in session.scalars.await_args_list),
+        ):
+            self.assert_visible_conversation_query(
+                statement, user_id=current_user_id, conversation_id=conversation_id
+            )
+
+    async def test_search_excludes_hidden_and_deleted_messages(self) -> None:
+        current_user_id = UUID("00000000-0000-0000-0000-000000000001")
+        other_user_id = UUID("00000000-0000-0000-0000-000000000002")
+        conversation_id = UUID("00000000-0000-0000-0000-000000000010")
+        session = SimpleNamespace(
+            get=AsyncMock(return_value=SimpleNamespace(id=other_user_id)),
+            scalars=AsyncMock(return_value=[]),
+        )
+
+        with (
+            patch.object(
+                message_routes,
+                "get_direct_conversation",
+                AsyncMock(return_value=SimpleNamespace(conversation_id=conversation_id)),
+            ),
+            patch.object(
+                message_routes, "build_message_reads", AsyncMock(return_value=[])
+            ),
+        ):
+            await message_routes.search_conversation(
+                other_user_id=other_user_id,
+                current_user=SimpleNamespace(id=current_user_id),
+                session=session,
+                query="hello",
+                limit=10,
+            )
+
+        statement = session.scalars.await_args.args[0]
+        self.assert_visible_conversation_query(
+            statement, user_id=current_user_id, conversation_id=conversation_id
+        )
 
 
 if __name__ == "__main__":

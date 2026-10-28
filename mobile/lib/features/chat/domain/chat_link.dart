@@ -6,18 +6,20 @@ final RegExp chatUrlPattern = RegExp(
 const String chatTrailingUrlPunctuation = '.,!?;:)]}…';
 
 String? firstChatUrlInText(String content) {
-  final RegExpMatch? match = chatUrlPattern.firstMatch(content);
-  if (match == null) {
-    return null;
-  }
+  return chatUrlsInText(content).firstOrNull;
+}
 
-  String url = match.group(0)!.trimRight();
-  while (url.isNotEmpty &&
-      chatTrailingUrlPunctuation.contains(url[url.length - 1])) {
-    url = url.substring(0, url.length - 1);
+Iterable<String> chatUrlsInText(String content) sync* {
+  final Set<String> seen = <String>{};
+  for (final RegExpMatch match in chatUrlPattern.allMatches(content)) {
+    String url = match.group(0)!.trimRight();
+    while (url.isNotEmpty &&
+        chatTrailingUrlPunctuation.contains(url[url.length - 1])) {
+      url = url.substring(0, url.length - 1);
+    }
+    if (url.toLowerCase().startsWith('www.')) url = 'https://$url';
+    if (seen.add(url)) yield url;
   }
-
-  return url.toLowerCase().startsWith('www.') ? 'https://$url' : url;
 }
 
 String chatDomainForUrl(String url) {

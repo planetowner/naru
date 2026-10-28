@@ -485,262 +485,278 @@ void main() {
     },
   );
 
-  testWidgets(
-    'a reply quote loads its original outside the latest cached page',
-    (WidgetTester tester) async {
-      int contextRequestCount = 0;
-      int sentMessageCount = 0;
-      final DateTime sentAt = DateTime.utc(2026, 7, 1, 7);
-      final ChatRealtimeService realtimeService = await _pumpConversationHome(
-        tester,
-        messageResponder: (http.Request request) async {
-          sentMessageCount += 1;
-          final Map<String, dynamic> requestBody =
-              jsonDecode(request.body) as Map<String, dynamic>;
-          final Map<String, dynamic> sentMessage = _messageJson(
-            399 + sentMessageCount,
-          );
-          sentMessage['content'] = requestBody['content'];
-          sentMessage['created_at'] = sentAt.toIso8601String();
-          sentMessage['sender_id'] = _currentUser.id;
-          sentMessage['recipient_id'] = _otherUser.id;
-
-          return http.Response(
-            jsonEncode(sentMessage),
-            201,
-            headers: const <String, String>{'content-type': 'application/json'},
-          );
-        },
-        conversationResponder: (http.Request request) async {
-          if (request.url.path.contains('/around/')) {
-            contextRequestCount += 1;
-            final String targetMessageId = request.url.pathSegments.last;
-            final int targetIndex = int.parse(
-              targetMessageId.substring('message-'.length),
+  for (final bool retryContext in <bool>[false, true]) {
+    testWidgets(
+      retryContext
+          ? 'a reply quote retries a transient context failure and restores its window'
+          : 'a reply quote loads its original outside the latest cached page',
+      (WidgetTester tester) async {
+        int contextRequestCount = 0;
+        final int expectedContextRequestCount = retryContext ? 2 : 1;
+        int sentMessageCount = 0;
+        final DateTime sentAt = DateTime.utc(2026, 7, 1, 7);
+        final ChatRealtimeService realtimeService = await _pumpConversationHome(
+          tester,
+          messageResponder: (http.Request request) async {
+            sentMessageCount += 1;
+            final Map<String, dynamic> requestBody =
+                jsonDecode(request.body) as Map<String, dynamic>;
+            final Map<String, dynamic> sentMessage = _messageJson(
+              399 + sentMessageCount,
             );
-            final int startIndex = targetIndex == 21 ? 0 : 369;
-            final int endIndex = targetIndex == 21 ? 52 : 400;
-
-            expect(request.url.queryParameters['older_limit'], '30');
-            expect(request.url.queryParameters['newer_limit'], '30');
+            sentMessage['content'] = requestBody['content'];
+            sentMessage['created_at'] = sentAt.toIso8601String();
+            sentMessage['sender_id'] = _currentUser.id;
+            sentMessage['recipient_id'] = _otherUser.id;
 
             return http.Response(
-              jsonEncode(<String, Object?>{
-                'messages': List<Map<String, dynamic>>.generate(
-                  endIndex - startIndex,
-                  (int offset) {
-                    final int index = startIndex + offset;
+              jsonEncode(sentMessage),
+              201,
+              headers: const <String, String>{
+                'content-type': 'application/json',
+              },
+            );
+          },
+          conversationResponder: (http.Request request) async {
+            if (request.url.path.contains('/around/')) {
+              contextRequestCount += 1;
+              if (retryContext && contextRequestCount == 1) {
+                return http.Response('{}', 503);
+              }
+              final String targetMessageId = request.url.pathSegments.last;
+              final int targetIndex = int.parse(
+                targetMessageId.substring('message-'.length),
+              );
+              final int startIndex = targetIndex == 21 ? 0 : 369;
+              final int endIndex = targetIndex == 21 ? 52 : 400;
+
+              expect(request.url.queryParameters['older_limit'], '30');
+              expect(request.url.queryParameters['newer_limit'], '30');
+
+              return http.Response(
+                jsonEncode(<String, Object?>{
+                  'messages': List<Map<String, dynamic>>.generate(
+                    endIndex - startIndex,
+                    (int offset) {
+                      final int index = startIndex + offset;
+                      return _messageJson(
+                        index,
+                        replyToIndex: index == 399 ? 21 : null,
+                      );
+                    },
+                  ),
+                  'has_more_older': startIndex > 0,
+                  'has_more_newer': endIndex < 400,
+                }),
+                200,
+                headers: const <String, String>{
+                  'content-type': 'application/json',
+                },
+              );
+            }
+
+            final String? beforeMessageId =
+                request.url.queryParameters['before_message_id'];
+
+            if (beforeMessageId == null) {
+              return http.Response(
+                jsonEncode(
+                  List<Map<String, dynamic>>.generate(100, (int offset) {
+                    final int index = offset + 300;
+
                     return _messageJson(
                       index,
                       replyToIndex: index == 399 ? 21 : null,
                     );
-                  },
+                  }),
                 ),
-                'has_more_older': startIndex > 0,
-                'has_more_newer': endIndex < 400,
-              }),
-              200,
-              headers: const <String, String>{
-                'content-type': 'application/json',
-              },
-            );
-          }
+                200,
+                headers: const <String, String>{
+                  'content-type': 'application/json',
+                  'x-has-more': 'true',
+                },
+              );
+            }
 
-          final String? beforeMessageId =
-              request.url.queryParameters['before_message_id'];
+            throw StateError('Reply navigation must use the context endpoint.');
+          },
+        );
+        addTearDown(realtimeService.dispose);
 
-          if (beforeMessageId == null) {
-            return http.Response(
-              jsonEncode(
-                List<Map<String, dynamic>>.generate(100, (int offset) {
-                  final int index = offset + 300;
+        await tester.tap(find.text(_otherUser.displayName));
+        await tester.pumpAndSettle();
 
-                  return _messageJson(
-                    index,
-                    replyToIndex: index == 399 ? 21 : null,
-                  );
-                }),
-              ),
-              200,
-              headers: const <String, String>{
-                'content-type': 'application/json',
-                'x-has-more': 'true',
-              },
-            );
-          }
+        final Finder quoteAreaFinder = find.byKey(
+          const ValueKey<String>('reply-quote-area-message-399'),
+        );
+        expect(quoteAreaFinder, findsOneWidget);
 
-          throw StateError('Reply navigation must use the context endpoint.');
-        },
-      );
-      addTearDown(realtimeService.dispose);
+        final Finder messageListFinder = find.byKey(
+          const ValueKey<String>('message-list'),
+        );
+        final Rect initialMessageListRect = tester.getRect(messageListFinder);
+        final double initialReplyTop =
+            tester.getRect(quoteAreaFinder).top - initialMessageListRect.top;
 
-      await tester.tap(find.text(_otherUser.displayName));
-      await tester.pumpAndSettle();
+        await tester.tap(quoteAreaFinder);
 
-      final Finder quoteAreaFinder = find.byKey(
-        const ValueKey<String>('reply-quote-area-message-399'),
-      );
-      expect(quoteAreaFinder, findsOneWidget);
+        final Finder originalBubbleFinder = find.byKey(
+          const ValueKey<String>('incoming-bubble-message-21'),
+        );
+        final Finder backButtonFinder = find.byKey(
+          const ValueKey<String>('back-to-reply-message'),
+        );
+        final Finder latestButtonFinder = find.byKey(
+          const ValueKey<String>('scroll-to-latest-message'),
+        );
 
-      final Finder messageListFinder = find.byKey(
-        const ValueKey<String>('message-list'),
-      );
-      final Rect initialMessageListRect = tester.getRect(messageListFinder);
-      final double initialReplyTop =
-          tester.getRect(quoteAreaFinder).top - initialMessageListRect.top;
+        for (
+          int frame = 0;
+          frame < 80 && backButtonFinder.evaluate().isEmpty;
+          frame++
+        ) {
+          await tester.pump(const Duration(milliseconds: 40));
+        }
 
-      await tester.tap(quoteAreaFinder);
+        expect(contextRequestCount, expectedContextRequestCount);
+        expect(originalBubbleFinder, findsOneWidget);
+        expect(backButtonFinder, findsOneWidget);
+        expect(latestButtonFinder, findsOneWidget);
 
-      final Finder originalBubbleFinder = find.byKey(
-        const ValueKey<String>('incoming-bubble-message-21'),
-      );
-      final Finder backButtonFinder = find.byKey(
-        const ValueKey<String>('back-to-reply-message'),
-      );
-      final Finder latestButtonFinder = find.byKey(
-        const ValueKey<String>('scroll-to-latest-message'),
-      );
+        final Rect messageListRect = tester.getRect(
+          find.byKey(const ValueKey<String>('message-list')),
+        );
+        final Rect originalBubbleRect = tester.getRect(originalBubbleFinder);
+        final double originalTopRatio =
+            (originalBubbleRect.top - messageListRect.top) /
+            messageListRect.height;
 
-      for (
-        int frame = 0;
-        frame < 80 && backButtonFinder.evaluate().isEmpty;
-        frame++
-      ) {
-        await tester.pump(const Duration(milliseconds: 40));
-      }
+        // RenderAbstractViewport의 물리 픽셀 반올림 오차는 허용하되 기대 위치 범위는 지켜요.
+        expect(originalTopRatio, inInclusiveRange(0.18, 0.39));
 
-      expect(contextRequestCount, 1);
-      expect(originalBubbleFinder, findsOneWidget);
-      expect(backButtonFinder, findsOneWidget);
-      expect(latestButtonFinder, findsOneWidget);
+        await tester.tap(backButtonFinder);
 
-      final Rect messageListRect = tester.getRect(
-        find.byKey(const ValueKey<String>('message-list')),
-      );
-      final Rect originalBubbleRect = tester.getRect(originalBubbleFinder);
-      final double originalTopRatio =
-          (originalBubbleRect.top - messageListRect.top) /
-          messageListRect.height;
+        for (
+          int frame = 0;
+          frame < 80 && backButtonFinder.evaluate().isNotEmpty;
+          frame++
+        ) {
+          await tester.pump(const Duration(milliseconds: 40));
+        }
 
-      // RenderAbstractViewport의 물리 픽셀 반올림 오차는 허용하되 기대 위치 범위는 지켜요.
-      expect(originalTopRatio, inInclusiveRange(0.18, 0.39));
+        expect(backButtonFinder, findsNothing);
+        expect(quoteAreaFinder, findsOneWidget);
+        expect(
+          contextRequestCount,
+          expectedContextRequestCount,
+          reason:
+              'Returning to a reply captured from the latest window must reuse '
+              'that complete window instead of requesting a 30-message context.',
+        );
 
-      await tester.tap(backButtonFinder);
+        final Rect returnedMessageListRect = tester.getRect(messageListFinder);
+        final double returnedReplyTop =
+            tester.getRect(quoteAreaFinder).top - returnedMessageListRect.top;
 
-      for (
-        int frame = 0;
-        frame < 80 && backButtonFinder.evaluate().isNotEmpty;
-        frame++
-      ) {
-        await tester.pump(const Duration(milliseconds: 40));
-      }
+        expect(returnedReplyTop, closeTo(initialReplyTop, 1));
 
-      expect(backButtonFinder, findsNothing);
-      expect(quoteAreaFinder, findsOneWidget);
-      expect(
-        contextRequestCount,
-        1,
-        reason:
-            'Returning to a reply captured from the latest window must reuse '
-            'that complete window instead of requesting a 30-message context.',
-      );
+        await tester.drag(messageListFinder, const Offset(0, -500));
+        await tester.pumpAndSettle();
 
-      final Rect returnedMessageListRect = tester.getRect(messageListFinder);
-      final double returnedReplyTop =
-          tester.getRect(quoteAreaFinder).top - returnedMessageListRect.top;
+        final Finder returnedLatestBubbleFinder = find.byKey(
+          const ValueKey<String>('incoming-bubble-message-399'),
+        );
+        final Finder composerFinder = find.byKey(
+          const ValueKey<String>('message-composer-default'),
+        );
 
-      expect(returnedReplyTop, closeTo(initialReplyTop, 1));
+        expect(returnedLatestBubbleFinder, findsOneWidget);
+        expect(
+          tester.getRect(composerFinder).top -
+              tester.getRect(returnedLatestBubbleFinder).bottom,
+          closeTo(12, 1),
+          reason:
+              'Returning to the actual last reply must restore the latest '
+              'structural center so no empty space can be scrolled below it.',
+        );
 
-      await tester.drag(messageListFinder, const Offset(0, -500));
-      await tester.pumpAndSettle();
-
-      final Finder returnedLatestBubbleFinder = find.byKey(
-        const ValueKey<String>('incoming-bubble-message-399'),
-      );
-      final Finder composerFinder = find.byKey(
-        const ValueKey<String>('message-composer-default'),
-      );
-
-      expect(returnedLatestBubbleFinder, findsOneWidget);
-      expect(
-        tester.getRect(composerFinder).top -
-            tester.getRect(returnedLatestBubbleFinder).bottom,
-        closeTo(12, 1),
-        reason:
-            'Returning to the actual last reply must restore the latest '
-            'structural center so no empty space can be scrolled below it.',
-      );
-
-      await tester.enterText(
-        find.byKey(const ValueKey<String>('message-input')),
-        'sent after reply navigation',
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey<String>('message-send')));
-      await tester.pumpAndSettle();
-
-      final Finder newestBubbleFinder = find.byKey(
-        const ValueKey<String>('outgoing-bubble-message-400'),
-      );
-      expect(newestBubbleFinder, findsOneWidget);
-      expect(
-        tester.getRect(composerFinder).top -
-            tester.getRect(newestBubbleFinder).bottom,
-        closeTo(12, 1),
-        reason:
-            'Returning from reply navigation must not leave its recentered '
-            'sliver as the structural center of the latest conversation.',
-      );
-
-      for (final String content in <String>[
-        'second message in the same minute',
-        'third message in the same minute',
-      ]) {
         await tester.enterText(
           find.byKey(const ValueKey<String>('message-input')),
-          content,
+          'sent after reply navigation',
         );
         await tester.pumpAndSettle();
         await tester.tap(find.byKey(const ValueKey<String>('message-send')));
         await tester.pumpAndSettle();
-      }
 
-      final BuildContext timestampContext = tester.element(composerFinder);
-      final String formattedSentTime =
-          MaterialLocalizations.of(timestampContext).formatTimeOfDay(
-            TimeOfDay.fromDateTime(sentAt.toLocal()),
-            alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(
-              timestampContext,
-            ),
+        final Finder newestBubbleFinder = find.byKey(
+          const ValueKey<String>('outgoing-bubble-message-400'),
+        );
+        expect(newestBubbleFinder, findsOneWidget);
+        expect(
+          tester.getRect(composerFinder).top -
+              tester.getRect(newestBubbleFinder).bottom,
+          closeTo(12, 1),
+          reason:
+              'Returning from reply navigation must not leave its recentered '
+              'sliver as the structural center of the latest conversation.',
+        );
+
+        for (final String content in <String>[
+          'second message in the same minute',
+          'third message in the same minute',
+        ]) {
+          await tester.enterText(
+            find.byKey(const ValueKey<String>('message-input')),
+            content,
           );
+          await tester.pumpAndSettle();
+          await tester.tap(find.byKey(const ValueKey<String>('message-send')));
+          await tester.pumpAndSettle();
+        }
 
-      expect(find.text(formattedSentTime), findsOneWidget);
-      expect(
-        find.byKey(const ValueKey<String>('outgoing-bubble-message-402')),
-        findsOneWidget,
-      );
+        final BuildContext timestampContext = tester.element(composerFinder);
+        final String formattedSentTime =
+            MaterialLocalizations.of(timestampContext).formatTimeOfDay(
+              TimeOfDay.fromDateTime(sentAt.toLocal()),
+              alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(
+                timestampContext,
+              ),
+            );
 
-      await tester.tap(quoteAreaFinder);
+        expect(find.text(formattedSentTime), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey<String>('outgoing-bubble-message-402')),
+          findsOneWidget,
+        );
 
-      for (
-        int frame = 0;
-        frame < 80 && latestButtonFinder.evaluate().isEmpty;
-        frame++
-      ) {
-        await tester.pump(const Duration(milliseconds: 40));
-      }
+        await tester.tap(quoteAreaFinder);
 
-      expect(backButtonFinder, findsOneWidget);
-      expect(latestButtonFinder, findsOneWidget);
+        for (
+          int frame = 0;
+          frame < 80 && latestButtonFinder.evaluate().isEmpty;
+          frame++
+        ) {
+          await tester.pump(const Duration(milliseconds: 40));
+        }
 
-      await tester.tap(latestButtonFinder);
-      await tester.pumpAndSettle();
+        expect(backButtonFinder, findsOneWidget);
+        expect(latestButtonFinder, findsOneWidget);
 
-      expect(backButtonFinder, findsNothing);
-      expect(latestButtonFinder, findsNothing);
-      expect(newestBubbleFinder, findsOneWidget);
-    },
-  );
+        // 전송 후 다시 이동해도 남은 애니메이션이 원문을 화면 밖으로 밀어내면 안 돼요.
+        await tester.pumpAndSettle();
+        expect(originalBubbleFinder.hitTestable(), findsOneWidget);
+        expect(backButtonFinder, findsOneWidget);
+        expect(latestButtonFinder, findsOneWidget);
+
+        await tester.tap(latestButtonFinder);
+        await tester.pumpAndSettle();
+
+        expect(backButtonFinder, findsNothing);
+        expect(latestButtonFinder, findsNothing);
+        expect(newestBubbleFinder, findsOneWidget);
+      },
+    );
+  }
 
   testWidgets(
     'a cached far reply restores the original history center before scrolling',

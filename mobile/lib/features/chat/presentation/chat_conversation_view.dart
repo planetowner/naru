@@ -20,17 +20,23 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../../design_system/app_colors.dart';
+import '../../../design_system/app_control_style.dart';
 import '../../../design_system/app_icons.dart';
 import '../../../design_system/components/app_button.dart';
+import '../../../design_system/components/app_icon_button.dart';
+import '../../../design_system/components/app_text_field.dart';
 import '../../../design_system/app_radius.dart';
 import '../../../design_system/app_spacing.dart';
 import '../../../design_system/app_typography.dart';
 import '../../../design_system/components/app_media_viewer_chrome.dart';
 import '../../../design_system/components/app_profile_image.dart';
 import '../data/chat_photo_library.dart';
+import '../data/chat_api.dart';
+import '../domain/chat_search.dart';
 import '../data/chat_video_disk_cache.dart';
 import '../data/chat_video_transcoder.dart';
 import '../data/photo_send_diagnostics.dart';
+import '../domain/chat_history_direction.dart';
 import '../domain/chat_link.dart';
 import '../domain/chat_message_action.dart';
 import '../domain/chat_message.dart';
@@ -51,6 +57,7 @@ import 'chat_scrollbar_range_tracker.dart';
 import 'read_receipt_formatter.dart';
 import 'reply_navigation_diagnostics.dart';
 
+part 'chat_search_widgets.dart';
 
 const double _messageListHorizontalPadding = AppSpacing.space8;
 
@@ -214,8 +221,9 @@ typedef ChatMessageTranslationRetrier =
     Future<ChatMessage> Function({required String messageId});
 
 typedef ChatMessageDeleter = Future<void> Function({required String messageId});
-typedef ChatOlderMessagesLoader = Future<void> Function();
-typedef ChatNewerMessagesLoader = Future<void> Function();
+typedef ChatSearchPageLoader =
+    Future<ChatConversationPage> Function({String? beforeMessageId});
+typedef ChatHistoryPageLoader = Future<void> Function();
 typedef ChatLatestWindowRestorer = Future<void> Function();
 typedef ChatMessageLoader =
     Future<bool> Function(
@@ -401,6 +409,12 @@ final class ChatConversationViewController {
     return _state?._prepareInitialCachedPhotos() ?? Future<void>.value();
   }
 
+  bool closeSearch() {
+    if (_state?._searchModeActive != true) return false;
+    _state!._exitSearchMode();
+    return true;
+  }
+
   void _attach(_ChatConversationViewState state) {
     _state = state;
   }
@@ -424,6 +438,7 @@ final class ChatConversationView extends StatefulWidget {
     this.hasMoreNewerMessages = false,
     this.loadingOlderMessages = false,
     this.loadingNewerMessages = false,
+    this.onLoadSearchPage,
     this.onLoadOlderMessages,
     this.onLoadNewerMessages,
     this.onShowLatestMessages,
@@ -466,8 +481,9 @@ final class ChatConversationView extends StatefulWidget {
   final bool hasMoreNewerMessages;
   final bool loadingOlderMessages;
   final bool loadingNewerMessages;
-  final ChatOlderMessagesLoader? onLoadOlderMessages;
-  final ChatNewerMessagesLoader? onLoadNewerMessages;
+  final ChatSearchPageLoader? onLoadSearchPage;
+  final ChatHistoryPageLoader? onLoadOlderMessages;
+  final ChatHistoryPageLoader? onLoadNewerMessages;
   final ChatLatestWindowRestorer? onShowLatestMessages;
   final ChatMessageLoader? onEnsureMessageLoaded;
   final bool showLatestReadReceipt;
@@ -599,6 +615,13 @@ final class _ChatConversationViewState extends State<ChatConversationView>
   List<String> _searchResultMessageIds = const <String>[];
   int? _searchResultIndex;
   DateTime? _selectedSearchDate;
+  ChatSearchCategory _searchCategory = ChatSearchCategory.messages;
+  ChatSearchMediaFilter _searchMediaFilter = ChatSearchMediaFilter.all;
+  final Map<String, ChatMessage> _searchMessages = {};
+  bool _searchHistoryLoading = false;
+  bool _searchHistoryFailed = false;
+  String? _searchHistoryCursor;
+  int _searchGeneration = 0;
 
   @override
   void initState() {
@@ -626,6 +649,15 @@ final class _ChatConversationViewState extends State<ChatConversationView>
   void didUpdateWidget(covariant ChatConversationView oldWidget) {
     super.didUpdateWidget(oldWidget);
 
+    if (_searchModeActive &&
+        oldWidget.initialMessages != widget.initialMessages) {
+      for (final message in widget.initialMessages ?? const <ChatMessage>[]) {
+        _searchMessages[message.id] = message;
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _searchModeActive) _syncSearchResults();
+      });
+    }
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller?._detach(this);
       widget.controller?._attach(this);
@@ -2291,7 +2323,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
     _viewportResizeAnchorActive = false;
   }
 
-  void _handleMessageListUserScrollStarted() {
+  void _handleMessageListUserNavigationStarted() {
     if (_currentKeyboardHeight() > 0.5) {
       _beginViewportResizeAnchorPreservation();
       _scheduleViewportResizeAnchorRelease(
@@ -2518,6 +2550,17 @@ final class _ChatConversationViewState extends State<ChatConversationView>
 
     setState(() {
       _searchModeActive = true;
+      _searchCategory = ChatSearchCategory.messages;
+      _searchMediaFilter = ChatSearchMediaFilter.all;
+      _searchMessages.clear();
+      for (final message
+          in _messageListKey.currentState?._messages ?? const <ChatMessage>[]) {
+        _searchMessages[message.id] = message;
+      }
+      _searchGeneration++;
+      _searchHistoryLoading = false;
+      _searchHistoryFailed = false;
+      _searchHistoryCursor = null;
       _searchSubmitted = false;
       _searchQuery = _searchController.text;
       _searchResultMessageIds = const <String>[];
@@ -2530,6 +2573,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
       }
 
       _searchFocusNode.requestFocus();
+      unawaited(_loadSearchHistory());
     });
   }
 
@@ -2549,6 +2593,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
 
     setState(() {
       _searchModeActive = false;
+      _searchGeneration++;
       _searchSubmitted = false;
       _searchQuery = '';
       _searchResultMessageIds = const <String>[];
@@ -2597,19 +2642,82 @@ final class _ChatConversationViewState extends State<ChatConversationView>
       return;
     }
 
-    final _MessageListState? messageListState = _messageListKey.currentState;
-    final List<String> resultMessageIds =
-        messageListState?.searchMessageIds(_searchQuery) ?? const <String>[];
-
-    final int? nextIndex = resultMessageIds.isEmpty ? null : 0;
+    final String? previousId = _currentSearchMessageId;
+    final List<ChatMessage> sorted = _searchMessages.values.toList()
+      ..sort((a, b) => compareChatMessages(b, a));
+    final List<String> resultMessageIds = [
+      for (final message in sorted)
+        if (chatMessageMatchesQuery(message, _searchQuery)) message.id,
+    ];
+    final int preservedIndex = previousId == null
+        ? -1
+        : resultMessageIds.indexOf(previousId);
+    final int? nextIndex = resultMessageIds.isEmpty
+        ? null
+        : !scrollToFirstResult && preservedIndex >= 0
+        ? preservedIndex
+        : 0;
 
     setState(() {
       _searchResultMessageIds = resultMessageIds;
       _searchResultIndex = nextIndex;
     });
 
-    if (scrollToFirstResult && nextIndex != null) {
+    if ((scrollToFirstResult || previousId == null) &&
+        nextIndex != null &&
+        _searchCategory == ChatSearchCategory.messages) {
       _scrollToCurrentSearchResult();
+    }
+  }
+
+  Future<void> _loadSearchHistory() async {
+    final loader = widget.onLoadSearchPage;
+    if (loader == null || _searchHistoryLoading) return;
+    final int generation = _searchGeneration;
+    setState(() {
+      _searchHistoryLoading = true;
+      _searchHistoryFailed = false;
+    });
+    try {
+      while (mounted && _searchModeActive && generation == _searchGeneration) {
+        final page = await loader(beforeMessageId: _searchHistoryCursor);
+        if (!mounted || !_searchModeActive || generation != _searchGeneration) {
+          return;
+        }
+        setState(() {
+          for (final message in page.messages) {
+            _searchMessages[message.id] = message;
+          }
+          if (page.messages.isNotEmpty) {
+            _searchHistoryCursor =
+                (page.messages.toList()..sort(compareChatMessages)).first.id;
+          }
+        });
+        _syncSearchResults();
+        if (!page.hasMore || page.messages.isEmpty) break;
+      }
+    } catch (_) {
+      if (mounted && generation == _searchGeneration) {
+        setState(() => _searchHistoryFailed = true);
+      }
+    } finally {
+      if (mounted && generation == _searchGeneration) {
+        setState(() => _searchHistoryLoading = false);
+      }
+    }
+  }
+
+  void _selectSearchCategory(ChatSearchCategory category) {
+    if (_searchCategory == category) return;
+    _searchFocusNode.unfocus();
+    setState(() {
+      _searchCategory = category;
+      _selectedSearchDate = null;
+    });
+    if (category == ChatSearchCategory.messages && _hasSubmittedSearch) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _searchModeActive) _scrollToCurrentSearchResult();
+      });
     }
   }
 
@@ -2619,7 +2727,9 @@ final class _ChatConversationViewState extends State<ChatConversationView>
       _searchSubmitted = false;
       _searchResultMessageIds = const <String>[];
       _searchResultIndex = null;
-      _selectedSearchDate = null;
+      if (_searchCategory == ChatSearchCategory.messages) {
+        _selectedSearchDate = null;
+      }
     });
   }
 
@@ -2640,17 +2750,19 @@ final class _ChatConversationViewState extends State<ChatConversationView>
       _searchSubmitted = hasQuery;
       _searchResultMessageIds = const <String>[];
       _searchResultIndex = null;
-      _selectedSearchDate = null;
+      if (_searchCategory == ChatSearchCategory.messages) {
+        _selectedSearchDate = null;
+      }
     });
 
     _syncSearchResults(scrollToFirstResult: true);
     _searchFocusNode.unfocus();
   }
 
-  void _scrollToCurrentSearchResult() {
+  Future<void> _scrollToCurrentSearchResult() async {
     final String? messageId = _currentSearchMessageId;
 
-    if (messageId == null) {
+    if (messageId == null || _searchCategory != ChatSearchCategory.messages) {
       return;
     }
 
@@ -2660,7 +2772,17 @@ final class _ChatConversationViewState extends State<ChatConversationView>
       return;
     }
 
-    unawaited(messageListState.scrollToSearchMessage(messageId));
+    // 검색 인덱스는 전체 기록을 읽고, 말풍선은 기존 구간 로더로 가져와요.
+    if (!await messageListState._ensureNavigationMessageAvailable(messageId)) {
+      return;
+    }
+    if (!mounted ||
+        !_searchModeActive ||
+        _searchCategory != ChatSearchCategory.messages ||
+        _currentSearchMessageId != messageId) {
+      return;
+    }
+    await messageListState.scrollToSearchMessage(messageId);
   }
 
   void _moveToNewerSearchResult() {
@@ -2694,8 +2816,22 @@ final class _ChatConversationViewState extends State<ChatConversationView>
       return;
     }
 
-    final Set<DateTime> searchableDates = messageListState
-        .searchableMessageDates();
+    final Set<DateTime> searchableDates =
+        _searchCategory == ChatSearchCategory.messages
+        ? {
+            for (final message in _searchMessages.values)
+              if (chatSearchableText(message).isNotEmpty)
+                _dateOnly(message.createdAt),
+          }
+        : {
+            for (final entry in chatSearchEntries(
+              _searchMessages.values,
+              category: _searchCategory,
+              mediaFilter: _searchMediaFilter,
+              query: _searchQuery,
+            ))
+              _dateOnly(entry.message.createdAt),
+          };
 
     if (searchableDates.isEmpty) {
       return;
@@ -2707,9 +2843,11 @@ final class _ChatConversationViewState extends State<ChatConversationView>
       _searchDateSheetOpen = true;
     });
 
-    final ChatMessage? currentSearchMessage = _currentSearchMessageId == null
+    final ChatMessage? currentSearchMessage =
+        _searchCategory != ChatSearchCategory.messages ||
+            _currentSearchMessageId == null
         ? null
-        : messageListState.findMessage(_currentSearchMessageId!);
+        : _searchMessages[_currentSearchMessageId!];
 
     final DateTime latestSearchableDate = searchableDates.reduce(
       (DateTime a, DateTime b) => a.isBefore(b) ? b : a,
@@ -2746,7 +2884,11 @@ final class _ChatConversationViewState extends State<ChatConversationView>
       return;
     }
 
-    _handleSearchDateSelected(selectedDate);
+    if (_searchCategory == ChatSearchCategory.messages) {
+      _handleSearchDateSelected(selectedDate);
+    } else {
+      setState(() => _selectedSearchDate = _dateOnly(selectedDate));
+    }
   }
 
   void _handleSearchDateSelected(DateTime selectedDate) {
@@ -2764,7 +2906,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
 
     if (_hasSubmittedSearch && _searchResultMessageIds.isNotEmpty) {
       final int matchingIndex = _searchResultMessageIds.indexWhere((String id) {
-        final ChatMessage? message = messageListState.findMessage(id);
+        final ChatMessage? message = _searchMessages[id];
 
         return message != null &&
             _dateOnly(message.createdAt) == normalizedDate;
@@ -2780,7 +2922,26 @@ final class _ChatConversationViewState extends State<ChatConversationView>
       }
     }
 
-    unawaited(messageListState.scrollToSearchDate(normalizedDate));
+    final matches =
+        _searchMessages.values
+            .where(
+              (message) =>
+                  _dateOnly(message.createdAt) == normalizedDate &&
+                  chatSearchableText(message).isNotEmpty,
+            )
+            .toList()
+          ..sort(compareChatMessages);
+    if (matches.isNotEmpty) {
+      unawaited(() async {
+        if (await messageListState._ensureNavigationMessageAvailable(
+              matches.first.id,
+            ) &&
+            mounted &&
+            _searchModeActive) {
+          await messageListState.scrollToSearchMessage(matches.first.id);
+        }
+      }());
+    }
   }
 
   Future<void> _prepareMessageActions() async {
@@ -3374,6 +3535,11 @@ final class _ChatConversationViewState extends State<ChatConversationView>
     );
   }
 
+  double get _searchHeaderHeight => _ChatSearchTopBar.heightFor(
+    loading: _searchHistoryLoading,
+    failed: _searchHistoryFailed,
+  );
+
   String _searchCounterText() {
     if (!_hasSubmittedSearch) {
       return '';
@@ -3472,14 +3638,17 @@ final class _ChatConversationViewState extends State<ChatConversationView>
     final double messageListHeaderInset = showingVoiceCallScreen
         ? 0
         : mediaQuery.padding.top +
-              (_searchModeActive
-                  ? _ChatSearchTopBar.height
-                  : _ChatTopBar.height) +
+              _ChatTopBar.height +
               (showActiveVoiceCallBanner
                   ? _ActiveVoiceCallBanner.occupiedHeight
                   : 0);
 
-    final double messageListTopPadding = messageListHeaderInset + 8;
+    final double messageListLayoutTopPadding = messageListHeaderInset + 8;
+    final double messageListTopPadding =
+        messageListLayoutTopPadding +
+        (_searchModeActive && !showingVoiceCallScreen
+            ? _searchHeaderHeight - _ChatTopBar.height
+            : 0);
 
     final bool pinMessageListToBottom =
         !_searchModeActive &&
@@ -3508,54 +3677,66 @@ final class _ChatConversationViewState extends State<ChatConversationView>
               Column(
                 children: [
                   Expanded(
-                    child: _MessageList(
-                      key: _messageListKey,
-                      initialMessages: widget.initialMessages,
-                      showingLatestWindow: widget.showingLatestWindow,
-                      hasMoreMessages: widget.hasMoreMessages,
-                      hasMoreNewerMessages: widget.hasMoreNewerMessages,
-                      loadingOlderMessages: widget.loadingOlderMessages,
-                      loadingNewerMessages: widget.loadingNewerMessages,
-                      onLoadOlderMessages: widget.onLoadOlderMessages,
-                      onLoadNewerMessages: widget.onLoadNewerMessages,
-                      onShowLatestMessages: widget.onShowLatestMessages,
-                      onEnsureMessageLoaded: widget.onEnsureMessageLoaded,
-                      showLatestReadReceipt: widget.showLatestReadReceipt,
-                      currentUserId: widget.currentUserId,
-                      currentUserPreferredLanguage:
-                          widget.currentUserPreferredLanguage,
-                      otherParticipantId: widget.otherParticipantId,
-                      otherParticipantName: widget.otherParticipantName,
-                      otherParticipantProfileImageUrl:
-                          widget.otherParticipantProfileImageUrl,
-                      onTranslateMessage: widget.onTranslateMessage,
-                      onRetryTranslation: widget.onRetryTranslation,
-                      onDeleteMessage: widget.onDeleteMessage,
-                      onPhotoMessageTap: _openPhotoViewer,
-                      onVideoMessageTap: _openVideoViewer,
-                      onCreateMediaAssetAccessUrl:
-                          _cachedMediaAssetAccessUrlCreator,
-                      onCreatePhotoThumbnailAccessUrl:
-                          _cachedPhotoThumbnailAccessUrlCreator,
-                      translationDelay: widget.translationDelay,
-                      initialClock: widget.initialClock,
-                      nextLocalMessageId: widget.nextLocalMessageId,
-                      onReplySelected: _beginReply,
-                      onEditSelected: _beginEdit,
-                      onBackgroundTap: _searchModeActive
-                          ? _searchFocusNode.unfocus
-                          : _dismissComposerSurface,
-                      onPrepareMessageActions: _prepareMessageActions,
-                      onMessageCopied: _showMessageCopiedConfirmation,
-                      searchQuery: _searchModeActive && _hasSubmittedSearch
-                          ? _searchQuery
-                          : '',
-                      activeSearchMessageId: _currentSearchMessageId,
-                      topPadding: messageListTopPadding,
-                      bottomPadding: messageListBottomPadding,
-                      pinToBottom: pinMessageListToBottom,
-                      scrollLocked: widget.routeNavigationDragActive,
-                      onUserScrollStarted: _handleMessageListUserScrollStarted,
+                    child: ExcludeSemantics(
+                      excluding:
+                          _searchModeActive &&
+                          _searchCategory != ChatSearchCategory.messages,
+                      child: IgnorePointer(
+                        ignoring:
+                            _searchModeActive &&
+                            _searchCategory != ChatSearchCategory.messages,
+                        child: _MessageList(
+                          key: _messageListKey,
+                          initialMessages: widget.initialMessages,
+                          showingLatestWindow: widget.showingLatestWindow,
+                          hasMoreMessages: widget.hasMoreMessages,
+                          hasMoreNewerMessages: widget.hasMoreNewerMessages,
+                          loadingOlderMessages: widget.loadingOlderMessages,
+                          loadingNewerMessages: widget.loadingNewerMessages,
+                          onLoadOlderMessages: widget.onLoadOlderMessages,
+                          onLoadNewerMessages: widget.onLoadNewerMessages,
+                          onShowLatestMessages: widget.onShowLatestMessages,
+                          onEnsureMessageLoaded: widget.onEnsureMessageLoaded,
+                          showLatestReadReceipt: widget.showLatestReadReceipt,
+                          currentUserId: widget.currentUserId,
+                          currentUserPreferredLanguage:
+                              widget.currentUserPreferredLanguage,
+                          otherParticipantId: widget.otherParticipantId,
+                          otherParticipantName: widget.otherParticipantName,
+                          otherParticipantProfileImageUrl:
+                              widget.otherParticipantProfileImageUrl,
+                          onTranslateMessage: widget.onTranslateMessage,
+                          onRetryTranslation: widget.onRetryTranslation,
+                          onDeleteMessage: widget.onDeleteMessage,
+                          onPhotoMessageTap: _openPhotoViewer,
+                          onVideoMessageTap: _openVideoViewer,
+                          onCreateMediaAssetAccessUrl:
+                              _cachedMediaAssetAccessUrlCreator,
+                          onCreatePhotoThumbnailAccessUrl:
+                              _cachedPhotoThumbnailAccessUrlCreator,
+                          translationDelay: widget.translationDelay,
+                          initialClock: widget.initialClock,
+                          nextLocalMessageId: widget.nextLocalMessageId,
+                          onReplySelected: _beginReply,
+                          onEditSelected: _beginEdit,
+                          onBackgroundTap: _searchModeActive
+                              ? _searchFocusNode.unfocus
+                              : _dismissComposerSurface,
+                          onPrepareMessageActions: _prepareMessageActions,
+                          onMessageCopied: _showMessageCopiedConfirmation,
+                          searchQuery: _searchModeActive && _hasSubmittedSearch
+                              ? _searchQuery
+                              : '',
+                          activeSearchMessageId: _currentSearchMessageId,
+                          topPadding: messageListTopPadding,
+                          layoutTopPadding: messageListLayoutTopPadding,
+                          bottomPadding: messageListBottomPadding,
+                          pinToBottom: pinMessageListToBottom,
+                          scrollLocked: widget.routeNavigationDragActive,
+                          onUserNavigationStarted:
+                              _handleMessageListUserNavigationStarted,
+                        ),
+                      ),
                     ),
                   ),
                   if (!_searchModeActive)
@@ -3689,6 +3870,11 @@ final class _ChatConversationViewState extends State<ChatConversationView>
                           controller: _searchController,
                           focusNode: _searchFocusNode,
                           hasText: _searchController.text.isNotEmpty,
+                          category: _searchCategory,
+                          onCategoryChanged: _selectSearchCategory,
+                          loading: _searchHistoryLoading,
+                          failed: _searchHistoryFailed,
+                          onRetry: _loadSearchHistory,
                           onChanged: _handleSearchQueryChanged,
                           onSubmitted: _submitSearch,
                           onClear: _clearSearchQuery,
@@ -3710,6 +3896,48 @@ final class _ChatConversationViewState extends State<ChatConversationView>
                           onPressed: _showVoiceCallScreen,
                         ),
                     ],
+                  ),
+                ),
+
+              if (_searchModeActive &&
+                  _searchCategory != ChatSearchCategory.messages &&
+                  !showingVoiceCallScreen)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: mediaQuery.padding.top + _searchHeaderHeight,
+                  bottom: passiveBottomHeight,
+                  child: _ChatSearchAttachments(
+                    category: _searchCategory,
+                    entries: chatSearchEntries(
+                      _searchMessages.values,
+                      category: _searchCategory,
+                      query: _searchQuery,
+                      mediaFilter: _searchMediaFilter,
+                      date: _selectedSearchDate,
+                    ),
+                    mediaFilter: _searchMediaFilter,
+                    onMediaFilterChanged: (filter) =>
+                        setState(() => _searchMediaFilter = filter),
+                    selectedDate: _selectedSearchDate,
+                    onDatePressed: _openSearchDateSheet,
+                    onClearDate: () =>
+                        setState(() => _selectedSearchDate = null),
+                    hasQuery: _hasSearchQuery,
+                    loading: _searchHistoryLoading,
+                    failed: _searchHistoryFailed,
+                    onClear: _clearSearchQuery,
+                    currentUserId: widget.currentUserId,
+                    otherParticipantName: widget.otherParticipantName,
+                    onCreateThumbnailAccessUrl:
+                        _cachedPhotoThumbnailAccessUrlCreator,
+                    onCreateMediaAssetAccessUrl:
+                        _cachedMediaAssetAccessUrlCreator,
+                    onPhotoTap: _openPhotoViewer,
+                    onVideoTap: _openVideoViewer,
+                    onFileTap: (message) => _messageListKey.currentState
+                        ?._handleFileMessageTap(message),
+                    onBackgroundTap: _searchFocusNode.unfocus,
                   ),
                 ),
 
@@ -3739,7 +3967,9 @@ final class _ChatConversationViewState extends State<ChatConversationView>
                     onChooseAudioOutput: _chooseAudioOutputRoute,
                   ),
                 ),
-              if (_searchModeActive && !showingVoiceCallScreen)
+              if (_searchModeActive &&
+                  _searchCategory == ChatSearchCategory.messages &&
+                  !showingVoiceCallScreen)
                 Positioned(
                   left: ChatComposerStyle.horizontalPadding,
                   right: ChatComposerStyle.horizontalPadding,
@@ -4392,131 +4622,6 @@ final class _TopBarBlurFade extends StatelessWidget {
             color: AppColors.surface.withAlpha(tintAlpha),
             child: const SizedBox.expand(),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-final class _ChatSearchTopBar extends StatelessWidget {
-  const _ChatSearchTopBar({
-    required this.controller,
-    required this.focusNode,
-    required this.hasText,
-    required this.onChanged,
-    required this.onSubmitted,
-    required this.onClear,
-    required this.onCancel,
-  });
-
-  static const double height = 56;
-
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final bool hasText;
-  final ValueChanged<String> onChanged;
-  final ValueChanged<String> onSubmitted;
-  final VoidCallback onClear;
-  final VoidCallback onCancel;
-
-  @override
-  Widget build(BuildContext context) {
-    final double topPadding = MediaQuery.paddingOf(context).top;
-
-    return _TranslucentTopBarSurface(
-      key: const ValueKey<String>('chat-search-top-bar'),
-      height: topPadding + height,
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(18, topPadding + 7, 16, 7),
-        child: Row(
-          children: [
-            Expanded(
-              child: SizedBox(
-                height: 42,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: AppColors.grey100.withAlpha(204),
-                    borderRadius: AppRadius.borderRadius12,
-                  ),
-                  child: TextField(
-                    key: const ValueKey<String>('chat-search-input'),
-                    controller: controller,
-                    focusNode: focusNode,
-                    autofocus: true,
-                    textAlignVertical: TextAlignVertical.center,
-                    textInputAction: TextInputAction.search,
-                    onChanged: onChanged,
-                    onSubmitted: onSubmitted,
-                    cursorColor: AppColors.primary,
-                    style: AppTypography.typography4.copyWith(
-                      color: AppColors.grey900,
-                      fontWeight: AppTypography.regular,
-                    ),
-                    decoration: InputDecoration(
-                      // 테마의 filled:true(grey100)가 사각형으로 채워져
-                      // DecoratedBox의 둥근 모서리를 덮으므로 꺼요.
-                      filled: false,
-                      hintText: 'Search',
-                      hintStyle: AppTypography.typography4.copyWith(
-                        color: AppColors.grey500,
-                        fontWeight: AppTypography.regular,
-                      ),
-                      prefixIconConstraints: const BoxConstraints(
-                        minWidth: 50,
-                        minHeight: 42,
-                      ),
-                      prefixIcon: const Padding(
-                        padding: EdgeInsets.only(left: 14, right: 10),
-                        child: Icon(
-                          Icons.search_rounded,
-                          color: AppColors.grey700,
-                          size: 24,
-                        ),
-                      ),
-                      suffixIconConstraints: const BoxConstraints(
-                        minWidth: 42,
-                        minHeight: 42,
-                      ),
-                      suffixIcon: hasText
-                          ? IconButton(
-                              tooltip: 'Clear search',
-                              onPressed: onClear,
-                              padding: EdgeInsets.zero,
-                              icon: const Icon(
-                                Icons.cancel_rounded,
-                                color: AppColors.grey600,
-                                size: 22,
-                              ),
-                            )
-                          : null,
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      isDense: true,
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            TextButton(
-              onPressed: onCancel,
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.grey900,
-                minimumSize: const Size(64, 42),
-                padding: EdgeInsets.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              child: Text(
-                'Cancel',
-                style: AppTypography.typography4.copyWith(
-                  color: AppColors.grey900,
-                  fontWeight: AppTypography.regular,
-                ),
-              ),
-            ),
-          ],
         ),
       ),
     );
@@ -6290,11 +6395,7 @@ String _normalizeSearchQuery(String query) {
   return query.trim().toLowerCase();
 }
 
-DateTime _dateOnly(DateTime value) {
-  final DateTime local = value.toLocal();
-
-  return DateTime(local.year, local.month, local.day);
-}
+DateTime _dateOnly(DateTime value) => chatSearchDate(value);
 
 DateTime _monthOnly(DateTime value) {
   final DateTime local = value.toLocal();
@@ -6334,47 +6435,6 @@ bool _isLinkOnlyMessage(ChatMessage message) {
       .replaceAll(RegExp(r'[\s.,!?;:()\[\]{}…]+'), '');
 
   return remainingText.isEmpty;
-}
-
-List<String> _searchableTextSegmentsFor(ChatMessage message) {
-  final List<String> segments = <String>[];
-
-  if (!message.isPhotoMessage &&
-      !message.isVideoMessage &&
-      !message.isFileMessage &&
-      !message.isCallMessage) {
-    if (message.content.trim().isNotEmpty) {
-      segments.add(message.content);
-    }
-
-    final String? translatedContent = message.translatedContent;
-
-    if (translatedContent != null && translatedContent.trim().isNotEmpty) {
-      segments.add(translatedContent);
-    }
-
-    final String? replyContent = message.replyTo?.content;
-
-    if (replyContent != null && replyContent.trim().isNotEmpty) {
-      segments.add(replyContent);
-    }
-  }
-
-  return segments;
-}
-
-bool _messageMatchesSearchQuery(ChatMessage message, String normalizedQuery) {
-  if (normalizedQuery.isEmpty) {
-    return false;
-  }
-
-  for (final String segment in _searchableTextSegmentsFor(message)) {
-    if (segment.toLowerCase().contains(normalizedQuery)) {
-      return true;
-    }
-  }
-
-  return false;
 }
 
 bool _messageNeedsTranslation(
@@ -6496,9 +6556,13 @@ List<_SearchMatch> _searchMatchesIn(String text, String query) {
 }
 
 final class _ViewportAnchorScrollController extends ScrollController {
-  _ViewportAnchorScrollController({required this.bottomPadding});
+  _ViewportAnchorScrollController({
+    required this.bottomPadding,
+    required this.topPadding,
+  });
 
   final ValueGetter<double> bottomPadding;
+  final ValueGetter<double> topPadding;
 
   @override
   ScrollPosition createScrollPosition(
@@ -6514,6 +6578,7 @@ final class _ViewportAnchorScrollController extends ScrollController {
       oldPosition: oldPosition,
       debugLabel: debugLabel,
       bottomPadding: bottomPadding,
+      topPadding: topPadding,
     );
   }
 
@@ -6571,17 +6636,21 @@ final class _ViewportAnchorScrollPosition
     required super.oldPosition,
     required super.debugLabel,
     required this.bottomPadding,
+    required this.topPadding,
   });
 
   final ValueGetter<double> bottomPadding;
+  final ValueGetter<double> topPadding;
 
   bool _preserveViewportAnchor = false;
   double? _lastEffectiveViewportBottom;
+  double? _lastTopPadding;
   bool _preserveBottomAnchor = false;
   double? _preservedBottomDistance;
 
   void beginViewportAnchorPreservation() {
     _preserveViewportAnchor = true;
+    _lastTopPadding = topPadding();
     _lastEffectiveViewportBottom = hasViewportDimension
         ? viewportDimension - bottomPadding()
         : null;
@@ -6590,6 +6659,7 @@ final class _ViewportAnchorScrollPosition
   void endViewportAnchorPreservation() {
     _preserveViewportAnchor = false;
     _lastEffectiveViewportBottom = null;
+    _lastTopPadding = null;
   }
 
   void beginBottomAnchorPreservation() {
@@ -6637,20 +6707,26 @@ final class _ViewportAnchorScrollPosition
 
     if (!_preserveViewportAnchor) {
       _lastEffectiveViewportBottom = currentEffectiveViewportBottom;
+      _lastTopPadding = topPadding();
       return super.correctForNewDimensions(oldPosition, newPosition);
     }
 
     final double previousEffectiveViewportBottom =
         _lastEffectiveViewportBottom ??
         oldPosition.viewportDimension - currentBottomPadding;
+    // 대화의 배치 기준이 바뀌어도 같은 말풍선의 위치를 유지해요.
+    final double topPaddingChange =
+        topPadding() - (_lastTopPadding ?? topPadding());
     final double targetPixels =
         (pixels +
+                topPaddingChange +
                 previousEffectiveViewportBottom -
                 currentEffectiveViewportBottom)
             .clamp(newPosition.minScrollExtent, newPosition.maxScrollExtent)
             .toDouble();
 
     _lastEffectiveViewportBottom = currentEffectiveViewportBottom;
+    _lastTopPadding = topPadding();
 
     if (targetPixels == pixels) {
       return true;
@@ -6697,10 +6773,11 @@ final class _MessageList extends StatefulWidget {
     required this.searchQuery,
     required this.activeSearchMessageId,
     required this.topPadding,
+    required this.layoutTopPadding,
     required this.bottomPadding,
     required this.pinToBottom,
     required this.scrollLocked,
-    required this.onUserScrollStarted,
+    required this.onUserNavigationStarted,
     super.key,
   });
 
@@ -6710,8 +6787,8 @@ final class _MessageList extends StatefulWidget {
   final bool hasMoreNewerMessages;
   final bool loadingOlderMessages;
   final bool loadingNewerMessages;
-  final ChatOlderMessagesLoader? onLoadOlderMessages;
-  final ChatNewerMessagesLoader? onLoadNewerMessages;
+  final ChatHistoryPageLoader? onLoadOlderMessages;
+  final ChatHistoryPageLoader? onLoadNewerMessages;
   final ChatLatestWindowRestorer? onShowLatestMessages;
   final ChatMessageLoader? onEnsureMessageLoaded;
   final bool showLatestReadReceipt;
@@ -6738,10 +6815,12 @@ final class _MessageList extends StatefulWidget {
   final String searchQuery;
   final String? activeSearchMessageId;
   final double topPadding;
+  // 검색 상단은 대화 위에 겹쳐요. 가려지는 범위와 대화의 배치 기준을 구분해요.
+  final double layoutTopPadding;
   final double bottomPadding;
   final bool pinToBottom;
   final bool scrollLocked;
-  final VoidCallback onUserScrollStarted;
+  final VoidCallback onUserNavigationStarted;
 
   @override
   State<_MessageList> createState() {
@@ -6763,8 +6842,8 @@ final class _MessageListState extends State<_MessageList>
   );
   static const Duration _replyNavigationMaskDelay = Duration(milliseconds: 50);
   static const int _maximumRememberedMessageScrollOffsets = 64;
-  static const double _minimumOlderMessagesPrefetchExtent = 2400;
-  static const double _olderMessagesPrefetchViewportCount = 6;
+  static const double _minimumHistoryPrefetchExtent = 2400;
+  static const double _historyPrefetchViewportCount = 6;
   static const int _bottomSettleRequiredStableFrames = 2;
   // 긴 번역문이 사라질 때는 AnimatedSwitcher(160ms)가 끝난 뒤
   // AnimatedSize(180ms)가 축소되므로 두 전환 시간을 모두 덮어요.
@@ -6791,9 +6870,9 @@ final class _MessageListState extends State<_MessageList>
   final ChatScrollbarRangeTracker _scrollbarRangeTracker =
       ChatScrollbarRangeTracker();
   bool _didResolveInitialScrollPosition = false;
-  bool _olderMessagesLoadInProgress = false;
-  bool _newerMessagesLoadInProgress = false;
-  bool _bottomPinCanceledByUserScroll = false;
+  final Set<ChatHistoryDirection> _messagePageLoadsInProgress =
+      <ChatHistoryDirection>{};
+  bool _bottomPinCanceledByUserNavigation = false;
   bool _bottomSettleActive = false;
   bool _bottomSettleFrameScheduled = false;
   double? _bottomSettleLastMaxScrollExtent;
@@ -6882,6 +6961,7 @@ final class _MessageListState extends State<_MessageList>
 
     _scrollController = _ViewportAnchorScrollController(
       bottomPadding: () => widget.bottomPadding,
+      topPadding: () => widget.layoutTopPadding,
     )..addListener(_handleMessageListScroll);
 
     _messageClock = widget.initialClock ?? DateTime.now();
@@ -6905,7 +6985,7 @@ final class _MessageListState extends State<_MessageList>
   }
 
   void _beginBottomSettle() {
-    if (!mounted || _bottomPinCanceledByUserScroll) {
+    if (!mounted || _bottomPinCanceledByUserNavigation) {
       return;
     }
 
@@ -6916,7 +6996,7 @@ final class _MessageListState extends State<_MessageList>
   }
 
   Future<void> _settleAtBottom() {
-    if (!mounted || _bottomPinCanceledByUserScroll) {
+    if (!mounted || _bottomPinCanceledByUserNavigation) {
       return Future<void>.value();
     }
 
@@ -6966,7 +7046,7 @@ final class _MessageListState extends State<_MessageList>
   }
 
   void _resolveBottomSettle() {
-    if (!mounted || !_bottomSettleActive || _bottomPinCanceledByUserScroll) {
+    if (!mounted || !_bottomSettleActive || _bottomPinCanceledByUserNavigation) {
       _bottomSettleActive = false;
       _completeBottomSettle();
       return;
@@ -7024,15 +7104,15 @@ final class _MessageListState extends State<_MessageList>
       }
 
       if (!conversationOverflows) {
-        _maybeLoadOlderMessages();
+        _maybeLoadMessages(ChatHistoryDirection.older);
       }
     });
   }
 
   void _handleMessageListScroll() {
     _updateScrollOverlayMetrics();
-    _maybeLoadOlderMessages();
-    _maybeLoadNewerMessages();
+    _maybeLoadMessages(ChatHistoryDirection.older);
+    _maybeLoadMessages(ChatHistoryDirection.newer);
     _updateScrollToLatestButtonVisibility();
 
     if (_manualScrollSessionActive) {
@@ -7260,18 +7340,26 @@ final class _MessageListState extends State<_MessageList>
     });
   }
 
-  void _maybeLoadOlderMessages() {
-    final ChatOlderMessagesLoader? onLoadOlderMessages =
-        widget.onLoadOlderMessages;
+  void _maybeLoadMessages(ChatHistoryDirection direction) {
+    final bool newer = direction == ChatHistoryDirection.newer;
+    final ChatHistoryPageLoader? onLoadMessages = newer
+        ? widget.onLoadNewerMessages
+        : widget.onLoadOlderMessages;
+    final bool loading = newer
+        ? widget.loadingNewerMessages
+        : widget.loadingOlderMessages;
+    final bool hasMore = newer
+        ? widget.hasMoreNewerMessages
+        : widget.hasMoreMessages;
 
     if (!mounted ||
         !_didResolveInitialScrollPosition ||
-        _olderMessagesLoadInProgress ||
+        _messagePageLoadsInProgress.contains(direction) ||
         _replyNavigationInProgress ||
         _scrollToLatestInProgress ||
-        widget.loadingOlderMessages ||
-        !widget.hasMoreMessages ||
-        onLoadOlderMessages == null ||
+        loading ||
+        !hasMore ||
+        onLoadMessages == null ||
         !_scrollController.hasClients) {
       return;
     }
@@ -7280,120 +7368,57 @@ final class _MessageListState extends State<_MessageList>
     final ChatScrollbarRangeSnapshot? stableRange =
         _scrollbarRangeTracker.currentSnapshot;
     final double loadThreshold = math.max(
-      _minimumOlderMessagesPrefetchExtent,
-      position.viewportDimension * _olderMessagesPrefetchViewportCount,
+      _minimumHistoryPrefetchExtent,
+      position.viewportDimension * _historyPrefetchViewportCount,
     );
 
-    if (!position.hasContentDimensions ||
-        stableRange == null ||
-        stableRange.pixels - stableRange.minimumExtent > loadThreshold) {
+    if (!position.hasContentDimensions || stableRange == null) {
+      return;
+    }
+    final double distanceToBoundary = newer
+        ? stableRange.maximumExtent - stableRange.pixels
+        : stableRange.pixels - stableRange.minimumExtent;
+    if (distanceToBoundary > loadThreshold) {
       return;
     }
 
-    unawaited(_loadOlderMessages(onLoadOlderMessages));
+    unawaited(_loadMessages(direction, onLoadMessages));
   }
 
-  Future<void> _loadOlderMessages(
-    ChatOlderMessagesLoader onLoadOlderMessages,
+  Future<void> _loadMessages(
+    ChatHistoryDirection direction,
+    ChatHistoryPageLoader onLoadMessages,
   ) async {
-    if (_olderMessagesLoadInProgress) {
+    if (_messagePageLoadsInProgress.contains(direction)) {
       return;
     }
 
-    _olderMessagesLoadInProgress = true;
-    final String? previousFirstMessageId = _messages.isEmpty
+    String? boundaryMessageId() => _messages.isEmpty
         ? null
-        : _messages.first.id;
-    bool loadedOlderMessages = false;
+        : (direction == ChatHistoryDirection.newer
+              ? _messages.last.id
+              : _messages.first.id);
+
+    _messagePageLoadsInProgress.add(direction);
+    final String? previousBoundaryMessageId = boundaryMessageId();
+    bool loadedMessages = false;
 
     try {
-      await onLoadOlderMessages();
+      await onLoadMessages();
       WidgetsBinding.instance.scheduleFrame();
       await WidgetsBinding.instance.endOfFrame;
 
       if (!mounted) {
         return;
       }
-
-      loadedOlderMessages =
-          previousFirstMessageId !=
-          (_messages.isEmpty ? null : _messages.first.id);
+      loadedMessages = previousBoundaryMessageId != boundaryMessageId();
     } finally {
-      _olderMessagesLoadInProgress = false;
+      _messagePageLoadsInProgress.remove(direction);
     }
 
-    if (loadedOlderMessages && mounted) {
+    if (loadedMessages && mounted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _maybeLoadOlderMessages();
-      });
-    }
-  }
-
-  void _maybeLoadNewerMessages() {
-    final ChatNewerMessagesLoader? onLoadNewerMessages =
-        widget.onLoadNewerMessages;
-
-    if (!mounted ||
-        !_didResolveInitialScrollPosition ||
-        _newerMessagesLoadInProgress ||
-        _replyNavigationInProgress ||
-        _scrollToLatestInProgress ||
-        widget.loadingNewerMessages ||
-        !widget.hasMoreNewerMessages ||
-        onLoadNewerMessages == null ||
-        !_scrollController.hasClients) {
-      return;
-    }
-
-    final ScrollPosition position = _scrollController.position;
-    final ChatScrollbarRangeSnapshot? stableRange =
-        _scrollbarRangeTracker.currentSnapshot;
-    final double loadThreshold = math.max(
-      _minimumOlderMessagesPrefetchExtent,
-      position.viewportDimension * _olderMessagesPrefetchViewportCount,
-    );
-
-    if (!position.hasContentDimensions ||
-        stableRange == null ||
-        stableRange.maximumExtent - stableRange.pixels > loadThreshold) {
-      return;
-    }
-
-    unawaited(_loadNewerMessages(onLoadNewerMessages));
-  }
-
-  Future<void> _loadNewerMessages(
-    ChatNewerMessagesLoader onLoadNewerMessages,
-  ) async {
-    if (_newerMessagesLoadInProgress) {
-      return;
-    }
-
-    _newerMessagesLoadInProgress = true;
-    final String? previousLastMessageId = _messages.isEmpty
-        ? null
-        : _messages.last.id;
-    bool loadedNewerMessages = false;
-
-    try {
-      await onLoadNewerMessages();
-      WidgetsBinding.instance.scheduleFrame();
-      await WidgetsBinding.instance.endOfFrame;
-
-      if (!mounted) {
-        return;
-      }
-
-      loadedNewerMessages =
-          previousLastMessageId !=
-          (_messages.isEmpty ? null : _messages.last.id);
-    } finally {
-      _newerMessagesLoadInProgress = false;
-    }
-
-    if (loadedNewerMessages && mounted) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _maybeLoadNewerMessages();
+        _maybeLoadMessages(direction);
       });
     }
   }
@@ -7441,10 +7466,10 @@ final class _MessageListState extends State<_MessageList>
     }
 
     if (widget.pinToBottom && !oldWidget.pinToBottom) {
-      _bottomPinCanceledByUserScroll = false;
+      _bottomPinCanceledByUserNavigation = false;
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && widget.pinToBottom && !_bottomPinCanceledByUserScroll) {
+        if (mounted && widget.pinToBottom && !_bottomPinCanceledByUserNavigation) {
           unawaited(scrollToBottom(animate: false));
         }
       });
@@ -7455,7 +7480,7 @@ final class _MessageListState extends State<_MessageList>
         _normalizeHistoryCenterForLatestWindow();
 
         if (widget.pinToBottom) {
-          _bottomPinCanceledByUserScroll = false;
+          _bottomPinCanceledByUserNavigation = false;
           _beginBottomSettle();
         }
       }
@@ -7463,8 +7488,7 @@ final class _MessageListState extends State<_MessageList>
     }
 
     final bool shouldPinToBottomAfterUpdate =
-        !_olderMessagesLoadInProgress &&
-        !_newerMessagesLoadInProgress &&
+        _messagePageLoadsInProgress.isEmpty &&
         !_replyNavigationInProgress &&
         (!_didResolveInitialScrollPosition || isNearBottom);
     final String? previousFirstMessageId = _messages.isEmpty
@@ -7497,7 +7521,7 @@ final class _MessageListState extends State<_MessageList>
           message,
     ];
     _messages.sort(compareChatMessages);
-    if (!_olderMessagesLoadInProgress && !_newerMessagesLoadInProgress) {
+    if (_messagePageLoadsInProgress.isEmpty) {
       final Set<String> previousMessageIdSet = previousMessageIds.toSet();
 
       for (final ChatMessage message in _messages) {
@@ -7538,7 +7562,8 @@ final class _MessageListState extends State<_MessageList>
         _messages.any(
           (ChatMessage message) => message.id == previousFirstMessageId,
         );
-    if (olderMessagesWerePrepended && _olderMessagesLoadInProgress) {
+    if (olderMessagesWerePrepended &&
+        _messagePageLoadsInProgress.contains(ChatHistoryDirection.older)) {
       _historyPageBoundaryMessageIds.add(previousFirstMessageId);
     }
     final int previousLastMessageIndex = previousLastMessageId == null
@@ -7549,7 +7574,8 @@ final class _MessageListState extends State<_MessageList>
     final bool newerMessagesWereAppended =
         previousLastMessageIndex >= 0 &&
         previousLastMessageIndex + 1 < _messages.length;
-    if (newerMessagesWereAppended && _newerMessagesLoadInProgress) {
+    if (newerMessagesWereAppended &&
+        _messagePageLoadsInProgress.contains(ChatHistoryDirection.newer)) {
       _historyPageBoundaryMessageIds.add(
         _messages[previousLastMessageIndex + 1].id,
       );
@@ -7568,7 +7594,7 @@ final class _MessageListState extends State<_MessageList>
     final bool shouldPinLatestWindowToBottom =
         enteredLatestWindow && widget.pinToBottom;
     if (shouldPinLatestWindowToBottom) {
-      _bottomPinCanceledByUserScroll = false;
+      _bottomPinCanceledByUserNavigation = false;
     }
 
     if (shouldPinToBottomAfterUpdate || shouldPinLatestWindowToBottom) {
@@ -7795,37 +7821,13 @@ final class _MessageListState extends State<_MessageList>
   }
 
   void addMessage(ChatMessage message) {
-    final List<String> previousMessageIds = _messageIdsSnapshot();
-    final bool isNewMessage = !_messages.any(
-      (ChatMessage existingMessage) => existingMessage.id == message.id,
-    );
-
-    if (isNewMessage) {
-      _recordIncomingPhotoReveal(message);
-      _prefetchPhotoThumbnails(<ChatMessage>[message]);
-    }
-
-    setState(() {
-      final int existingIndex = _messages.indexWhere(
-        (ChatMessage existingMessage) => existingMessage.id == message.id,
-      );
-
-      if (existingIndex == -1) {
-        _messages.add(message);
-      } else {
-        _messages[existingIndex] = _retainVisiblePhotoPreviews(
-          previous: _messages[existingIndex],
-          next: message,
-        );
-      }
-
-      _messages.sort(compareChatMessages);
-      _syncMessageClockWith(message);
-    });
-    _reconcileScrollbarRangeAfterMessageChange(previousMessageIds);
+    addMessages(<ChatMessage>[message], prefetchExistingThumbnails: false);
   }
 
-  void addMessages(List<ChatMessage> messages) {
+  void addMessages(
+    List<ChatMessage> messages, {
+    bool prefetchExistingThumbnails = true,
+  }) {
     if (messages.isEmpty) {
       return;
     }
@@ -7838,7 +7840,14 @@ final class _MessageListState extends State<_MessageList>
         _recordIncomingPhotoReveal(message);
       }
     }
-    _prefetchPhotoThumbnails(messages);
+    // 단건 갱신은 새 메시지만, 묶음 갱신은 기존 메시지도 미리 불러와요.
+    _prefetchPhotoThumbnails(
+      messages.where(
+        (message) =>
+            prefetchExistingThumbnails ||
+            !existingMessageIds.contains(message.id),
+      ),
+    );
 
     setState(() {
       for (final ChatMessage message in messages) {
@@ -8367,66 +8376,6 @@ final class _MessageListState extends State<_MessageList>
     return true;
   }
 
-  List<String> searchMessageIds(String query) {
-    final String normalizedQuery = _normalizeSearchQuery(query);
-
-    if (normalizedQuery.isEmpty) {
-      return const <String>[];
-    }
-
-    final List<ChatMessage> sortedMessages = List<ChatMessage>.of(_messages)
-      ..sort((ChatMessage first, ChatMessage second) {
-        final int createdAtComparison = second.createdAt.compareTo(
-          first.createdAt,
-        );
-
-        if (createdAtComparison != 0) {
-          return createdAtComparison;
-        }
-
-        return second.id.compareTo(first.id);
-      });
-
-    return <String>[
-      for (final ChatMessage message in sortedMessages)
-        if (_messageMatchesSearchQuery(message, normalizedQuery)) message.id,
-    ];
-  }
-
-  Set<DateTime> searchableMessageDates() {
-    return <DateTime>{
-      for (final ChatMessage message in _messages)
-        if (_searchableTextSegmentsFor(message).isNotEmpty)
-          _dateOnly(message.createdAt),
-    };
-  }
-
-  String? firstSearchableMessageIdOnDate(DateTime date) {
-    final DateTime targetDate = _dateOnly(date);
-
-    final List<ChatMessage> sortedMessages = List<ChatMessage>.of(_messages)
-      ..sort((ChatMessage first, ChatMessage second) {
-        final int createdAtComparison = first.createdAt.compareTo(
-          second.createdAt,
-        );
-
-        if (createdAtComparison != 0) {
-          return createdAtComparison;
-        }
-
-        return first.id.compareTo(second.id);
-      });
-
-    for (final ChatMessage message in sortedMessages) {
-      if (_dateOnly(message.createdAt) == targetDate &&
-          _searchableTextSegmentsFor(message).isNotEmpty) {
-        return message.id;
-      }
-    }
-
-    return null;
-  }
-
   bool get isNearBottom {
     if (!_scrollController.hasClients) {
       return true;
@@ -8440,7 +8389,7 @@ final class _MessageListState extends State<_MessageList>
   Future<void> scrollToBottom({bool animate = true}) async {
     if (!mounted ||
         !_scrollController.hasClients ||
-        _bottomPinCanceledByUserScroll) {
+        _bottomPinCanceledByUserNavigation) {
       return;
     }
 
@@ -8473,7 +8422,7 @@ final class _MessageListState extends State<_MessageList>
     _updateScrollToLatestButtonVisibility();
 
     try {
-      _bottomPinCanceledByUserScroll = false;
+      _bottomPinCanceledByUserNavigation = false;
       _bottomSettleActive = false;
       _completeBottomSettle();
       _manualScrollSessionActive = false;
@@ -8511,7 +8460,7 @@ final class _MessageListState extends State<_MessageList>
   }
 
   void _preserveBottomDuringNextContentResize() {
-    if (!mounted || _bottomPinCanceledByUserScroll || !isNearBottom) {
+    if (!mounted || _bottomPinCanceledByUserNavigation || !isNearBottom) {
       return;
     }
 
@@ -8536,7 +8485,7 @@ final class _MessageListState extends State<_MessageList>
     _updateScrollOverlayMetrics();
     _updateScrollToLatestButtonVisibility();
 
-    if (_bottomPinCanceledByUserScroll ||
+    if (_bottomPinCanceledByUserNavigation ||
         (!widget.pinToBottom && !_bottomSettleActive) ||
         !_scrollController.hasClients) {
       return false;
@@ -8559,6 +8508,17 @@ final class _MessageListState extends State<_MessageList>
     return false;
   }
 
+  void _releaseBottomPinForUserNavigation() {
+    // 스크롤과 답장 이동 모두 전송·키보드 전환의 하단 고정을 풀어야 해요.
+    _bottomPinCanceledByUserNavigation = true;
+    _bottomSettleActive = false;
+    _completeBottomSettle();
+    _bottomSettleLastMaxScrollExtent = null;
+    _bottomSettleStableFrameCount = 0;
+    _cancelBottomAnchorPreservation();
+    widget.onUserNavigationStarted();
+  }
+
   bool _handleScrollNotification(ScrollNotification notification) {
     if (notification.depth != 0) {
       return false;
@@ -8566,16 +8526,10 @@ final class _MessageListState extends State<_MessageList>
 
     if (notification is ScrollStartNotification &&
         notification.dragDetails != null) {
-      _bottomPinCanceledByUserScroll = true;
-      _bottomSettleActive = false;
-      _completeBottomSettle();
-      _bottomSettleLastMaxScrollExtent = null;
-      _bottomSettleStableFrameCount = 0;
-      _cancelBottomAnchorPreservation();
+      _releaseBottomPinForUserNavigation();
       _manualScrollSessionActive = true;
       _manualScrollHasMoved = false;
       _showManualScrollChrome();
-      widget.onUserScrollStarted();
     } else if (_manualScrollSessionActive &&
         ((notification is ScrollUpdateNotification &&
                 (notification.scrollDelta?.abs() ?? 0) > 0.5) ||
@@ -8590,7 +8544,7 @@ final class _MessageListState extends State<_MessageList>
       _scheduleActiveScrollDateRefresh();
     } else if (notification is ScrollEndNotification) {
       if (isNearBottom) {
-        _bottomPinCanceledByUserScroll = false;
+        _bottomPinCanceledByUserNavigation = false;
       }
 
       if (_manualScrollSessionActive) {
@@ -8926,7 +8880,7 @@ final class _MessageListState extends State<_MessageList>
     }
 
     final double historyCenterTop =
-        widget.topPadding +
+        widget.layoutTopPadding +
         (_messages.isEmpty || _replyOriginalViewportActive
             ? 0
             : _historyCenterContentInset);
@@ -9121,40 +9075,25 @@ final class _MessageListState extends State<_MessageList>
       renderObject,
     );
     final ScrollPosition position = _scrollController.position;
-    final RevealedOffset leadingReveal = viewport.getOffsetToReveal(
-      renderObject,
-      0,
-    );
-    final RevealedOffset trailingReveal = viewport.getOffsetToReveal(
-      renderObject,
-      1,
-    );
     final RevealedOffset desiredReveal = viewport.getOffsetToReveal(
       renderObject,
       alignment,
     );
-    final double fullyVisibleMinimum = math.min(
-      leadingReveal.offset,
-      trailingReveal.offset,
-    );
-    final double fullyVisibleMaximum = math.max(
-      leadingReveal.offset,
-      trailingReveal.offset,
-    );
-    final double targetHeight = renderObject is RenderBox
-        ? renderObject.size.height
-        : desiredReveal.rect.height;
-    final bool canFitEntireMessage =
-        targetHeight <= position.viewportDimension + 0.5;
-    double targetOffset = desiredReveal.offset;
-
-    if (canFitEntireMessage) {
-      // 요청한 정렬을 우선하되, 긴 원문이 잘리는 경우에는
-      // 말풍선 전체가 보이는 범위 안으로 위치를 보정해요.
-      targetOffset = targetOffset
-          .clamp(fullyVisibleMinimum, fullyVisibleMaximum)
-          .toDouble();
-    }
+    final double visibleTop = widget.topPadding;
+    final double visibleBottom =
+        position.viewportDimension - widget.bottomPadding;
+    // 전체 뷰포트에는 상단 바와 검색 바 뒤쪽도 포함돼요.
+    // 실제 배치될 사각형으로 계산해야 목록의 중심점이 바뀌어도 가려지지 않아요.
+    final double fullyVisibleMinimum =
+        desiredReveal.offset + desiredReveal.rect.bottom - visibleBottom;
+    final double fullyVisibleMaximum =
+        desiredReveal.offset + desiredReveal.rect.top - visibleTop;
+    final double targetOffset =
+        desiredReveal.rect.height <= visibleBottom - visibleTop
+        ? desiredReveal.offset
+              .clamp(fullyVisibleMinimum, fullyVisibleMaximum)
+              .toDouble()
+        : fullyVisibleMaximum;
 
     return targetOffset
         .clamp(position.minScrollExtent, position.maxScrollExtent)
@@ -9431,16 +9370,6 @@ final class _MessageListState extends State<_MessageList>
     return _scrollToMessage(messageId, alignment: 0.24);
   }
 
-  Future<bool> scrollToSearchDate(DateTime date) async {
-    final String? messageId = firstSearchableMessageIdOnDate(date);
-
-    if (messageId == null) {
-      return false;
-    }
-
-    return _scrollToMessage(messageId, alignment: 0.24);
-  }
-
   void _flashMessage(String messageId) {
     if (!mounted || _findMessage(messageId) == null) {
       return;
@@ -9595,6 +9524,7 @@ final class _MessageListState extends State<_MessageList>
     }
 
     _replyNavigationInProgress = true;
+    _releaseBottomPinForUserNavigation();
     _updateScrollToLatestButtonVisibility();
     final bool previousReplyOriginalViewportActive =
         _replyOriginalViewportActive;
@@ -9674,6 +9604,7 @@ final class _MessageListState extends State<_MessageList>
     }
 
     _replyNavigationInProgress = true;
+    _releaseBottomPinForUserNavigation();
     _updateScrollToLatestButtonVisibility();
 
     try {
@@ -12756,16 +12687,24 @@ final class _LinkPreviewCard extends StatelessWidget {
 }
 
 final class _LinkPreviewImage extends StatelessWidget {
-  const _LinkPreviewImage({required this.preview, required this.width});
+  const _LinkPreviewImage({
+    required this.preview,
+    required this.width,
+    this.height,
+  });
 
   final ChatLinkPreview preview;
   final double width;
+  final double? height;
 
   @override
   Widget build(BuildContext context) {
     final String? imageUrl = preview.imageUrl;
     final Uri? imageUri = imageUrl == null ? null : Uri.tryParse(imageUrl);
-    final double height = width / 2;
+    final double height =
+        this.height ??
+        width / // 채팅 미리보기의 기본 비율이에요. 검색 결과는 기존처럼 높이를 따로 전달해요.
+            2.0;
     final Widget child;
 
     if (imageUri == null ||
@@ -13086,9 +13025,11 @@ final class _VideoMessage extends StatefulWidget {
     required this.onCreateMediaAssetAccessUrl,
     required this.onCreateThumbnailAccessUrl,
     required this.onVideoTap,
+    this.searchTileSize,
     super.key,
   });
 
+  final Size? searchTileSize;
   final ChatMessage message;
   final bool isOutgoing;
   final Key measurementKey;
@@ -13101,6 +13042,7 @@ final class _VideoMessage extends StatefulWidget {
 }
 
 final class _VideoMessageState extends State<_VideoMessage> {
+  bool _downloadRequested = false;
   Future<void>? _downloadFuture;
   File? _localFile;
   String? _activeMediaAssetId;
@@ -13175,6 +13117,8 @@ final class _VideoMessageState extends State<_VideoMessage> {
       _downloadTotalBytes = attachment.sizeBytes ?? 0;
     }
 
+    // 검색 격자는 썸네일만 읽고 사용자가 누른 영상만 내려받아요.
+    if (widget.searchTileSize != null && !_downloadRequested) return;
     if (_downloadFuture == null) {
       _downloadInProgress = true;
       _downloadFailed = false;
@@ -13292,14 +13236,21 @@ final class _VideoMessageState extends State<_VideoMessage> {
     }
   }
 
-  void _openVideo() {
+  Future<void> _openVideo() async {
     final File? localFile = _localFile;
 
     if (localFile == null) {
       setState(() {
         _downloadFailed = false;
       });
+      _downloadRequested = true;
       _syncVideoSource();
+      if (widget.searchTileSize != null && _downloadFuture != null) {
+        await _downloadFuture;
+        if (mounted && _localFile != null) {
+          widget.onVideoTap(widget.message, _localFile!);
+        }
+      }
       return;
     }
 
@@ -13309,7 +13260,8 @@ final class _VideoMessageState extends State<_VideoMessage> {
   @override
   Widget build(BuildContext context) {
     final ChatVideoAttachment attachment = _attachment;
-    final Size videoSize = _videoBubbleSize(context, attachment);
+    final Size videoSize =
+        widget.searchTileSize ?? _videoBubbleSize(context, attachment);
     final bool isUploading = widget.message.videoUploadPending;
     final bool isTransferring = isUploading || _downloadInProgress;
     final int uploadedBytes = isUploading
@@ -13331,12 +13283,19 @@ final class _VideoMessageState extends State<_VideoMessage> {
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: isTransferring || (_localFile == null && !_downloadFailed)
+      onTap:
+          isTransferring ||
+              (widget.searchTileSize == null &&
+                  _localFile == null &&
+                  !_downloadFailed)
           ? null
           : _openVideo,
       child: ClipRRect(
         key: widget.measurementKey,
-        borderRadius: const BorderRadius.all(Radius.circular(14)),
+        borderRadius: widget.searchTileSize == null
+            ? ChatMessageStyle.mediaBorderRadius
+            // 사진과 영상 결과가 같은 격자 모서리를 사용해요.
+            : AppRadius.borderRadius12,
         child: SizedBox(
           width: videoSize.width,
           height: videoSize.height,
@@ -13351,7 +13310,8 @@ final class _VideoMessageState extends State<_VideoMessage> {
                 onCreateMediaAssetAccessUrl: widget.onCreateThumbnailAccessUrl,
                 persistToDisk: true,
               ),
-              ColoredBox(color: AppColors.black.withAlpha(96)),
+              if (widget.searchTileSize == null)
+                ColoredBox(color: AppColors.black.withAlpha(96)),
               if (widget.message.videoEncodingPending)
                 const _VideoEncodingIndicator()
               else if (isTransferring)
@@ -13361,6 +13321,37 @@ final class _VideoMessageState extends State<_VideoMessage> {
                 )
               else if (_downloadFailed)
                 const _VideoDownloadRetryIndicator()
+              else if (widget.searchTileSize != null)
+                Positioned(
+                  right: AppSpacing.space4,
+                  bottom: AppSpacing.space4,
+                  child: Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppSpacing.space4,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.black.withAlpha(153),
+                      borderRadius: AppRadius.borderRadius4,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          AppIcons.play,
+                          color: AppColors.white,
+                          size: 12.0,
+                        ),
+                        Text(
+                          formatChatVideoDuration(attachment.duration),
+                          style: AppTypography.subTypography13.copyWith(
+                            color: AppColors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
               else if (_localFile != null)
                 _VideoPlayIndicator(duration: attachment.duration),
             ],

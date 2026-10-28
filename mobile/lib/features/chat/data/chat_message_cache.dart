@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
+import '../domain/chat_history_direction.dart';
 import '../domain/chat_message.dart';
 import 'chat_api.dart';
 
@@ -81,84 +82,51 @@ final class ChatMessageCache {
         ? unclampedEndIndex
         : segment.messageIds.length;
 
-    return ChatCachedConversation(
-      messages: _messagesForIds(
-        entry,
-        segment.messageIds.sublist(startIndex, endIndex),
-      ),
-      hasMoreOlder: startIndex > 0 || segment.hasMoreOlder,
-      hasMoreNewer:
-          endIndex < segment.messageIds.length || segment.hasMoreNewer,
+    return _segmentSnapshot(
+      entry,
+      segment,
+      startIndex: startIndex,
+      endIndex: endIndex,
     );
   }
 
-  Future<ChatCachedConversation?> readMessagesBefore({
+  Future<ChatCachedConversation?> readMessagePage({
     required String otherUserId,
-    required String beforeMessageId,
+    required String cursorMessageId,
+    required ChatHistoryDirection direction,
     required int limit,
   }) async {
     final _ChatMessageCacheEntry entry = await _loadEntry(otherUserId);
     final _ChatMessageCacheSegment? segment = _segmentContaining(
       entry,
-      beforeMessageId,
+      cursorMessageId,
     );
 
     if (segment == null) {
       return null;
     }
 
-    final int beforeIndex = segment.messageIds.indexOf(beforeMessageId);
-
-    if (beforeIndex <= 0) {
+    final bool newer = direction == ChatHistoryDirection.newer;
+    final int cursorIndex = segment.messageIds.indexOf(cursorMessageId);
+    if (newer
+        ? cursorIndex + 1 >= segment.messageIds.length
+        : cursorIndex <= 0) {
       return null;
     }
 
-    final int startIndex = beforeIndex > limit ? beforeIndex - limit : 0;
-    return ChatCachedConversation(
-      messages: _messagesForIds(
-        entry,
-        segment.messageIds.sublist(startIndex, beforeIndex),
-      ),
-      hasMoreOlder: startIndex > 0 || segment.hasMoreOlder,
-      hasMoreNewer: true,
-    );
-  }
-
-  Future<ChatCachedConversation?> readMessagesAfter({
-    required String otherUserId,
-    required String afterMessageId,
-    required int limit,
-  }) async {
-    final _ChatMessageCacheEntry entry = await _loadEntry(otherUserId);
-    final _ChatMessageCacheSegment? segment = _segmentContaining(
+    final int startIndex = newer
+        ? cursorIndex + 1
+        : (cursorIndex > limit ? cursorIndex - limit : 0);
+    final int endIndex = newer
+        ? (startIndex + limit < segment.messageIds.length
+              ? startIndex + limit
+              : segment.messageIds.length)
+        : cursorIndex;
+    return _segmentSnapshot(
       entry,
-      afterMessageId,
-    );
-
-    if (segment == null) {
-      return null;
-    }
-
-    final int afterIndex = segment.messageIds.indexOf(afterMessageId);
-    final int startIndex = afterIndex + 1;
-
-    if (startIndex >= segment.messageIds.length) {
-      return null;
-    }
-
-    final int unclampedEndIndex = startIndex + limit;
-    final int endIndex = unclampedEndIndex < segment.messageIds.length
-        ? unclampedEndIndex
-        : segment.messageIds.length;
-
-    return ChatCachedConversation(
-      messages: _messagesForIds(
-        entry,
-        segment.messageIds.sublist(startIndex, endIndex),
-      ),
-      hasMoreOlder: true,
-      hasMoreNewer:
-          endIndex < segment.messageIds.length || segment.hasMoreNewer,
+      segment,
+      startIndex: startIndex,
+      endIndex: endIndex,
     );
   }
 
@@ -189,40 +157,27 @@ final class ChatMessageCache {
     );
   }
 
-  Future<void> mergeOlderPage({
+  Future<void> mergeMessagePage({
     required String otherUserId,
-    required String beforeMessageId,
+    required String cursorMessageId,
+    required ChatHistoryDirection direction,
     required Iterable<ChatMessage> messages,
-    required bool hasMoreOlder,
+    required bool hasMore,
   }) {
     return _mergeWindow(
       otherUserId: otherUserId,
       messages: messages,
-      hasMoreOlder: hasMoreOlder,
-      hasMoreNewer: true,
-      connectsToMessageId: beforeMessageId,
+      hasMoreOlder: direction == ChatHistoryDirection.older ? hasMore : true,
+      hasMoreNewer: direction == ChatHistoryDirection.newer ? hasMore : true,
+      connectsToMessageId: cursorMessageId,
     );
   }
 
-  Future<void> mergeNewerPage({
-    required String otherUserId,
-    required String afterMessageId,
-    required Iterable<ChatMessage> messages,
-    required bool hasMoreNewer,
-  }) {
-    return _mergeWindow(
-      otherUserId: otherUserId,
-      messages: messages,
-      hasMoreOlder: true,
-      hasMoreNewer: hasMoreNewer,
-      connectsToMessageId: afterMessageId,
-    );
-  }
-
-  Future<void> updateOlderBoundary({
+  Future<void> updatePageBoundary({
     required String otherUserId,
     required String boundaryMessageId,
-    required bool hasMoreOlder,
+    required ChatHistoryDirection direction,
+    required bool hasMore,
   }) async {
     final _ChatMessageCacheEntry entry = await _loadEntry(otherUserId);
     final _ChatMessageCacheSegment? segment = _segmentContaining(
@@ -230,30 +185,24 @@ final class ChatMessageCache {
       boundaryMessageId,
     );
 
-    if (segment == null || segment.messageIds.first != boundaryMessageId) {
+    if (segment == null) {
       return;
     }
 
-    segment.hasMoreOlder = hasMoreOlder;
-    await _scheduleWrite(otherUserId, entry);
-  }
-
-  Future<void> updateNewerBoundary({
-    required String otherUserId,
-    required String boundaryMessageId,
-    required bool hasMoreNewer,
-  }) async {
-    final _ChatMessageCacheEntry entry = await _loadEntry(otherUserId);
-    final _ChatMessageCacheSegment? segment = _segmentContaining(
-      entry,
-      boundaryMessageId,
-    );
-
-    if (segment == null || segment.messageIds.last != boundaryMessageId) {
+    final bool newer = direction == ChatHistoryDirection.newer;
+    final String currentBoundary = newer
+        ? segment.messageIds.last
+        : segment.messageIds.first;
+    // 조회 중 구간이 넓어졌다면 예전 경계의 결과로 새 경계를 덮어쓰지 않아요.
+    if (currentBoundary != boundaryMessageId) {
       return;
     }
 
-    segment.hasMoreNewer = hasMoreNewer;
+    if (newer) {
+      segment.hasMoreNewer = hasMore;
+    } else {
+      segment.hasMoreOlder = hasMore;
+    }
     await _scheduleWrite(otherUserId, entry);
   }
 
@@ -588,12 +537,18 @@ final class ChatMessageCache {
 
   ChatCachedConversation _segmentSnapshot(
     _ChatMessageCacheEntry entry,
-    _ChatMessageCacheSegment segment,
-  ) {
+    _ChatMessageCacheSegment segment, {
+    int startIndex = 0,
+    int? endIndex,
+  }) {
+    final int end = endIndex ?? segment.messageIds.length;
     return ChatCachedConversation(
-      messages: _messagesForIds(entry, segment.messageIds),
-      hasMoreOlder: segment.hasMoreOlder,
-      hasMoreNewer: segment.hasMoreNewer,
+      messages: _messagesForIds(
+        entry,
+        segment.messageIds.sublist(startIndex, end),
+      ),
+      hasMoreOlder: startIndex > 0 || segment.hasMoreOlder,
+      hasMoreNewer: end < segment.messageIds.length || segment.hasMoreNewer,
     );
   }
 
