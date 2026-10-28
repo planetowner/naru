@@ -1867,10 +1867,19 @@ final class _ChatConversationScreenState extends State<ChatConversationScreen> {
 
   Future<ChatMessage> _retryTextMessageTranslation({
     required String messageId,
+  }) => _retryMessageProcessing(messageId: messageId, transcribe: false);
+
+  Future<ChatMessage> _retryVoiceMemoTranscription({
+    required String messageId,
+  }) => _retryMessageProcessing(messageId: messageId, transcribe: true);
+
+  Future<ChatMessage> _retryMessageProcessing({
+    required String messageId,
+    required bool transcribe,
   }) async {
-    final ChatMessage message = await widget.chatApi.retryMessageTranslation(
-      messageId: messageId,
-    );
+    final ChatMessage message = await (transcribe
+        ? widget.chatApi.retryMessageTranscription(messageId: messageId)
+        : widget.chatApi.retryMessageTranslation(messageId: messageId));
 
     if (mounted) {
       _upsertMessage(message);
@@ -1960,6 +1969,7 @@ final class _ChatConversationScreenState extends State<ChatConversationScreen> {
             widget.chatApi.createMediaAssetThumbnailAccessUrl,
         onEditTextMessage: _editTextMessage,
         onRetryTranslation: _retryTextMessageTranslation,
+        onRetryTranscription: _retryVoiceMemoTranscription,
         onDeleteMessage: _deleteMessage,
         onBack: widget.onBack,
         unreadOtherConversationCount: widget.realtimeService

@@ -12,6 +12,8 @@ typedef ChatVideoUploadProgressCallback =
 
 enum ChatTranslationStatus { none, translating, translated, failed }
 
+enum ChatTranscriptionStatus { none, transcribing, transcribed, failed }
+
 enum ChatCallKind { voice, video }
 
 enum ChatCallOutcome { started, ended, cancelled, missed, noAnswer }
@@ -167,6 +169,7 @@ final class ChatMessage {
     this.readAt,
     this.editedAt,
     this.translationStatus = ChatTranslationStatus.none,
+    this.transcriptionStatus = ChatTranscriptionStatus.none,
     this.translatedContent,
     this.sourceLanguage,
     this.translatedLanguage,
@@ -196,6 +199,7 @@ final class ChatMessage {
   final DateTime? editedAt;
 
   final ChatTranslationStatus translationStatus;
+  final ChatTranscriptionStatus transcriptionStatus;
   final String? translatedContent;
   final String? sourceLanguage;
   final String? translatedLanguage;
@@ -283,6 +287,7 @@ final class ChatMessage {
     DateTime? readAt,
     DateTime? editedAt,
     ChatTranslationStatus? translationStatus,
+    ChatTranscriptionStatus? transcriptionStatus,
     String? translatedContent,
     String? sourceLanguage,
     String? translatedLanguage,
@@ -322,6 +327,7 @@ final class ChatMessage {
       readAt: clearReadAt ? null : readAt ?? this.readAt,
       editedAt: clearEditedAt ? null : editedAt ?? this.editedAt,
       translationStatus: translationStatus ?? this.translationStatus,
+      transcriptionStatus: transcriptionStatus ?? this.transcriptionStatus,
       translatedContent: clearTranslatedContent
           ? null
           : translatedContent ?? this.translatedContent,

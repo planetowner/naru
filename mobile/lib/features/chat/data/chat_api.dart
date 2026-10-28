@@ -319,11 +319,18 @@ final class ChatApi {
     return Map<String, int>.unmodifiable(counts);
   }
 
-  Future<ChatMessage> retryMessageTranslation({
-    required String messageId,
-  }) async {
+  Future<ChatMessage> retryMessageTranslation({required String messageId}) =>
+      _retryMessageProcessing(messageId, 'translation');
+
+  Future<ChatMessage> retryMessageTranscription({required String messageId}) =>
+      _retryMessageProcessing(messageId, 'transcription');
+
+  Future<ChatMessage> _retryMessageProcessing(
+    String messageId,
+    String operation,
+  ) async {
     final http.Response response = await _client.post(
-      _baseUri.resolve('/messages/$messageId/translation/retry'),
+      _baseUri.resolve('/messages/$messageId/$operation/retry'),
       headers: _headers,
     );
 
@@ -332,7 +339,7 @@ final class ChatApi {
         _readErrorMessage(
           response,
           fallback:
-              'Translation retry failed with status code '
+              '$operation retry failed with status code '
               '${response.statusCode}.',
         ),
       );
@@ -1280,13 +1287,22 @@ final class ChatApi {
     final String messageType = json['message_type'] as String? ?? 'text';
     final Map<String, dynamic>? metadata = _optionalMap(json['metadata']);
     final String content = json['content'] as String;
-    final bool translates = messageType == 'text';
+    final bool translates =
+        messageType == 'text' || messageType == 'voice_memo';
 
     return ChatMessage(
       id: _requiredString(json['id'], 'id'),
       senderId: _requiredString(json['sender_id'], 'sender_id'),
       recipientId: _requiredString(json['recipient_id'], 'recipient_id'),
       content: content,
+      transcriptionStatus: messageType == 'voice_memo'
+          ? switch (json['transcription_status']) {
+              'pending' => ChatTranscriptionStatus.transcribing,
+              'completed' => ChatTranscriptionStatus.transcribed,
+              'failed' => ChatTranscriptionStatus.failed,
+              _ => ChatTranscriptionStatus.none,
+            }
+          : ChatTranscriptionStatus.none,
       createdAt: _dateTimeFromApi(json['created_at']),
       editedAt: _optionalDateTime(json['edited_at']),
       readAt: _optionalDateTime(json['read_at']),
@@ -1438,6 +1454,12 @@ final class ChatApi {
       },
       'translation_provider': null,
       'translation_model': null,
+      'transcription_status': switch (message.transcriptionStatus) {
+        ChatTranscriptionStatus.none => 'none',
+        ChatTranscriptionStatus.transcribing => 'pending',
+        ChatTranscriptionStatus.transcribed => 'completed',
+        ChatTranscriptionStatus.failed => 'failed',
+      },
     };
   }
 

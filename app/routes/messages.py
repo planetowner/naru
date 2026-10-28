@@ -65,9 +65,11 @@ from app.schemas import (
 from app.translation import (
     TRANSLATION_PROVIDER_NAME,
     TRANSLATION_MODEL,
+    infer_text_language,
     should_translate_text,
     translate_message,
 )
+from app.transcription import transcribe_voice_memo
 from app.unread_counts import (
     load_unread_counts_by_sender,
     unread_counts_event_publisher,
@@ -110,6 +112,11 @@ URL_PATTERN = re.compile(r"(?i)\b(?:https?://|www\.)[^\s<>'\"]+")
 TRAILING_URL_PUNCTUATION = ".,!?;:)]}…"
 
 
+def message_has_translatable_text(message: Message) -> bool:
+    return message.kind == MessageKind.TEXT or (
+        message.kind == MessageKind.VOICE_MEMO
+        and message.metadata_json.get("transcription_status") == "completed"
+    )
 
 
 def normalize_utc(value: datetime) -> datetime:
@@ -907,7 +914,7 @@ async def build_message_reads(
             message.source_language or sender.preferred_language
         )
         needs_translation = (
-            message.kind == MessageKind.TEXT
+            message_has_translatable_text(message)
             and should_translate_text(
                 message.body,
                 source_language=source_language,
@@ -915,7 +922,7 @@ async def build_message_reads(
             )
         )
 
-        if message.kind == MessageKind.TEXT and needs_translation:
+        if needs_translation:
             translation_status = (
                 translation.status.value
                 if translation is not None
@@ -936,11 +943,6 @@ async def build_message_reads(
                 if translation is not None
                 else None
             )
-        elif message.kind == MessageKind.TEXT:
-            translation_status = TranslationStatus.COMPLETED.value
-            translated_content = None
-            translation_provider = None
-            translation_model = None
         else:
             translation_status = TranslationStatus.COMPLETED.value
             translated_content = None
@@ -976,6 +978,11 @@ async def build_message_reads(
                 translation_status=translation_status,
                 translation_provider=translation_provider,
                 translation_model=translation_model,
+                transcription_status=(
+                    message.metadata_json.get("transcription_status", "none")
+                    if message.kind == MessageKind.VOICE_MEMO
+                    else "none"
+                ),
             )
         )
 
@@ -1120,6 +1127,21 @@ async def execute_message_translation(
     return True
 
 
+async def publish_message_update(
+    session: AsyncSession,
+    message: Message,
+    *,
+    direct_conversation: DirectConversation,
+    event_type: str = "message.updated",
+) -> MessageRead:
+    message_read = await build_single_message_read(
+        session, message, direct_conversation=direct_conversation
+    )
+    await send_to_direct_participants(
+        direct_conversation,
+        {"type": event_type, "message": message_read.model_dump(mode="json")},
+    )
+    return message_read
 
 
 async def translate_and_publish_message(message_id: UUID) -> None:
@@ -1129,7 +1151,10 @@ async def translate_and_publish_message(message_id: UUID) -> None:
         if message is None:
             return
 
-        if message.kind != MessageKind.TEXT or message.deleted_at is not None:
+        if (
+            not message_has_translatable_text(message)
+            or message.deleted_at is not None
+        ):
             return
 
         direct_conversation = await session.scalar(
@@ -1154,22 +1179,69 @@ async def translate_and_publish_message(message_id: UUID) -> None:
         await session.commit()
         await session.refresh(message)
 
-        message_read = await build_single_message_read(
+        await publish_message_update(
             session,
             message,
             direct_conversation=direct_conversation,
+            event_type="message.translation.updated",
         )
-        websocket_event = {
-            "type": "message.translation.updated",
-            "message": message_read.model_dump(mode="json"),
+
+
+async def transcribe_and_publish_message(message_id: UUID) -> None:
+    async with SessionLocal() as session:
+        # 양쪽 참여자가 동시에 재시도해도 같은 녹음을 중복 변환하지 않아요.
+        message = await session.get(Message, message_id, with_for_update=True)
+        if (
+            message is None
+            or message.deleted_at is not None
+            or message.kind != MessageKind.VOICE_MEMO
+            or message.metadata_json.get("transcription_status") != "pending"
+        ):
+            return
+        direct_conversation = await session.get(
+            DirectConversation, message.conversation_id
+        )
+        if direct_conversation is None:
+            return
+
+        try:
+            asset = await session.scalar(
+                select(MediaAsset)
+                .join(
+                    MessageAttachment,
+                    MessageAttachment.media_asset_id == MediaAsset.id,
+                )
+                .where(MessageAttachment.message_id == message.id)
+                .order_by(MessageAttachment.position)
+                .limit(1)
+            )
+            if asset is None:
+                raise ValueError("Voice memo attachment not found.")
+            message.body = await transcribe_voice_memo(asset)
+        except Exception:
+            logger.exception("Transcription failed for message ID %s", message.id)
+            transcription_status = "failed"
+        else:
+            transcription_status = "completed"
+            message.source_language = (
+                infer_text_language(message.body) or message.source_language
+            )
+
+        # 전사 원문도 메시지 본문에 저장해 기존 번역·검색·캐시 흐름을 공유해요.
+        message.metadata_json = {
+            **message.metadata_json,
+            "transcription_status": transcription_status,
         }
+        message.updated_at = datetime.now(timezone.utc)
+        await session.commit()
+        await session.refresh(message)
+        await publish_message_update(
+            session, message, direct_conversation=direct_conversation
+        )
 
-    await send_to_direct_participants(
-        direct_conversation,
-        websocket_event,
-    )
-
-
+    # 번역이 끝나기 전에도 원문을 읽을 수 있도록 전사 결과를 먼저 전달해요.
+    if transcription_status == "completed":
+        await translate_and_publish_message(message_id)
 
 
 @router.post(
@@ -1399,6 +1471,13 @@ async def create_message(
     if message_data.created_at is not None:
         message.created_at = normalize_utc(message_data.created_at)
 
+    if message.kind == MessageKind.VOICE_MEMO:
+        message.body = ""
+        message.metadata_json = {
+            **message.metadata_json,
+            "transcription_status": "pending",
+        }
+
     session.add(message)
     await session.flush()
 
@@ -1472,6 +1551,8 @@ async def create_message(
         background_tasks.add_task(translate_and_publish_message, message.id)
 
     background_tasks.add_task(send_message_notification, message.id)
+    if message.kind == MessageKind.VOICE_MEMO:
+        background_tasks.add_task(transcribe_and_publish_message, message.id)
 
     return message_read
 
@@ -2106,6 +2187,46 @@ async def mark_conversation_as_read(
     )
 
 
+@router.post(
+    "/{message_id}/transcription/retry",
+    response_model=MessageRead,
+)
+async def retry_message_transcription(
+    message_id: UUID,
+    background_tasks: BackgroundTasks,
+    current_user: CurrentUserDependency,
+    session: SessionDependency,
+) -> MessageRead:
+    message = await session.get(Message, message_id, with_for_update=True)
+    if (
+        message is None
+        or message.deleted_at is not None
+        or message.kind != MessageKind.VOICE_MEMO
+    ):
+        raise HTTPException(status_code=404, detail="Voice memo not found")
+    direct_conversation = await session.get(
+        DirectConversation, message.conversation_id
+    )
+    if direct_conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    if current_user.id not in direct_participant_ids(direct_conversation):
+        raise HTTPException(
+            status_code=403,
+            detail="You are not a participant in this conversation",
+        )
+
+    if message.metadata_json.get("transcription_status") not in {"pending", "completed"}:
+        message.metadata_json = {
+            **message.metadata_json,
+            "transcription_status": "pending",
+        }
+        await session.commit()
+        await session.refresh(message)
+        background_tasks.add_task(transcribe_and_publish_message, message.id)
+
+    return await publish_message_update(
+        session, message, direct_conversation=direct_conversation
+    )
 
 
 @router.post(
@@ -2122,7 +2243,7 @@ async def retry_message_translation(
     if (
         message is None
         or message.deleted_at is not None
-        or message.kind != MessageKind.TEXT
+        or not message_has_translatable_text(message)
     ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -2166,21 +2287,12 @@ async def retry_message_translation(
     await session.commit()
     await session.refresh(message)
 
-    message_read = await build_single_message_read(
+    return await publish_message_update(
         session,
         message,
         direct_conversation=direct_conversation,
+        event_type="message.translation.updated",
     )
-
-    await send_to_direct_participants(
-        direct_conversation,
-        {
-            "type": "message.translation.updated",
-            "message": message_read.model_dump(mode="json"),
-        },
-    )
-
-    return message_read
 
 
 @router.patch(

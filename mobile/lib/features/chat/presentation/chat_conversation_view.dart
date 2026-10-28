@@ -217,7 +217,7 @@ typedef ChatTextMessageEditor =
 
 typedef ChatMessageTranslator = Future<String?> Function(ChatMessage message);
 
-typedef ChatMessageTranslationRetrier =
+typedef ChatMessageProcessingRetrier =
     Future<ChatMessage> Function({required String messageId});
 
 typedef ChatMessageDeleter = Future<void> Function({required String messageId});
@@ -463,6 +463,7 @@ final class ChatConversationView extends StatefulWidget {
     this.onEditTextMessage,
     this.onTranslateMessage,
     this.onRetryTranslation,
+    this.onRetryTranscription,
     this.onDeleteMessage,
     this.onBack,
     this.unreadOtherConversationCount = 0,
@@ -505,7 +506,8 @@ final class ChatConversationView extends StatefulWidget {
   final ChatLinkOpener? onOpenLink;
   final ChatTextMessageEditor? onEditTextMessage;
   final ChatMessageTranslator? onTranslateMessage;
-  final ChatMessageTranslationRetrier? onRetryTranslation;
+  final ChatMessageProcessingRetrier? onRetryTranslation;
+  final ChatMessageProcessingRetrier? onRetryTranscription;
   final ChatMessageDeleter? onDeleteMessage;
   final VoidCallback? onBack;
   final int unreadOtherConversationCount;
@@ -3712,6 +3714,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
                               widget.otherParticipantProfileImageUrl,
                           onTranslateMessage: widget.onTranslateMessage,
                           onRetryTranslation: widget.onRetryTranslation,
+                          onRetryTranscription: widget.onRetryTranscription,
                           onDeleteMessage: widget.onDeleteMessage,
                           onPhotoMessageTap: _openPhotoViewer,
                           onVideoMessageTap: _openVideoViewer,
@@ -6451,7 +6454,8 @@ bool _messageNeedsTranslation(
       message.isFileMessage ||
       message.isCallMessage ||
       message.isLinkMessage ||
-      message.isVoiceMemoMessage) {
+      (message.isVoiceMemoMessage &&
+          message.transcriptionStatus != ChatTranscriptionStatus.transcribed)) {
     return false;
   }
 
@@ -6762,6 +6766,7 @@ final class _MessageList extends StatefulWidget {
     required this.otherParticipantProfileImageUrl,
     required this.onTranslateMessage,
     required this.onRetryTranslation,
+    required this.onRetryTranscription,
     required this.onDeleteMessage,
     required this.onPhotoMessageTap,
     required this.onVideoMessageTap,
@@ -6803,7 +6808,8 @@ final class _MessageList extends StatefulWidget {
   final String otherParticipantName;
   final String? otherParticipantProfileImageUrl;
   final ChatMessageTranslator? onTranslateMessage;
-  final ChatMessageTranslationRetrier? onRetryTranslation;
+  final ChatMessageProcessingRetrier? onRetryTranslation;
+  final ChatMessageProcessingRetrier? onRetryTranscription;
   final ChatMessageDeleter? onDeleteMessage;
   final _PhotoMessageTapCallback onPhotoMessageTap;
   final _VideoMessageTapCallback onVideoMessageTap;
@@ -9737,21 +9743,22 @@ final class _MessageListState extends State<_MessageList>
   }
 
   void _retryTranslation(String messageId) {
-    final ChatMessageTranslationRetrier? retryTranslation =
+    final ChatMessageProcessingRetrier? retryTranslation =
         widget.onRetryTranslation;
 
     if (retryTranslation != null) {
-      unawaited(_retryServerTranslation(messageId, retryTranslation));
+      unawaited(_retryServerTextProcessing(messageId, retryTranslation));
       return;
     }
 
     unawaited(_startTranslation(messageId));
   }
 
-  Future<void> _retryServerTranslation(
+  Future<void> _retryServerTextProcessing(
     String messageId,
-    ChatMessageTranslationRetrier retryTranslation,
-  ) async {
+    ChatMessageProcessingRetrier retryProcessing, {
+    bool transcribe = false,
+  }) async {
     final int messageIndex = _messages.indexWhere(
       (ChatMessage message) => message.id == messageId,
     );
@@ -9762,7 +9769,11 @@ final class _MessageListState extends State<_MessageList>
 
     final ChatMessage currentMessage = _messages[messageIndex];
 
-    if (currentMessage.translationStatus == ChatTranslationStatus.translating) {
+    if (transcribe
+        ? currentMessage.transcriptionStatus ==
+              ChatTranscriptionStatus.transcribing
+        : currentMessage.translationStatus ==
+              ChatTranslationStatus.translating) {
       return;
     }
 
@@ -9771,7 +9782,12 @@ final class _MessageListState extends State<_MessageList>
     setState(() {
       _showTranslatedMessageIds.remove(messageId);
       _messages[messageIndex] = currentMessage.copyWith(
-        translationStatus: ChatTranslationStatus.translating,
+        transcriptionStatus: transcribe
+            ? ChatTranscriptionStatus.transcribing
+            : null,
+        translationStatus: transcribe
+            ? null
+            : ChatTranslationStatus.translating,
         clearTranslationFailureReason: true,
       );
     });
@@ -9779,7 +9795,7 @@ final class _MessageListState extends State<_MessageList>
     ChatMessage retriedMessage;
 
     try {
-      retriedMessage = await retryTranslation(messageId: messageId);
+      retriedMessage = await retryProcessing(messageId: messageId);
     } catch (_) {
       if (!mounted) {
         return;
@@ -9797,8 +9813,13 @@ final class _MessageListState extends State<_MessageList>
 
       setState(() {
         _messages[failedIndex] = _messages[failedIndex].copyWith(
-          translationStatus: ChatTranslationStatus.failed,
-          translationFailureReason: 'Translation unavailable',
+          transcriptionStatus: transcribe
+              ? ChatTranscriptionStatus.failed
+              : null,
+          translationStatus: transcribe ? null : ChatTranslationStatus.failed,
+          translationFailureReason: transcribe
+              ? null
+              : 'Translation unavailable',
         );
       });
 
@@ -10413,6 +10434,68 @@ final class _MessageListState extends State<_MessageList>
     );
   }
 
+  Widget? _buildVoiceMemoText(ChatMessage message) {
+    final ChatTranscriptionStatus status = message.transcriptionStatus;
+    if (status == ChatTranscriptionStatus.none) return null;
+
+    if (status != ChatTranscriptionStatus.transcribed) {
+      final (String, String, String) labels =
+          switch (_normalizeChatLanguageCode(
+            widget.currentUserPreferredLanguage,
+          )) {
+            'ko' => ('텍스트로 변환 중...', '음성을 텍스트로 변환하지 못했어요.', '다시 해보기'),
+            'zh-CN' => ('正在转为文字...', '暂时无法将语音转为文字。', '重试'),
+            _ => (
+              'Transcribing...',
+              "Couldn't transcribe this voice memo.",
+              'Retry',
+            ),
+          };
+      final ChatMessageProcessingRetrier? retry = widget.onRetryTranscription;
+      return _MessageProcessingStatus(
+        statusKey: 'transcription-${message.id}',
+        loading: status == ChatTranscriptionStatus.transcribing,
+        failed: status == ChatTranscriptionStatus.failed,
+        loadingText: labels.$1,
+        failureText: labels.$2,
+        retryText: labels.$3,
+        onRetry: retry == null
+            ? null
+            : () => unawaited(
+                _retryServerTextProcessing(message.id, retry, transcribe: true),
+              ),
+      );
+    }
+
+    final bool isIncoming = message.senderId != widget.currentUserId;
+    final bool canTranslate =
+        isIncoming &&
+        _messageNeedsTranslation(
+          message,
+          currentUserPreferredLanguage: widget.currentUserPreferredLanguage,
+        );
+    // 음성의 원문·번역·재시도·검색 강조도 문자 메시지의 본문 컴포넌트를 사용해요.
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: canTranslate ? () => _handleIncomingMessageTap(message.id) : null,
+      child: _MessageTextContent(
+        message: message,
+        currentUserId: widget.currentUserId,
+        currentUserPreferredLanguage: widget.currentUserPreferredLanguage,
+        otherParticipantName: widget.otherParticipantName,
+        showTranslation: _showTranslatedMessageIds.contains(message.id),
+        isActiveSearchResult:
+            message.id ==
+            (_highlightedMessageId ?? widget.activeSearchMessageId),
+        searchQuery: widget.searchQuery,
+        canRetryTranslation: widget.onRetryTranslation != null,
+        canUseTranslation: canTranslate,
+        onRetryTranslation: () => _retryTranslation(message.id),
+        onReplyQuoteTap: _handleReplyQuoteTap,
+      ),
+    );
+  }
+
   Widget _buildTimelineGroupForRange({
     required _TimelineMessageGroupRange groupRange,
     required _TimelineMessageGroupRange? previousGroupRange,
@@ -10441,6 +10524,7 @@ final class _MessageListState extends State<_MessageList>
         highlightedMessageId:
             _highlightedMessageId ?? widget.activeSearchMessageId,
         searchQuery: widget.searchQuery,
+        voiceMemoTextBuilder: _buildVoiceMemoText,
         canRequestTranslation: widget.onTranslateMessage != null,
         canRetryTranslation:
             widget.onTranslateMessage != null ||
@@ -11515,6 +11599,7 @@ final class _MessageGroup extends StatelessWidget {
     required this.shownTranslatedMessageIds,
     required this.highlightedMessageId,
     required this.searchQuery,
+    required this.voiceMemoTextBuilder,
     required this.canRequestTranslation,
     required this.canRetryTranslation,
     required this.onIncomingMessageTap,
@@ -11540,6 +11625,7 @@ final class _MessageGroup extends StatelessWidget {
   final Set<String> shownTranslatedMessageIds;
   final String? highlightedMessageId;
   final String searchQuery;
+  final Widget? Function(ChatMessage) voiceMemoTextBuilder;
   final bool canRequestTranslation;
   final bool canRetryTranslation;
   final ValueChanged<String> onIncomingMessageTap;
@@ -11565,6 +11651,7 @@ final class _MessageGroup extends StatelessWidget {
         now: now,
         highlightedMessageId: highlightedMessageId,
         searchQuery: searchQuery,
+        voiceMemoTextBuilder: voiceMemoTextBuilder,
         onFileMessageTap: onFileMessageTap,
         onPhotoMessageTap: onPhotoMessageTap,
         onVideoMessageTap: onVideoMessageTap,
@@ -11585,6 +11672,7 @@ final class _MessageGroup extends StatelessWidget {
       shownTranslatedMessageIds: shownTranslatedMessageIds,
       highlightedMessageId: highlightedMessageId,
       searchQuery: searchQuery,
+      voiceMemoTextBuilder: voiceMemoTextBuilder,
       canRequestTranslation: canRequestTranslation,
       canRetryTranslation: canRetryTranslation,
       onIncomingMessageTap: onIncomingMessageTap,
@@ -11612,6 +11700,7 @@ final class _IncomingMessageGroup extends StatelessWidget {
     required this.shownTranslatedMessageIds,
     required this.highlightedMessageId,
     required this.searchQuery,
+    required this.voiceMemoTextBuilder,
     required this.canRequestTranslation,
     required this.canRetryTranslation,
     required this.onIncomingMessageTap,
@@ -11635,6 +11724,7 @@ final class _IncomingMessageGroup extends StatelessWidget {
   final Set<String> shownTranslatedMessageIds;
   final String? highlightedMessageId;
   final String searchQuery;
+  final Widget? Function(ChatMessage) voiceMemoTextBuilder;
   final bool canRequestTranslation;
   final bool canRetryTranslation;
   final ValueChanged<String> onIncomingMessageTap;
@@ -11681,6 +11771,7 @@ final class _IncomingMessageGroup extends StatelessWidget {
                   ),
                   isHighlighted: messages[index].id == highlightedMessageId,
                   searchQuery: searchQuery,
+                  voiceMemoTextBuilder: voiceMemoTextBuilder,
                   canRequestTranslation: canRequestTranslation,
                   canRetryTranslation: canRetryTranslation,
                   onMessageTap: () {
@@ -11788,6 +11879,7 @@ final class _IncomingMessageRow extends StatelessWidget {
     required this.showTranslation,
     required this.isHighlighted,
     required this.searchQuery,
+    required this.voiceMemoTextBuilder,
     required this.canRequestTranslation,
     required this.canRetryTranslation,
     required this.onMessageTap,
@@ -11812,6 +11904,7 @@ final class _IncomingMessageRow extends StatelessWidget {
   final bool showTranslation;
   final bool isHighlighted;
   final String searchQuery;
+  final Widget? Function(ChatMessage) voiceMemoTextBuilder;
   final bool canRequestTranslation;
   final bool canRetryTranslation;
   final VoidCallback onMessageTap;
@@ -11889,6 +11982,7 @@ final class _IncomingMessageRow extends StatelessWidget {
         messageId: message.id,
         measurementKey: ValueKey<String>('incoming-bubble-${message.id}'),
         attachment: message.voiceMemoAttachment!,
+        textContent: voiceMemoTextBuilder(message),
         isHighlighted: isHighlighted,
         onCreateMediaAssetAccessUrl: onCreateMediaAssetAccessUrl,
       );
@@ -11917,7 +12011,7 @@ final class _IncomingMessageRow extends StatelessWidget {
                 attachment: message.fileAttachment!,
                 isOutgoing: false,
               )
-            : _IncomingMessageContent(
+            : _MessageTextContent(
                 message: message,
                 currentUserId: currentUserId,
                 currentUserPreferredLanguage: currentUserPreferredLanguage,
@@ -11950,7 +12044,7 @@ final class _IncomingMessageRow extends StatelessWidget {
         child: content,
       ),
     );
-    final Widget rowBubble = isCallMessage || isVoiceMemoMessage
+    final Widget rowBubble = isCallMessage
         ? bubble
         : Flexible(fit: FlexFit.loose, child: bubble);
 
@@ -11982,8 +12076,8 @@ final class _IncomingMessageRow extends StatelessWidget {
   }
 }
 
-final class _IncomingMessageContent extends StatelessWidget {
-  const _IncomingMessageContent({
+final class _MessageTextContent extends StatelessWidget {
+  const _MessageTextContent({
     required this.message,
     required this.currentUserId,
     required this.currentUserPreferredLanguage,
@@ -12092,79 +12186,25 @@ final class _IncomingMessageContent extends StatelessWidget {
         key: ValueKey<String>('translation-skipped-${message.id}'),
       );
     }
-
-    switch (message.translationStatus) {
-      case ChatTranslationStatus.translating:
-        return Padding(
-          key: ValueKey<String>('translation-loading-${message.id}'),
-          padding: EdgeInsets.only(top: AppSpacing.space4),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox.square(
-                dimension: 10.0,
-                child: CircularProgressIndicator(
-                  strokeWidth: 1.5,
-                  color: AppColors.grey500,
-                ),
-              ),
-              const SizedBox(width: 5.0),
-              Text(
-                _translationLoadingText,
-                style: ChatMessageStyle.translationTextStyle(
-                  AppColors.textTertiary,
-                ),
-              ),
-            ],
-          ),
-        );
-
-      case ChatTranslationStatus.failed:
-        final TextStyle failureTextStyle =
-            ChatMessageStyle.translationTextStyle(AppColors.textSecondary);
-
-        return Padding(
-          key: ValueKey<String>('translation-failed-${message.id}'),
-          padding: EdgeInsets.only(top: 3),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                _translationFailureText,
-                softWrap: true,
-                strutStyle: _buildMessageStrutStyle(failureTextStyle),
-                style: failureTextStyle,
-                textWidthBasis: TextWidthBasis.longestLine,
-                textHeightBehavior: _messageTextHeightBehavior,
-              ),
-              if (canRetryTranslation && canUseTranslation) ...[
-                const SizedBox(height: 2.0),
-                TextButton(
-                  onPressed: onRetryTranslation,
-                  // 말풍선 안의 재시도 링크는 기존처럼 별도 버튼 여백 없이 표시해요.
-                  style: TextButton.styleFrom(
-                    foregroundColor: ChatMessageStyle.translationRetry.color,
-                    minimumSize: Size.zero,
-                    padding: EdgeInsets.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  child: Text(
-                    _translationRetryText,
-                    style: ChatMessageStyle.translationRetry,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        );
-
-      case ChatTranslationStatus.none:
-      case ChatTranslationStatus.translated:
-        return SizedBox.shrink(
-          key: ValueKey<String>('translation-idle-${message.id}'),
-        );
-    }
+    final bool loading =
+        message.translationStatus == ChatTranslationStatus.translating;
+    final bool failed =
+        message.translationStatus == ChatTranslationStatus.failed;
+    return _MessageProcessingStatus(
+      key: ValueKey<ChatTranslationStatus>(message.translationStatus),
+      statusKey:
+          'translation-${loading
+              ? 'loading'
+              : failed
+              ? 'failed'
+              : 'idle'}-${message.id}',
+      loading: loading,
+      failed: failed,
+      loadingText: _translationLoadingText,
+      failureText: _translationFailureText,
+      retryText: _translationRetryText,
+      onRetry: canRetryTranslation ? onRetryTranslation : null,
+    );
   }
 
   String get _translationFailureText {
@@ -12198,6 +12238,100 @@ final class _IncomingMessageContent extends StatelessWidget {
       default:
         return 'Translating...';
     }
+  }
+}
+
+// 번역과 음성 전사의 처리 상태는 같은 간격·글자·재시도 동작을 사용해요.
+final class _MessageProcessingStatus extends StatelessWidget {
+  const _MessageProcessingStatus({
+    super.key,
+    required this.statusKey,
+    required this.loading,
+    required this.failed,
+    required this.loadingText,
+    required this.failureText,
+    required this.retryText,
+    required this.onRetry,
+  });
+
+  final String statusKey;
+  final bool loading;
+  final bool failed;
+  final String loadingText;
+  final String failureText;
+  final String retryText;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) {
+      return Padding(
+        key: ValueKey<String>(statusKey),
+        padding: const EdgeInsets.only(top: AppSpacing.space4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox.square(
+              dimension: 10,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.5,
+                color: AppColors.grey500,
+              ),
+            ),
+            const SizedBox(width: 5),
+            Flexible(
+              child: Text(
+                loadingText,
+                style: ChatMessageStyle.translationTextStyle(
+                  AppColors.textTertiary,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    if (failed) {
+      final TextStyle style = ChatMessageStyle.translationTextStyle(
+        AppColors.textSecondary,
+      );
+      return Padding(
+        key: ValueKey<String>(statusKey),
+        padding: const EdgeInsets.only(top: 3),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              failureText,
+              softWrap: true,
+              strutStyle: _buildMessageStrutStyle(style),
+              style: style,
+              textWidthBasis: TextWidthBasis.longestLine,
+              textHeightBehavior: _messageTextHeightBehavior,
+            ),
+            if (onRetry != null) ...[
+              const SizedBox(height: 2),
+              TextButton(
+                onPressed: onRetry,
+                // 말풍선 안의 재시도 링크는 기존처럼 별도 버튼 여백 없이 표시해요.
+                style: TextButton.styleFrom(
+                  foregroundColor: ChatMessageStyle.translationRetry.color,
+                  minimumSize: Size.zero,
+                  padding: EdgeInsets.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
+                ),
+                child: Text(
+                  retryText,
+                  style: ChatMessageStyle.translationRetry,
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+    return SizedBox.shrink(key: ValueKey<String>(statusKey));
   }
 }
 
@@ -12748,6 +12882,7 @@ final class _OutgoingMessageGroup extends StatelessWidget {
     required this.now,
     required this.highlightedMessageId,
     required this.searchQuery,
+    required this.voiceMemoTextBuilder,
     required this.onFileMessageTap,
     required this.onPhotoMessageTap,
     required this.onVideoMessageTap,
@@ -12765,6 +12900,7 @@ final class _OutgoingMessageGroup extends StatelessWidget {
   final DateTime now;
   final String? highlightedMessageId;
   final String searchQuery;
+  final Widget? Function(ChatMessage) voiceMemoTextBuilder;
   final ValueChanged<ChatMessage> onFileMessageTap;
   final _PhotoMessageTapCallback onPhotoMessageTap;
   final _VideoMessageTapCallback onVideoMessageTap;
@@ -12788,6 +12924,7 @@ final class _OutgoingMessageGroup extends StatelessWidget {
             showTime: index == messages.length - 1,
             isHighlighted: messages[index].id == highlightedMessageId,
             searchQuery: searchQuery,
+            voiceMemoTextBuilder: voiceMemoTextBuilder,
             onFileMessageTap: onFileMessageTap,
             onPhotoMessageTap: onPhotoMessageTap,
             onVideoMessageTap: onVideoMessageTap,
@@ -12830,6 +12967,7 @@ final class _OutgoingMessageRow extends StatelessWidget {
     required this.showTime,
     required this.isHighlighted,
     required this.searchQuery,
+    required this.voiceMemoTextBuilder,
     required this.onFileMessageTap,
     required this.onPhotoMessageTap,
     required this.onVideoMessageTap,
@@ -12847,6 +12985,7 @@ final class _OutgoingMessageRow extends StatelessWidget {
   final bool showTime;
   final bool isHighlighted;
   final String searchQuery;
+  final Widget? Function(ChatMessage) voiceMemoTextBuilder;
   final ValueChanged<ChatMessage> onFileMessageTap;
   final _PhotoMessageTapCallback onPhotoMessageTap;
   final _VideoMessageTapCallback onVideoMessageTap;
@@ -12903,6 +13042,7 @@ final class _OutgoingMessageRow extends StatelessWidget {
         messageId: message.id,
         measurementKey: ValueKey<String>('outgoing-bubble-${message.id}'),
         attachment: message.voiceMemoAttachment!,
+        textContent: voiceMemoTextBuilder(message),
         isHighlighted: isHighlighted,
         onCreateMediaAssetAccessUrl: onCreateMediaAssetAccessUrl,
       );
@@ -12972,7 +13112,7 @@ final class _OutgoingMessageRow extends StatelessWidget {
         child: content,
       ),
     );
-    final Widget rowBubble = message.isCallMessage || message.isVoiceMemoMessage
+    final Widget rowBubble = message.isCallMessage
         ? bubble
         : Flexible(fit: FlexFit.loose, child: bubble);
 
@@ -17138,6 +17278,7 @@ final class _VoiceMemoMessageBubble extends StatefulWidget {
     required this.messageId,
     required this.measurementKey,
     required this.attachment,
+    required this.textContent,
     required this.isHighlighted,
     required this.onCreateMediaAssetAccessUrl,
   });
@@ -17145,6 +17286,7 @@ final class _VoiceMemoMessageBubble extends StatefulWidget {
   final String messageId;
   final Key measurementKey;
   final ChatVoiceMemoAttachment attachment;
+  final Widget? textContent;
   final bool isHighlighted;
   final ChatMediaAssetAccessUrlCreator? onCreateMediaAssetAccessUrl;
 
@@ -17316,6 +17458,11 @@ final class _VoiceMemoMessageBubbleState
     ChatVoiceMemoAttachment previous,
     ChatVoiceMemoAttachment current,
   ) {
+    // 전사·번역 갱신에는 로컬 파일 정보가 없지만 첨부 ID가 같으면 같은 녹음이에요.
+    if (current.mediaAssetId != null &&
+        current.mediaAssetId == previous.mediaAssetId) {
+      return false;
+    }
     return previous.duration != current.duration ||
         previous.mediaAssetId != current.mediaAssetId ||
         previous.localPath != current.localPath ||
@@ -17820,8 +17967,6 @@ final class _VoiceMemoMessageBubbleState
         children: [
           SizedBox(
             width: width,
-            // 녹음창의 표시줄과 다른, 채팅에 보낸 음성 카드의 기존 크기를 유지해요.
-            height: 56.0,
             child: DecoratedBox(
               decoration: BoxDecoration(
                 color: AppColors.white,
@@ -17830,121 +17975,143 @@ final class _VoiceMemoMessageBubbleState
                   BorderSide(color: AppColors.grey100),
                 ),
               ),
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  10,
-                  AppSpacing.space8,
-                  14,
-                  AppSpacing.space8,
-                ),
-                child: Row(
-                  children: [
-                    SizedBox.square(
-                      dimension: AppSpacing.space40,
-                      child: Material(
-                        color: AppColors.grey50,
-                        shape: const CircleBorder(),
-                        clipBehavior: Clip.antiAlias,
-                        child: InkWell(
-                          customBorder: const CircleBorder(),
-                          onTap: canPlay ? _togglePlayback : null,
-                          child: Icon(
-                            AppIcons.playback(_playing),
-                            size: 30.0,
-                            color: canPlay
-                                ? AppColors.grey900
-                                : AppColors.grey300,
-                          ),
-                        ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // 재생 컨트롤의 높이는 텍스트 변환 상태와 관계없이 유지해요.
+                  SizedBox(
+                    height: 56,
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        10,
+                        AppSpacing.space8,
+                        14,
+                        AppSpacing.space8,
                       ),
-                    ),
-                    const SizedBox(
-                      // 파형 양옆 간격은 공유하고, 파형을 그리는 규칙은 녹음창과 계속 함께 써요.
-                      width: AppSpacing.space12,
-                    ),
-                    Expanded(
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final double scrubWidth = constraints.maxWidth;
-
-                          return GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTapDown: canScrub
-                                ? (details) {
-                                    _draggingWaveform = false;
-                                    _beginWaveformScrub(
-                                      details.localPosition,
-                                      scrubWidth,
-                                    );
-                                  }
-                                : null,
-                            onTapUp: canScrub
-                                ? (details) {
-                                    _updateWaveformScrub(
-                                      details.localPosition,
-                                      scrubWidth,
-                                    );
-                                    unawaited(_commitWaveformScrub());
-                                  }
-                                : null,
-                            onTapCancel: canScrub
-                                ? () {
-                                    if (!_draggingWaveform) {
-                                      _cancelWaveformScrub();
-                                    }
-                                  }
-                                : null,
-                            onHorizontalDragStart: canScrub
-                                ? (details) {
-                                    _draggingWaveform = true;
-                                    _beginWaveformScrub(
-                                      details.localPosition,
-                                      scrubWidth,
-                                    );
-                                  }
-                                : null,
-                            onHorizontalDragUpdate: canScrub
-                                ? (details) {
-                                    _updateWaveformScrub(
-                                      details.localPosition,
-                                      scrubWidth,
-                                    );
-                                  }
-                                : null,
-                            onHorizontalDragEnd: canScrub
-                                ? (_) {
-                                    unawaited(_commitWaveformScrub());
-                                  }
-                                : null,
-                            onHorizontalDragCancel: canScrub
-                                ? _cancelWaveformScrub
-                                : null,
-                            child: SizedBox(
-                              height: 22.0,
-                              child: _VoiceMemoWaveform(
-                                color: AppColors.grey300,
-                                playedColor: AppColors.grey900,
-                                samples: _waveformSamples,
-                                progress: _progress,
-                                showProgress:
-                                    displayPlaybackPosition > Duration.zero &&
-                                    widget.attachment.duration > Duration.zero,
+                      child: Row(
+                        children: [
+                          SizedBox.square(
+                            dimension: AppSpacing.space40,
+                            child: Material(
+                              color: AppColors.grey50,
+                              shape: const CircleBorder(),
+                              clipBehavior: Clip.antiAlias,
+                              child: InkWell(
+                                customBorder: const CircleBorder(),
+                                onTap: canPlay ? _togglePlayback : null,
+                                child: Icon(
+                                  AppIcons.playback(_playing),
+                                  size: 30.0,
+                                  color: canPlay
+                                      ? AppColors.grey900
+                                      : AppColors.grey300,
+                                ),
                               ),
                             ),
-                          );
-                        },
+                          ),
+                          const SizedBox(
+                            // 파형 양옆 간격은 공유하고, 파형을 그리는 규칙은 녹음창과 계속 함께 써요.
+                            width: AppSpacing.space12,
+                          ),
+                          Expanded(
+                            child: LayoutBuilder(
+                              builder: (context, constraints) {
+                                final double scrubWidth = constraints.maxWidth;
+
+                                return GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTapDown: canScrub
+                                      ? (details) {
+                                          _draggingWaveform = false;
+                                          _beginWaveformScrub(
+                                            details.localPosition,
+                                            scrubWidth,
+                                          );
+                                        }
+                                      : null,
+                                  onTapUp: canScrub
+                                      ? (details) {
+                                          _updateWaveformScrub(
+                                            details.localPosition,
+                                            scrubWidth,
+                                          );
+                                          unawaited(_commitWaveformScrub());
+                                        }
+                                      : null,
+                                  onTapCancel: canScrub
+                                      ? () {
+                                          if (!_draggingWaveform) {
+                                            _cancelWaveformScrub();
+                                          }
+                                        }
+                                      : null,
+                                  onHorizontalDragStart: canScrub
+                                      ? (details) {
+                                          _draggingWaveform = true;
+                                          _beginWaveformScrub(
+                                            details.localPosition,
+                                            scrubWidth,
+                                          );
+                                        }
+                                      : null,
+                                  onHorizontalDragUpdate: canScrub
+                                      ? (details) {
+                                          _updateWaveformScrub(
+                                            details.localPosition,
+                                            scrubWidth,
+                                          );
+                                        }
+                                      : null,
+                                  onHorizontalDragEnd: canScrub
+                                      ? (_) {
+                                          unawaited(_commitWaveformScrub());
+                                        }
+                                      : null,
+                                  onHorizontalDragCancel: canScrub
+                                      ? _cancelWaveformScrub
+                                      : null,
+                                  child: SizedBox(
+                                    height: 22.0,
+                                    child: _VoiceMemoWaveform(
+                                      color: AppColors.grey300,
+                                      playedColor: AppColors.grey900,
+                                      samples: _waveformSamples,
+                                      progress: _progress,
+                                      showProgress:
+                                          displayPlaybackPosition >
+                                              Duration.zero &&
+                                          widget.attachment.duration >
+                                              Duration.zero,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.space12),
+                          Text(
+                            _formatVoiceMemoDuration(
+                              padMinutes: false,
+                              widget.attachment.duration,
+                            ),
+                            style: ChatMessageStyle.body(),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(width: AppSpacing.space12),
-                    Text(
-                      _formatVoiceMemoDuration(
-                        padMinutes: false,
-                        widget.attachment.duration,
+                  ),
+                  if (widget.textContent != null)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        ChatMessageStyle.horizontalPadding,
+                        0,
+                        ChatMessageStyle.horizontalPadding,
+                        AppSpacing.space12,
                       ),
-                      style: ChatMessageStyle.body(),
+                      child: widget.textContent,
                     ),
-                  ],
-                ),
+                ],
               ),
             ),
           ),

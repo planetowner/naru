@@ -26,6 +26,7 @@ OpenAI.
 - Simplified Chinese to Korean text translation
 - Conversation-context-aware translation
 - Original text preserved alongside translated text
+- Automatic voice memo transcription, followed by the same Korean/Chinese translation
 - Real-time message, read receipt, edit, delete, and translation updates
 - Flutter login and chat client
 - iOS APNs message notifications with profile images, grouping, media previews,
@@ -100,6 +101,7 @@ Configure these in the hosted backend environment:
 - `DATABASE_URL`: PostgreSQL connection URL
 - `JWT_SECRET`: long random signing secret for access tokens
 - `OPENAI_API_KEY`: OpenAI API key
+- `OPENAI_TRANSCRIPTION_MODEL`: voice transcription model (defaults to `gpt-transcribe`)
 - `OPENAI_MODEL`: OpenAI model name (defaults to `gpt-5.4-mini`)
 - `APNS_KEY_ID`: Apple APNs signing key ID
 - `APNS_TEAM_ID`: Apple Developer team ID
@@ -109,6 +111,22 @@ Configure these in the hosted backend environment:
 `DATABASE_URL` must point to PostgreSQL. `postgresql://` and `postgres://`
 URLs are accepted and normalized to SQLAlchemy's asyncpg driver URL
 automatically.
+
+### Voice memo transcription
+
+New voice memos are transcribed automatically after sending. The transcript is
+stored in the existing message body, and processing status in message metadata;
+no database migration is needed. Both participants receive transcript updates,
+then the existing translation flow translates for the recipient's language.
+The Flutter voice card shows the transcript below its player. Recipients can tap
+the text to switch between the original and translation, as with text messages.
+
+Transcription and translation failures have separate retries. The original audio
+remains playable if either step fails. Existing recordings are not backfilled.
+The [OpenAI file transcription API](https://developers.openai.com/api/docs/guides/speech-to-text)
+accepts files up to 25 MB; larger recordings remain available for playback, but
+their transcription fails. The backend needs access to the stored audio and the
+configured transcription model through its existing OpenAI API key.
 
 ## User Administration
 

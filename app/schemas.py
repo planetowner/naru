@@ -249,6 +249,7 @@ class MessageRead(BaseModel):
     translation_status: TranslationStatus
     translation_provider: Optional[str]
     translation_model: Optional[str]
+    transcription_status: Literal["none", "pending", "completed", "failed"] = "none"
 
 
 class MessageContextRead(BaseModel):

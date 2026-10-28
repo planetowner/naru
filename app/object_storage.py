@@ -150,6 +150,17 @@ class ObjectStorageClient:
             ExpiresIn=expires_in,
         )
 
+    def read_object(self, *, storage_key: str, max_bytes: int) -> bytes:
+        response = self._client.get_object(Bucket=self.bucket, Key=storage_key)
+        body = response["Body"]
+        try:
+            data = body.read(max_bytes + 1)
+            if len(data) > max_bytes:
+                raise ValueError("Stored audio exceeds the transcription size limit.")
+            return data
+        finally:
+            body.close()
+
     def object_metadata(self, *, storage_key: str) -> dict[str, object]:
         try:
             return self._client.head_object(
