@@ -127,17 +127,22 @@ final class PhotoManagerChatPhotoLibrary
         ChatPhotoLibraryChangeSource,
         ChatQuickPhotoSource,
         ChatPhotoLibraryPreloader {
+  PhotoManagerChatPhotoLibrary({this.imagesOnly = false});
+
+  final bool imagesOnly;
+  RequestType get _requestType =>
+      imagesOnly ? RequestType.image : RequestType.common;
+
   static const int _preloadPageSize = 60;
   static const int _preloadThumbnailCount = 18;
   static const int _maximumThumbnailCacheCount = 160;
-  static const PermissionRequestOption _permissionOption =
-      PermissionRequestOption(
-        iosAccessLevel: IosAccessLevel.readWrite,
-        androidPermission: AndroidPermission(
-          type: RequestType.common,
-          mediaLocation: false,
-        ),
-      );
+  PermissionRequestOption get _permissionOption => PermissionRequestOption(
+    iosAccessLevel: IosAccessLevel.readWrite,
+    androidPermission: AndroidPermission(
+      type: _requestType,
+      mediaLocation: false,
+    ),
+  );
 
   static final Set<PhotoManagerChatPhotoLibrary> _observedLibraries =
       <PhotoManagerChatPhotoLibrary>{};
@@ -489,7 +494,7 @@ final class PhotoManagerChatPhotoLibrary
     final FilterOptionGroup filterOption = _createFilterOption();
 
     final List<AssetPathEntity> paths = await PhotoManager.getAssetPathList(
-      type: RequestType.common,
+      type: _requestType,
       hasAll: true,
       onlyAll: false,
       filterOption: filterOption,

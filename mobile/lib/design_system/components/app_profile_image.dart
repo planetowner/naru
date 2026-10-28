@@ -7,12 +7,15 @@ final class AppProfileImage extends StatelessWidget {
   const AppProfileImage({
     required this.imageUrl,
     required this.size,
-    required this.borderRadius,
     required this.iconSize,
+    double? borderRadius,
     this.iconColor = AppColors.white,
     this.image,
     super.key,
-  });
+  }) : borderRadius = borderRadius ?? size * cornerRadiusFraction;
+
+  // 채팅방·목록·크롭은 같은 모서리 비율을 써서 실제 보이는 영역을 맞춰요.
+  static const double cornerRadiusFraction = 1 / 3;
 
   const AppProfileImage.large({
     required this.imageUrl,

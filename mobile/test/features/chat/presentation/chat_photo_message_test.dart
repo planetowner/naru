@@ -10,6 +10,8 @@ import 'package:naru/design_system/app_icons.dart';
 import 'package:naru/features/chat/domain/chat_message.dart';
 import 'package:naru/features/chat/presentation/chat_conversation_view.dart';
 
+import '../../../support/pump_real_async_until.dart';
+
 final Uint8List _testPng = base64Decode(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAABmJLR0QA'
   '/wD/AP+gvaeTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH5gMQ'
@@ -135,24 +137,6 @@ Directory _setUpPhotoCacheDirectory(String prefix) {
     }
   });
   return cacheDirectory;
-}
-
-Future<void> _pumpRealAsyncUntil(
-  WidgetTester tester,
-  bool Function() condition, {
-  required String failureReason,
-}) async {
-  final Stopwatch timeout = Stopwatch()..start();
-
-  await tester.runAsync(() async {
-    while (!condition() && timeout.elapsed < const Duration(seconds: 5)) {
-      await Future<void>.delayed(const Duration(milliseconds: 1));
-      await tester.pump();
-    }
-  });
-  await tester.pump();
-
-  expect(condition(), isTrue, reason: failureReason);
 }
 
 final class _IncomingPhotoHarness extends StatefulWidget {
@@ -796,7 +780,7 @@ void main() {
         await tester.pumpAndSettle();
 
         // 파일 조회는 실제 비동기 작업이라 애니메이션 정착만으로 완료를 알 수 없어요.
-        await _pumpRealAsyncUntil(
+        await pumpRealAsyncUntil(
           tester,
           () => find
               .byKey(
@@ -826,7 +810,7 @@ void main() {
         );
         await tester.pump();
         if (failFirstSave) {
-          await _pumpRealAsyncUntil(
+          await pumpRealAsyncUntil(
             tester,
             () => find.text('Photo could not be saved.').evaluate().isNotEmpty,
             failureReason: '저장 실패 안내가 표시되지 않았습니다.',
@@ -842,7 +826,7 @@ void main() {
           );
           await tester.pump();
         }
-        await _pumpRealAsyncUntil(
+        await pumpRealAsyncUntil(
           tester,
           () => find.text('Photo saved').evaluate().isNotEmpty,
           failureReason: '사진 저장 완료 안내가 표시되지 않았습니다.',
@@ -1579,7 +1563,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey<String>('photo-viewer-share')));
     await tester.pump();
-    await _pumpRealAsyncUntil(
+    await pumpRealAsyncUntil(
       tester,
       () =>
           sharedPath != null &&

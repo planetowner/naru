@@ -1,5 +1,4 @@
-import 'dart:typed_data';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -18,14 +17,17 @@ import '../../auth/presentation/app_language_picker.dart';
 import '../../chat/data/chat_api.dart';
 import '../../chat/data/chat_photo_library.dart';
 import 'account_form_page.dart';
+import 'profile_photo_picker_screen.dart';
 
 final class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
     required this.user,
     required this.chatApi,
     required this.onSaved,
+    this.photoLibrary,
     super.key,
   });
+  final ChatPhotoLibrary? photoLibrary;
   final AppUser user;
   final ChatApi chatApi;
   final Future<void> Function(AppUser) onSaved;
@@ -69,54 +71,30 @@ final class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _choosePhoto() async {
     if (_saving || _picking) return;
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      backgroundColor: AppColors.surface,
-      barrierColor: AppColors.black.withValues(alpha: 0.32),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppRadius.radius24),
-        ),
-      ),
-      builder: (context) => SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.space24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(context.l10n.changePhoto, style: AppTypography.sectionTitle),
-              const SizedBox(height: AppSpacing.space24),
-              for (final option in [
-                (ImageSource.gallery, context.l10n.photo, AppIcons.image),
-                (ImageSource.camera, context.l10n.camera, AppIcons.camera),
-              ])
-                AppSelectionTile(
-                  label: option.$2,
-                  icon: option.$3,
-                  selected: false,
-                  onTap: () => Navigator.of(context).pop(option.$1),
-                ),
-              const SizedBox(height: AppSpacing.space24),
-              AppButton(
-                label: context.l10n.cancel,
-                secondary: true,
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (source == null || !mounted) return;
+    ImageSource? source;
     setState(() {
       _picking = true;
       _error = null;
     });
     try {
-      final photo = await pickPhoto(source);
-      if (photo == null) return;
+      final XFile? photo;
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+        final photoLibrary =
+            widget.photoLibrary ??
+            PhotoManagerChatPhotoLibrary(imagesOnly: true);
+        photo = await Navigator.of(context).push<XFile>(
+          MaterialPageRoute(
+            builder: (_) =>
+                ProfilePhotoPickerScreen(photoLibrary: photoLibrary),
+          ),
+        );
+      } else {
+        // UIKit을 쓰지 않는 플랫폼은 기존 사진 선택·촬영 흐름을 유지해요.
+        source = await _choosePhotoSource();
+        if (source == null || !mounted) return;
+        photo = await pickPhoto(source);
+      }
+      if (photo == null || !mounted) return;
       final bytes = await photo.readAsBytes();
       if (mounted) {
         setState(() {
@@ -137,6 +115,51 @@ final class _SettingsScreenState extends State<SettingsScreen> {
       if (mounted) setState(() => _picking = false);
     }
   }
+
+  Future<ImageSource?> _choosePhotoSource() =>
+      showModalBottomSheet<ImageSource>(
+        context: context,
+        backgroundColor: AppColors.surface,
+        barrierColor: AppColors.black.withValues(alpha: 0.32),
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppRadius.radius24),
+          ),
+        ),
+        builder: (context) => SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.space24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  context.l10n.changePhoto,
+                  style: AppTypography.sectionTitle,
+                ),
+                const SizedBox(height: AppSpacing.space24),
+                for (final option in [
+                  (ImageSource.gallery, context.l10n.photo, AppIcons.image),
+                  (ImageSource.camera, context.l10n.camera, AppIcons.camera),
+                ])
+                  AppSelectionTile(
+                    label: option.$2,
+                    icon: option.$3,
+                    selected: false,
+                    onTap: () => Navigator.of(context).pop(option.$1),
+                  ),
+                const SizedBox(height: AppSpacing.space24),
+                AppButton(
+                  label: context.l10n.cancel,
+                  secondary: true,
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
 
   Future<void> _save() async {
     if (_saving || _picking || !_formKey.currentState!.validate()) return;

@@ -13,6 +13,8 @@ final class AppNavigationBar extends StatelessWidget {
     required this.title,
     required this.backTooltip,
     required this.onBack,
+    this.backIcon = AppIcons.back,
+    this.trailing,
     super.key,
   });
 
@@ -21,7 +23,9 @@ final class AppNavigationBar extends StatelessWidget {
 
   final String title;
   final String? backTooltip;
-  final VoidCallback onBack;
+  final VoidCallback? onBack;
+  final IconData backIcon;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -36,7 +40,7 @@ final class AppNavigationBar extends StatelessWidget {
       child: Row(
         children: [
           AppRoundIconButton(
-            icon: AppIcons.back,
+            icon: backIcon,
             tooltip: backTooltip ?? context.l10n.back,
             onPressed: onBack,
           ),
@@ -53,8 +57,11 @@ final class AppNavigationBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppSpacing.space12),
-          // 뒤로가기와 같은 폭을 남겨 제목이 화면 중앙에 오도록 해요.
-          const SizedBox(width: AppMediaViewerChrome.buttonDimension),
+          // 오른쪽 동작이 없어도 같은 폭을 남겨 제목을 중앙에 맞춰요.
+          SizedBox(
+            width: AppMediaViewerChrome.buttonDimension,
+            child: trailing,
+          ),
         ],
       ),
     ),

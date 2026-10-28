@@ -11637,7 +11637,6 @@ final class _IncomingMessageGroup extends StatelessWidget {
         AppProfileImage(
           imageUrl: otherParticipantProfileImageUrl,
           size: 36,
-          borderRadius: AppRadius.radius12,
           iconSize: 22,
         ),
         const SizedBox(width: 10),

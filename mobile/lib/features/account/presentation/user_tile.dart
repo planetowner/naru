@@ -97,7 +97,6 @@ final class _UserAvatar extends StatelessWidget {
             child: AppProfileImage(
               imageUrl: imageUrl,
               size: UserTile.avatarSize,
-              borderRadius: AppRadius.radius16,
               iconSize: 30,
             ),
           ),

@@ -92,11 +92,33 @@ final class ChatPhotoPicker extends StatefulWidget {
     this.onHandleDragUpdate,
     this.onHandleDragEnd,
     super.key,
-  });
+  }) : onSelected = null,
+       selectedAssetId = null,
+       autoSelectFirst = false,
+       onCamera = null;
 
+  // 프로필도 앨범·권한·격자 갱신을 공유하고 선택 방식만 한 장으로 바꿔요.
+  const ChatPhotoPicker.single({
+    required this.photoLibrary,
+    required this.selectedAssetId,
+    required ValueChanged<ChatPhotoAsset> this.onSelected,
+    required VoidCallback this.onCamera,
+    this.autoSelectFirst = true,
+    super.key,
+  }) : onClose = null,
+       onSend = null,
+       expanded = true,
+       onHandleDragStart = null,
+       onHandleDragUpdate = null,
+       onHandleDragEnd = null;
+
+  final ValueChanged<ChatPhotoAsset>? onSelected;
+  final bool autoSelectFirst;
+  final String? selectedAssetId;
+  final VoidCallback? onCamera;
   final ChatPhotoLibrary photoLibrary;
-  final VoidCallback onClose;
-  final ChatPhotoSendCallback onSend;
+  final VoidCallback? onClose;
+  final ChatPhotoSendCallback? onSend;
 
   final bool expanded;
 
@@ -157,6 +179,10 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
   bool _collagePhotos = true;
 
   bool _albumListOpen = false;
+  bool _selectedInitialAsset = false;
+
+  bool get _singleSelection => widget.onSelected != null;
+  int get _leadingTileCount => widget.onCamera == null ? 0 : 1;
 
   String? _errorMessage;
 
@@ -185,6 +211,7 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
       _unsubscribeFromLibraryChanges();
       _pendingDeletedAssetIds.clear();
       _thumbnailBytesByAssetId.clear();
+      _selectedInitialAsset = false;
       unawaited(_reinitializeForPhotoLibraryChange());
     }
 
@@ -650,6 +677,12 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
       if (_gridController.hasClients) {
         _gridController.jumpTo(0);
       }
+      if (_singleSelection && !_selectedInitialAsset && firstPage.isNotEmpty) {
+        _selectedInitialAsset = true;
+        if (widget.autoSelectFirst && widget.selectedAssetId == null) {
+          widget.onSelected!(firstPage.first);
+        }
+      }
     } catch (_) {
       if (!mounted || _selectedAlbum?.id != album.id) {
         return;
@@ -730,6 +763,7 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
   }
 
   int _selectionIndex(ChatPhotoAsset asset) {
+    if (_singleSelection) return widget.selectedAssetId == asset.id ? 0 : -1;
     return _selectedAssets.indexWhere(
       (ChatPhotoAsset selectedAsset) => selectedAsset.id == asset.id,
     );
@@ -746,6 +780,11 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
   }
 
   void _toggleAsset(ChatPhotoAsset asset) {
+    if (_singleSelection) {
+      _selectedInitialAsset = true;
+      widget.onSelected!(asset);
+      return;
+    }
     final int currentIndex = _selectionIndex(asset);
 
     if (currentIndex >= 0) {
@@ -777,7 +816,7 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
     _sending = true;
 
     try {
-      await widget.onSend(
+      await widget.onSend!(
         ChatPhotoSelectionResult(
           assets: _selectedAssets,
           collage: _collagePhotos,
@@ -897,6 +936,7 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
         thumbnailBytes: thumbnailBytes ?? _thumbnailBytesByAssetId[asset.id],
         onThumbnailLoaded: _cacheThumbnail,
         selectedNumber: resolvedSelectedNumber,
+        singleSelection: _singleSelection,
         onTap: () {
           _toggleAsset(asset);
         },
@@ -909,6 +949,9 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
     required int nextIndex,
     required double itemStep,
   }) {
+    // 카메라 셀도 실제 격자 위치에 포함해 추가·삭제 애니메이션을 맞춰요.
+    previousIndex += _leadingTileCount;
+    nextIndex += _leadingTileCount;
     final int previousColumn =
         previousIndex % ChatPhotoPicker._gridCrossAxisCount;
     final int previousRow =
@@ -987,8 +1030,9 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
     double itemStep,
     double scrollOffset,
   ) {
-    final int column = item.previousIndex % ChatPhotoPicker._gridCrossAxisCount;
-    final int row = item.previousIndex ~/ ChatPhotoPicker._gridCrossAxisCount;
+    final int index = item.previousIndex + _leadingTileCount;
+    final int column = index % ChatPhotoPicker._gridCrossAxisCount;
+    final int row = index ~/ ChatPhotoPicker._gridCrossAxisCount;
 
     return Positioned(
       key: ValueKey<String>('photo-grid-removal-${item.asset.id}'),
@@ -1035,7 +1079,9 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
         final _PhotoGridTransition? transition = _photoGridTransition;
         final Map<Key, int> indexesByItemKey = <Key, int>{
           for (int index = 0; index < _assets.length; index++)
-            ValueKey<String>('photo-grid-item-${_assets[index].id}'): index,
+            ValueKey<String>('photo-grid-item-${_assets[index].id}'):
+                index + _leadingTileCount,
+          if (_leadingTileCount > 0) const ValueKey('photo-picker-camera'): 0,
         };
         final Widget grid = GridView.builder(
           key: const ValueKey<String>('photo-asset-grid'),
@@ -1050,8 +1096,27 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
             crossAxisSpacing: ChatPhotoPicker._gridSpacing,
           ),
           findChildIndexCallback: (Key key) => indexesByItemKey[key],
-          itemCount: _assets.length,
+          itemCount: _assets.length + _leadingTileCount,
           itemBuilder: (BuildContext context, int index) {
+            if (index < _leadingTileCount) {
+              return Material(
+                key: const ValueKey('photo-picker-camera'),
+                color: AppColors.grey100,
+                child: Semantics(
+                  button: true,
+                  label: context.l10n.camera,
+                  child: InkWell(
+                    onTap: widget.onCamera,
+                    child: const Icon(
+                      AppIcons.camera,
+                      size: 24,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+              );
+            }
+            index -= _leadingTileCount;
             return _buildTransitionedPhotoGridTile(
               _assets[index],
               index,
@@ -1087,6 +1152,17 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
 
   @override
   Widget build(BuildContext context) {
+    if (_singleSelection) {
+      return Material(
+        color: AppColors.surface,
+        child: Column(
+          children: [
+            _buildHeader(),
+            Expanded(child: _buildBody()),
+          ],
+        ),
+      );
+    }
     final BorderRadius panelRadius = widget.expanded
         ? BorderRadius.only(
             topLeft: Radius.circular(18),
@@ -1205,10 +1281,14 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
                     _selectedAlbumLabel,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTypography.typography5.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: AppTypography.bold,
-                    ),
+                    style:
+                        (_singleSelection
+                                ? AppTypography.navigationTitle
+                                : AppTypography.typography5)
+                            .copyWith(
+                              color: AppColors.textPrimary,
+                              fontWeight: AppTypography.bold,
+                            ),
                   ),
                 ),
                 const SizedBox(width: 2.0),
@@ -1244,60 +1324,67 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
         alignment: Alignment.center,
         children: [
           Align(alignment: Alignment.center, child: title),
-          Positioned(
-            left: 2.0,
-            top: 0,
-            bottom: 0,
-            child: Center(
-              child: IconButton(
-                key: const ValueKey<String>('photo-picker-close'),
-                tooltip: context.l10n.closePhotoPicker,
-                onPressed: widget.onClose,
-                icon: const Icon(
-                  AppIcons.close,
-                  size: 26.0,
-                  color: AppColors.grey900,
+          if (!_singleSelection)
+            Positioned(
+              left: 2.0,
+              top: 0,
+              bottom: 0,
+              child: Center(
+                child: IconButton(
+                  key: const ValueKey<String>('photo-picker-close'),
+                  tooltip: context.l10n.closePhotoPicker,
+                  onPressed: widget.onClose,
+                  icon: const Icon(
+                    AppIcons.close,
+                    size: 26.0,
+                    color: AppColors.grey900,
+                  ),
                 ),
               ),
             ),
-          ),
-          Positioned(
-            right: 10.0,
-            top: 0,
-            bottom: 0,
-            child: Center(
-              child: Material(
-                key: const ValueKey<String>('photo-picker-send'),
-                color: canSend ? AppColors.blue500 : AppColors.grey100,
-                borderRadius: AppRadius.borderRadius16,
-                clipBehavior: Clip.antiAlias,
-                child: InkWell(
-                  splashFactory: NoSplash.splashFactory,
-                  highlightColor: Colors.transparent,
-                  onTap: canSend
-                      ? () {
-                          unawaited(_sendSelection());
-                        }
-                      : null,
-                  child: SizedBox(
-                    width: selectedCount == 0 ? 56.0 : null,
-                    height: 32.0,
-                    child: Padding(
-                      key: const ValueKey<String>('photo-picker-send-padding'),
-                      padding: EdgeInsets.symmetric(
-                        horizontal: selectedCount == 0 ? 0 : 11.0,
-                      ),
-                      child: Center(
-                        child: selectedCount == 0
-                            ? FittedBox(fit: BoxFit.scaleDown, child: sendLabel)
-                            : sendLabel,
+          if (!_singleSelection)
+            Positioned(
+              right: 10.0,
+              top: 0,
+              bottom: 0,
+              child: Center(
+                child: Material(
+                  key: const ValueKey<String>('photo-picker-send'),
+                  color: canSend ? AppColors.blue500 : AppColors.grey100,
+                  borderRadius: AppRadius.borderRadius16,
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    splashFactory: NoSplash.splashFactory,
+                    highlightColor: Colors.transparent,
+                    onTap: canSend
+                        ? () {
+                            unawaited(_sendSelection());
+                          }
+                        : null,
+                    child: SizedBox(
+                      width: selectedCount == 0 ? 56.0 : null,
+                      height: 32.0,
+                      child: Padding(
+                        key: const ValueKey<String>(
+                          'photo-picker-send-padding',
+                        ),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: selectedCount == 0 ? 0 : 11.0,
+                        ),
+                        child: Center(
+                          child: selectedCount == 0
+                              ? FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: sendLabel,
+                                )
+                              : sendLabel,
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -1306,41 +1393,43 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
   Widget _buildBody() {
     if (_accessState == ChatPhotoAccessState.denied) {
       return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.space24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                AppIcons.photoLibrary,
-                size: 42.0,
-                color: AppColors.grey500,
-              ),
-              const SizedBox(height: AppSpacing.space12),
-              Text(
-                context.l10n.photoAccessRequired,
-                textAlign: TextAlign.center,
-                style: AppTypography.subTypography10.copyWith(
-                  color: AppColors.textPrimary,
-                  fontWeight: AppTypography.bold,
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.space24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  AppIcons.photoLibrary,
+                  size: 42.0,
+                  color: AppColors.grey500,
                 ),
-              ),
-              const SizedBox(height: AppSpacing.space4),
-              Text(
-                context.l10n.photoAccessDescription,
-                textAlign: TextAlign.center,
-                style: AppTypography.subTypography11.copyWith(
-                  color: AppColors.textSecondary,
+                const SizedBox(height: AppSpacing.space12),
+                Text(
+                  context.l10n.photoAccessRequired,
+                  textAlign: TextAlign.center,
+                  style: AppTypography.subTypography10.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: AppTypography.bold,
+                  ),
                 ),
-              ),
-              const SizedBox(height: AppSpacing.space16),
-              TextButton(
-                onPressed: () {
-                  unawaited(widget.photoLibrary.openSettings());
-                },
-                child: Text(context.l10n.openSettings),
-              ),
-            ],
+                const SizedBox(height: AppSpacing.space4),
+                Text(
+                  context.l10n.photoAccessDescription,
+                  textAlign: TextAlign.center,
+                  style: AppTypography.subTypography11.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.space16),
+                TextButton(
+                  onPressed: () {
+                    unawaited(widget.photoLibrary.openSettings());
+                  },
+                  child: Text(context.l10n.openSettings),
+                ),
+              ],
+            ),
           ),
         ),
       );
@@ -1654,8 +1743,10 @@ final class _PhotoGridTile extends StatelessWidget {
     required this.onThumbnailLoaded,
     required this.selectedNumber,
     required this.onTap,
+    this.singleSelection = false,
   });
 
+  final bool singleSelection;
   final ChatPhotoAsset asset;
   final ChatPhotoLibrary photoLibrary;
   final Uint8List? thumbnailBytes;
@@ -1691,15 +1782,26 @@ final class _PhotoGridTile extends StatelessWidget {
                   onThumbnailLoaded(asset.id, bytes);
                 },
               ),
-            if (selected) ColoredBox(color: AppColors.black.withAlpha(24)),
-            Positioned(
-              top: 7.0,
-              right: ChatPhotoPicker._tileHorizontalInset,
-              child: _PhotoSelectionBadge(
-                assetId: asset.id,
-                selectedNumber: selectedNumber,
+            if (selected)
+              singleSelection
+                  ? DecoratedBox(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: AppColors.primary, width: 2),
+                      ),
+                    )
+                  : ColoredBox(color: AppColors.black.withAlpha(24)),
+            if (!singleSelection || selected)
+              Positioned(
+                top: singleSelection ? AppSpacing.space8 : 7.0,
+                right: singleSelection
+                    ? AppSpacing.space8
+                    : ChatPhotoPicker._tileHorizontalInset,
+                child: _PhotoSelectionBadge(
+                  assetId: asset.id,
+                  selectedNumber: selectedNumber,
+                  useCheck: singleSelection,
+                ),
               ),
-            ),
             if (asset.isVideo)
               Positioned(
                 right: ChatPhotoPicker._tileHorizontalInset,
@@ -1732,8 +1834,10 @@ final class _PhotoSelectionBadge extends StatelessWidget {
   const _PhotoSelectionBadge({
     required this.assetId,
     required this.selectedNumber,
+    this.useCheck = false,
   });
 
+  final bool useCheck;
   final String assetId;
   final int? selectedNumber;
 
@@ -1753,6 +1857,8 @@ final class _PhotoSelectionBadge extends StatelessWidget {
       ),
       child: number == null
           ? null
+          : useCheck
+          ? const Icon(AppIcons.check, color: AppColors.white, size: 24)
           : Text(
               '$number',
               style: AppTypography.subTypography11.copyWith(
