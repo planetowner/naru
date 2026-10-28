@@ -1,7 +1,7 @@
 name: naru
 description: Private Flutter chat client for naru.
 publish_to: none
-version: 1.0.0+11
+version: 1.0.0+1
 
 environment:
   sdk: ^3.11.4
