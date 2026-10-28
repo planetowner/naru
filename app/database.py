@@ -12,6 +12,8 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import DeclarativeBase
 
+from app.languages import DEFAULT_LANGUAGE_CODE
+
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 ENV_PATH = PROJECT_ROOT / ".env"
@@ -93,6 +95,13 @@ async def ensure_schema_compatibility(
     connection: AsyncConnection,
 ) -> None:
     # 앱을 여러 번 시작해도 기존 스키마에 같은 변경을 안전하게 적용해요.
+    # 기존 계정의 선택은 유지하고, 언어가 생략된 새 계정의 기본값만 맞춰요.
+    await connection.execute(
+        text(
+            "ALTER TABLE users ALTER COLUMN preferred_language "
+            f"SET DEFAULT '{DEFAULT_LANGUAGE_CODE}'"
+        )
+    )
     await connection.execute(
         text(
             "ALTER TABLE users "

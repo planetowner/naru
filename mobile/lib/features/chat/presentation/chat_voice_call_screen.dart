@@ -1,3 +1,4 @@
+import '../../../core/l10n/app_strings.dart';
 import 'package:flutter/material.dart';
 
 import '../../../design_system/app_colors.dart';
@@ -6,6 +7,7 @@ import '../../../design_system/app_radius.dart';
 import '../../../design_system/app_spacing.dart';
 import '../../../design_system/app_typography.dart';
 import '../../../design_system/components/app_profile_image.dart';
+import '../../../design_system/components/app_selection_tile.dart';
 import '../../../design_system/components/app_round_icon_button.dart';
 import 'chat_action_sheet_style.dart';
 import 'chat_duration_formatter.dart';
@@ -16,10 +18,10 @@ enum ChatAudioOutputRoute {
   speaker,
   bluetooth;
 
-  String get label => switch (this) {
-    phone => 'Phone',
-    speaker => 'Speaker',
-    bluetooth => 'Bluetooth Headset',
+  String label(BuildContext context) => switch (this) {
+    phone => context.l10n.phone,
+    speaker => context.l10n.speaker,
+    bluetooth => context.l10n.bluetoothHeadset,
   };
 
   IconData get icon => switch (this) {
@@ -63,8 +65,8 @@ final class ChatVoiceCallScreen extends StatelessWidget {
       child: Column(
         children: [
           AppNavigationBar(
-            title: 'Voice call',
-            backTooltip: 'Back to chat',
+            title: context.l10n.voiceCall,
+            backTooltip: context.l10n.backToChat,
             onBack: onReturnToChat,
           ),
           Expanded(
@@ -76,11 +78,8 @@ final class ChatVoiceCallScreen extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    AppProfileImage(
+                    AppProfileImage.large(
                       imageUrl: participantProfileImageUrl,
-                      size: 112,
-                      borderRadius: 32,
-                      iconSize: 64,
                       iconColor: AppColors.primary,
                     ),
                     const SizedBox(height: AppSpacing.space24),
@@ -97,7 +96,7 @@ final class ChatVoiceCallScreen extends StatelessWidget {
                     Text(
                       connected
                           ? formatChatCallDuration(elapsed)
-                          : 'Connecting…',
+                          : context.l10n.connecting,
                       style: AppTypography.bodyLarge.copyWith(
                         color: connected
                             ? AppColors.primary
@@ -117,7 +116,7 @@ final class ChatVoiceCallScreen extends StatelessWidget {
                               ),
                               child: Center(
                                 child: Text(
-                                  'Your mic is off',
+                                  context.l10n.micOff,
                                   style: AppTypography.bodySmall.copyWith(
                                     color: AppColors.textSecondary,
                                   ),
@@ -143,7 +142,7 @@ final class ChatVoiceCallScreen extends StatelessWidget {
               children: [
                 Expanded(
                   child: _CallControlButton(
-                    label: muted ? 'Unmute' : 'Mute',
+                    label: muted ? context.l10n.unmute : context.l10n.mute,
                     icon: muted ? AppIcons.micOff : AppIcons.mic,
                     active: muted,
                     onPressed: onToggleMute,
@@ -152,7 +151,7 @@ final class ChatVoiceCallScreen extends StatelessWidget {
                 const SizedBox(width: AppSpacing.space16),
                 Expanded(
                   child: _CallControlButton(
-                    label: 'End call',
+                    label: context.l10n.endCall,
                     icon: AppIcons.callEnd,
                     destructive: true,
                     onPressed: onEndCall,
@@ -161,7 +160,7 @@ final class ChatVoiceCallScreen extends StatelessWidget {
                 const SizedBox(width: AppSpacing.space16),
                 Expanded(
                   child: _CallControlButton(
-                    label: audioOutputRoute.label,
+                    label: audioOutputRoute.label(context),
                     icon: audioOutputRoute.icon,
                     active: audioOutputRoute != ChatAudioOutputRoute.phone,
                     onPressed: onChooseAudioOutput,
@@ -254,7 +253,7 @@ final class ChatAudioOutputSheet extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.space24),
             Text(
-              'Audio output',
+              context.l10n.audioOutput,
               style: AppTypography.sectionTitle.copyWith(
                 color: AppColors.textPrimary,
               ),
@@ -282,47 +281,10 @@ final class _AudioOutputOption extends StatelessWidget {
   final bool selected;
 
   @override
-  Widget build(BuildContext context) => Semantics(
+  Widget build(BuildContext context) => AppSelectionTile(
+    label: route.label(context),
+    icon: route.icon,
     selected: selected,
-    child: Material(
-      color: selected ? AppColors.grey100 : AppColors.surface,
-      borderRadius: AppRadius.borderRadius16,
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => Navigator.of(context).pop(route),
-        child: SizedBox(
-          height: 58,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.space16),
-            child: Row(
-              children: [
-                Icon(
-                  route.icon,
-                  size: 24,
-                  color: selected
-                      ? AppColors.textPrimary
-                      : AppColors.textSecondary,
-                ),
-                const SizedBox(width: AppSpacing.space12),
-                Expanded(
-                  child: Text(
-                    route.label,
-                    style: AppTypography.bodyMedium.copyWith(
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                ),
-                if (selected)
-                  const Icon(
-                    AppIcons.check,
-                    size: 24,
-                    color: AppColors.textPrimary,
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    ),
+    onTap: () => Navigator.of(context).pop(route),
   );
 }

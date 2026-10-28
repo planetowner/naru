@@ -10,14 +10,25 @@ final class AppProfileImage extends StatelessWidget {
     required this.borderRadius,
     required this.iconSize,
     this.iconColor = AppColors.white,
+    this.image,
     super.key,
   });
+
+  const AppProfileImage.large({
+    required this.imageUrl,
+    this.image,
+    this.iconColor = AppColors.white,
+    super.key,
+  }) : size = 112,
+       borderRadius = 32,
+       iconSize = 64;
 
   final String? imageUrl;
   final double size;
   final double borderRadius;
   final double iconSize;
   final Color iconColor;
+  final ImageProvider? image;
 
   @override
   Widget build(BuildContext context) {
@@ -28,14 +39,19 @@ final class AppProfileImage extends StatelessWidget {
       child: Icon(AppIcons.person, color: iconColor, size: iconSize),
     );
 
+    final ImageProvider? provider =
+        image ??
+        (resolvedImageUrl == null || resolvedImageUrl.isEmpty
+            ? null
+            : NetworkImage(resolvedImageUrl));
     return SizedBox.square(
       dimension: size,
-      child: resolvedImageUrl == null || resolvedImageUrl.isEmpty
+      child: provider == null
           ? fallback
           : ClipRRect(
               borderRadius: radius,
-              child: Image.network(
-                resolvedImageUrl,
+              child: Image(
+                image: provider,
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) => fallback,
               ),

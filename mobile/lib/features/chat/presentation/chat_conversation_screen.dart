@@ -1,13 +1,17 @@
+import '../../account/presentation/user_tile.dart';
+import '../../account/presentation/add_friend_screen.dart';
+import '../../account/presentation/settings_screen.dart';
+import '../../../core/l10n/app_strings.dart';
 import 'dart:async';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../../design_system/app_colors.dart';
-import '../../../design_system/app_radius.dart';
 import '../../../design_system/app_spacing.dart';
 import '../../../design_system/app_typography.dart';
-import '../../../design_system/components/app_profile_image.dart';
+import '../../../design_system/components/app_round_icon_button.dart';
+import '../../../design_system/app_icons.dart';
 import '../../auth/domain/app_user.dart';
 import '../../auth/domain/auth_session.dart';
 import '../data/chat_api.dart';
@@ -19,11 +23,6 @@ import '../domain/chat_message.dart';
 import 'chat_conversation_view.dart';
 import 'reply_navigation_diagnostics.dart';
 
-const double _chatListHorizontalPadding = AppSpacing.space20;
-const double _chatListAvatarSize = 48;
-const double _chatListTitleGap = AppSpacing.space16;
-const double _chatListTextStartInset =
-    _chatListHorizontalPadding + _chatListAvatarSize + _chatListTitleGap;
 const Duration _chatRouteOpenDuration = Duration(milliseconds: 190);
 const Duration _chatRouteCloseDuration = Duration(milliseconds: 170);
 const double _chatRouteDismissProgress = 0.5;
@@ -60,6 +59,7 @@ final class ChatConversationHomeScreen extends StatefulWidget {
     required this.controller,
     this.messageCache,
     this.onInitialLoadComplete,
+    this.onProfileUpdated,
     super.key,
   });
 
@@ -69,6 +69,7 @@ final class ChatConversationHomeScreen extends StatefulWidget {
   final ChatConversationHomeController controller;
   final ChatMessageCache? messageCache;
   final VoidCallback? onInitialLoadComplete;
+  final Future<void> Function(AppUser)? onProfileUpdated;
 
   @override
   State<ChatConversationHomeScreen> createState() {
@@ -79,12 +80,6 @@ final class ChatConversationHomeScreen extends StatefulWidget {
 final class _ChatConversationHomeScreenState
     extends State<ChatConversationHomeScreen>
     with SingleTickerProviderStateMixin {
-  static const Map<String, List<String>> _chatOrderByUsername =
-      <String, List<String>>{
-        'liababo': <String>['junebabo', 'yunjung5437'],
-        'junebabo': <String>['liababo', 'yunjung5437'],
-        'yunjung5437': <String>['junebabo', 'liababo'],
-      };
   late final AnimationController _chatRouteController;
   late final ChatMessageCache _messageCache;
   final Map<String, List<ChatMessage>> _conversationMessagesByUserId =
@@ -203,7 +198,6 @@ final class _ChatConversationHomeScreenState
           .where((AppUser user) => user.id != widget.session.user.id)
           .toList(growable: false);
 
-      _sortChatUsers(chatUsers);
       _prefetchConversations(chatUsers);
 
       final List<_ChatListEntry> entries = chatUsers
@@ -229,7 +223,7 @@ final class _ChatConversationHomeScreenState
 
       setState(() {
         _chatEntriesLoading = false;
-        _chatEntriesErrorMessage = 'Chat user loading failed.';
+        _chatEntriesErrorMessage = context.l10n.chatUsersFailed;
       });
     } finally {
       _chatEntriesRefreshing = false;
@@ -239,41 +233,6 @@ final class _ChatConversationHomeScreenState
         unawaited(_loadChatEntries(showInitialLoading: false));
       }
     }
-  }
-
-  void _sortChatUsers(List<AppUser> users) {
-    final List<String>? chatOrder =
-        _chatOrderByUsername[_normalizeUserKey(widget.session.user.username)];
-
-    if (chatOrder == null) {
-      return;
-    }
-
-    final Map<String, int> priorityByName = <String, int>{
-      for (int index = 0; index < chatOrder.length; index++)
-        chatOrder[index]: index,
-    };
-
-    users.sort((AppUser first, AppUser second) {
-      final int firstPriority =
-          priorityByName[_normalizeUserKey(first.username)] ??
-          priorityByName[_normalizeUserKey(_displayNameFor(first))] ??
-          chatOrder.length;
-      final int secondPriority =
-          priorityByName[_normalizeUserKey(second.username)] ??
-          priorityByName[_normalizeUserKey(_displayNameFor(second))] ??
-          chatOrder.length;
-
-      final int priorityComparison = firstPriority.compareTo(secondPriority);
-
-      if (priorityComparison != 0) {
-        return priorityComparison;
-      }
-
-      return _normalizeUserKey(
-        _displayNameFor(first),
-      ).compareTo(_normalizeUserKey(_displayNameFor(second)));
-    });
   }
 
   void _precacheProfileImages(List<_ChatListEntry> entries) {
@@ -361,19 +320,11 @@ final class _ChatConversationHomeScreenState
     }
   }
 
-  String _normalizeUserKey(String value) {
-    return value.trim().toLowerCase();
-  }
-
-  String _displayNameFor(AppUser user) {
-    return user.effectiveDisplayName;
-  }
-
   void _retryUsers() {
     unawaited(_loadChatEntries(showInitialLoading: true));
   }
 
-  void _openPendingConversation() {
+  void _openPendingConversation() async {
     if (!mounted) {
       return;
     }
@@ -391,12 +342,17 @@ final class _ChatConversationHomeScreenState
         break;
       }
     }
-    if (entry == null) {
-      return;
-    }
-
     widget.controller.consume(userId);
-    _openChat(entry.user);
+    try {
+      final user = entry?.user ?? await _chatApi.getUser(userId);
+      if (mounted) _openChat(user);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(context.l10n.requestFailed)));
+      }
+    }
   }
 
   void _cacheConversationMessages({
@@ -732,7 +688,6 @@ final class _ChatConversationHomeScreenState
             realtimeService: widget.realtimeService,
             currentUser: widget.session.user,
             otherUser: selectedUser,
-            otherUserDisplayName: _displayNameFor(selectedUser),
             routeNavigationDragActive: _chatRouteDragActive,
             initialMessages: _conversationMessagesByUserId[selectedUser.id],
             initialHasMoreMessages:
@@ -767,6 +722,25 @@ final class _ChatConversationHomeScreenState
     );
   }
 
+  Future<void> _openAddFriend() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => AddFriendScreen(chatApi: _chatApi)),
+    );
+    if (mounted) await _loadChatEntries(showInitialLoading: false);
+  }
+
+  void _openSettings() {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => SettingsScreen(
+          user: widget.session.user,
+          chatApi: _chatApi,
+          onSaved: widget.onProfileUpdated!,
+        ),
+      ),
+    );
+  }
+
   Widget _buildChatList() {
     if (_chatEntriesLoading && _chatEntries == null) {
       return const Scaffold(
@@ -797,19 +771,38 @@ final class _ChatConversationHomeScreenState
       appBar: AppBar(
         backgroundColor: AppColors.surface,
         elevation: 0,
-        titleSpacing: _chatListHorizontalPadding,
+        titleSpacing: UserTile.horizontalPadding,
+        centerTitle: false,
+        actions: [
+          AppRoundIconButton(
+            icon: AppIcons.personAdd,
+            tooltip: context.l10n.addFriend,
+            onPressed: _openAddFriend,
+            backgroundColor: Colors.transparent,
+            borderColor: Colors.transparent,
+          ),
+          const SizedBox(width: AppSpacing.space8),
+          if (widget.onProfileUpdated != null)
+            AppRoundIconButton(
+              icon: AppIcons.settings,
+              tooltip: context.l10n.settings,
+              onPressed: _openSettings,
+              backgroundColor: Colors.transparent,
+              borderColor: Colors.transparent,
+            ),
+          const SizedBox(width: AppSpacing.space16),
+        ],
         title: Text(
-          'Chats',
-          style: AppTypography.typography5.copyWith(
+          context.l10n.chats,
+          style: AppTypography.screenTitle.copyWith(
             color: AppColors.textPrimary,
-            fontWeight: AppTypography.bold,
           ),
         ),
       ),
       body: entries.isEmpty
           ? Center(
               child: Text(
-                'No chat users yet.',
+                context.l10n.noChatUsers,
                 style: AppTypography.typography7.copyWith(
                   color: AppColors.textSecondary,
                   fontWeight: AppTypography.regular,
@@ -822,7 +815,7 @@ final class _ChatConversationHomeScreenState
               separatorBuilder: (BuildContext context, int index) {
                 return const Divider(
                   height: 1,
-                  indent: _chatListTextStartInset,
+                  indent: UserTile.textStartInset,
                   color: AppColors.grey100,
                 );
               },
@@ -830,34 +823,10 @@ final class _ChatConversationHomeScreenState
                 final _ChatListEntry entry = entries[index];
                 final AppUser user = entry.user;
 
-                return ListTile(
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: _chatListHorizontalPadding,
-                    vertical: 6,
-                  ),
-                  horizontalTitleGap: _chatListTitleGap,
-                  minLeadingWidth: _chatListAvatarSize,
-                  leading: _ChatUserAvatar(
-                    imageUrl: user.profileImageUrl,
-                    unreadCount: widget.realtimeService.unreadCountFor(user.id),
-                  ),
-                  title: Text(
-                    _displayNameFor(user),
-                    style: AppTypography.typography6.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: AppTypography.bold,
-                    ),
-                  ),
-                  subtitle: Text(
-                    '@${user.username}',
-                    style: AppTypography.subTypography12.copyWith(
-                      color: AppColors.textTertiary,
-                      fontWeight: AppTypography.regular,
-                    ),
-                  ),
-                  onTap: () {
-                    _openChat(user);
-                  },
+                return UserTile(
+                  user: user,
+                  unreadCount: widget.realtimeService.unreadCountFor(user.id),
+                  onTap: () => _openChat(user),
                 );
               },
             ),
@@ -878,7 +847,6 @@ final class ChatConversationScreen extends StatefulWidget {
     required this.realtimeService,
     required this.currentUser,
     required this.otherUser,
-    required this.otherUserDisplayName,
     required this.onBack,
     this.onReadyForRouteAnimation,
     this.routeNavigationDragActive = false,
@@ -894,7 +862,6 @@ final class ChatConversationScreen extends StatefulWidget {
   final ChatRealtimeService realtimeService;
   final AppUser currentUser;
   final AppUser otherUser;
-  final String otherUserDisplayName;
   final VoidCallback onBack;
   final Future<void> Function()? onReadyForRouteAnimation;
   final bool routeNavigationDragActive;
@@ -1088,7 +1055,7 @@ final class _ChatConversationScreenState extends State<ChatConversationScreen> {
       }
 
       setState(() {
-        _errorMessage = 'Conversation loading failed.';
+        _errorMessage = context.l10n.conversationFailed;
         _loading = false;
       });
     }
@@ -1539,6 +1506,23 @@ final class _ChatConversationScreenState extends State<ChatConversationScreen> {
     }
 
     _upsertMessage(message);
+    unawaited(_resolveReceivedLinkPreview(message));
+  }
+
+  Future<void> _resolveReceivedLinkPreview(ChatMessage message) async {
+    final localized = await widget.chatApi.resolveLinkPreview(message);
+    if (!mounted || identical(localized, message)) return;
+    final current = [
+      ..._messages,
+      ..._latestMessages,
+    ].where((item) => item.id == message.id).firstOrNull;
+    // 카드 수집을 기다리는 동안 수정·삭제·읽음 상태가 바뀔 수 있어요.
+    if (current == null ||
+        current.content != message.content ||
+        current.editedAt != message.editedAt) {
+      return;
+    }
+    _upsertMessage(current.copyWith(linkPreview: localized.linkPreview));
   }
 
   void _handleMessageDeletedEvent(Map<String, dynamic> event) {
@@ -1953,9 +1937,9 @@ final class _ChatConversationScreenState extends State<ChatConversationScreen> {
         showLatestReadReceipt: !_hasMoreNewerMessages,
         currentUserId: widget.currentUser.id,
         currentUserName: widget.currentUser.displayName,
-        currentUserPreferredLanguage: widget.currentUser.preferredLanguage,
+
         otherParticipantId: widget.otherUser.id,
-        otherParticipantName: widget.otherUserDisplayName,
+        otherParticipantName: widget.otherUser.displayName,
         otherParticipantProfileImageUrl: widget.otherUser.profileImageUrl,
         onSendTextMessage: _sendTextMessage,
         onSendPhotoMessages: _sendPhotoMessages,
@@ -1975,69 +1959,6 @@ final class _ChatConversationScreenState extends State<ChatConversationScreen> {
         unreadOtherConversationCount: widget.realtimeService
             .unreadCountExcluding(widget.otherUser.id),
         routeNavigationDragActive: widget.routeNavigationDragActive,
-      ),
-    );
-  }
-}
-
-final class _ChatUserAvatar extends StatelessWidget {
-  const _ChatUserAvatar({required this.imageUrl, required this.unreadCount});
-
-  final String? imageUrl;
-  final int unreadCount;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox.square(
-      dimension: _chatListAvatarSize,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned.fill(
-            child: AppProfileImage(
-              imageUrl: imageUrl,
-              size: _chatListAvatarSize,
-              borderRadius: AppRadius.radius16,
-              iconSize: 30,
-            ),
-          ),
-          if (unreadCount > 0)
-            Positioned(
-              top: -4,
-              right: -4,
-              child: _ChatUnreadBadge(count: unreadCount),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-final class _ChatUnreadBadge extends StatelessWidget {
-  const _ChatUnreadBadge({required this.count});
-
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    final String label = count > 99 ? '99+' : count.toString();
-
-    return Container(
-      constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-      padding: const EdgeInsets.symmetric(horizontal: 5),
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: AppColors.red500,
-        borderRadius: AppRadius.borderRadiusFull,
-      ),
-      child: Text(
-        label,
-        // 작은 배지 안에 숫자를 맞추기 위해 줄 높이는 1로 유지해요.
-        style: AppTypography.subTypography13.copyWith(
-          color: AppColors.white,
-          fontWeight: AppTypography.bold,
-          height: 1,
-        ),
       ),
     );
   }
@@ -2069,7 +1990,7 @@ final class _ChatLoadingError extends StatelessWidget {
             TextButton(
               onPressed: onRetry,
               child: Text(
-                'Retry',
+                context.l10n.retry,
                 style: AppTypography.typography7.copyWith(
                   color: AppColors.blue500,
                   fontWeight: AppTypography.bold,

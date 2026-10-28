@@ -80,7 +80,7 @@ class NotificationLocalizationTests(unittest.TestCase):
                 recipient_language="ko",
                 call_event=call_event,
             ),
-            "부재중 보이스톡",
+            "부재중 음성 통화",
         )
         self.assertEqual(
             localized_message_body(
@@ -88,8 +88,56 @@ class NotificationLocalizationTests(unittest.TestCase):
                 recipient_language="zh-CN",
                 call_event=call_event,
             ),
-            "未接听语音通话",
+            "未接语音通话",
         )
+
+    def test_all_eight_languages_use_recipient_notification_copy(self) -> None:
+        expected = {
+            "ko": ("사진을 보냈습니다.", "동영상을 보냈습니다.", "음성메시지를 보냈습니다.", "파일을 보냈습니다.", "부재중 음성 통화"),
+            "zh-CN": ("照片", "视频", "语音备忘录", "文件", "未接语音通话"),
+            "en": ("Sent a photo.", "Sent a video.", "Sent a voice message.", "Sent a file.", "Missed voice call"),
+            "ja": ("写真を送信しました。", "動画を送信しました。", "ボイスメッセージを送信しました。", "ファイルを送信しました。", "音声通話の不在着信"),
+            "es": ("Ha enviado una foto.", "Ha enviado un vídeo.", "Ha enviado un mensaje de voz.", "Ha enviado un archivo.", "Llamada de voz perdida"),
+            "fr": ("A envoyé une photo.", "A envoyé une vidéo.", "A envoyé un message vocal.", "A envoyé un fichier.", "Appel vocal manqué"),
+            "de": ("Hat ein Foto gesendet.", "Hat ein Video gesendet.", "Hat eine Sprachnachricht gesendet.", "Hat eine Datei gesendet.", "Verpasster Sprachanruf"),
+            "it": ("Ha inviato una foto.", "Ha inviato un video.", "Ha inviato un messaggio vocale.", "Ha inviato un file.", "Chiamata vocale persa"),
+        }
+        kinds = [MessageKind.PHOTO, MessageKind.VIDEO, MessageKind.VOICE_MEMO, MessageKind.FILE, MessageKind.CALL]
+        for language, labels in expected.items():
+            for kind, label in zip(kinds, labels):
+                with self.subTest(language=language, kind=kind):
+                    self.assertEqual(localized_message_body(
+                        SimpleNamespace(kind=kind, body=""), recipient_language=language,
+                        call_event=SimpleNamespace(outcome=CallOutcome.MISSED),
+                    ), label)
+            self.assertEqual(localized_message_body(
+                SimpleNamespace(kind=MessageKind.CALL, body=""), recipient_language=language,
+                call_event=SimpleNamespace(outcome=CallOutcome.NO_ANSWER),
+            ), labels[-1])
+
+    def test_notification_keeps_user_text_and_file_names_intact(self) -> None:
+        for kind in (MessageKind.TEXT, MessageKind.LINK):
+            self.assertEqual(localized_message_body(
+                SimpleNamespace(kind=kind, body="Photo {name}"),
+                recipient_language="es", call_event=None,
+            ), "Photo {name}")
+        self.assertEqual(localized_message_body(
+            SimpleNamespace(kind=MessageKind.FILE, body=""), recipient_language="de",
+            call_event=None, file_name="문서 {name}.pdf",
+        ), "Datei: 문서 {name}.pdf")
+
+    def test_catalogs_share_keys_and_notification_placeholders(self) -> None:
+        import json
+        from pathlib import Path
+        from string import Formatter
+        files = list((Path(__file__).parents[1] / "app" / "locales").glob("*.arb"))
+        self.assertEqual(len(files), 8)
+        catalogs = [json.loads(path.read_text()) for path in files]
+        reference = {key for key in catalogs[0] if not key.startswith("@")}
+        for catalog in catalogs:
+            self.assertEqual({key for key in catalog if not key.startswith("@")}, reference)
+            fields = {name for _, name, _, _ in Formatter().parse(catalog["notificationNamedFile"]) if name}
+            self.assertEqual(fields, {"name"})
 
 
 class NotificationPayloadTests(unittest.TestCase):

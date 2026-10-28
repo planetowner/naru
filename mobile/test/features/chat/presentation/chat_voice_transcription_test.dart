@@ -1,3 +1,4 @@
+import '../../../support/localized_test_app.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -39,7 +40,9 @@ Widget screen(
   ChatMessageProcessingRetrier? retryTranscription,
   ChatMessageProcessingRetrier? retryTranslation,
   double textScale = 1,
-}) => MaterialApp(
+}) => LocalizedTestApp(
+  language: language,
+
   theme: AppTheme.light,
   builder: (context, child) => MediaQuery(
     data: MediaQuery.of(
@@ -48,8 +51,11 @@ Widget screen(
     child: child!,
   ),
   home: ChatConversationView(
+    currentUserName: 'Me',
+    otherParticipantName: 'Lia',
+
     initialMessages: [message],
-    currentUserPreferredLanguage: language,
+
     onRetryTranscription: retryTranscription,
     onRetryTranslation: retryTranslation,
   ),
@@ -65,7 +71,7 @@ void main() {
       await tester.pumpWidget(screen(voice()));
       await tester.pumpAndSettle();
       final Finder player = find.byIcon(AppIcons.play);
-      final Finder original = find.text('今天过得怎么样？我很想你。');
+      final Finder original = find.text('오늘 하루 어땠어? 많이 보고 싶어.');
       expect(original, findsOneWidget);
       expect(
         tester.getTopLeft(original).dy,
@@ -74,10 +80,10 @@ void main() {
       final double playerY = tester.getTopLeft(player).dy;
       await tester.tap(original);
       await tester.pumpAndSettle();
-      expect(find.text('오늘 하루 어땠어? 많이 보고 싶어.'), findsOneWidget);
+      expect(find.text('今天过得怎么样？我很想你。'), findsOneWidget);
       expect(player, findsOneWidget);
       expect(tester.getTopLeft(player).dy, closeTo(playerY, 24));
-      await tester.tap(find.text('오늘 하루 어땠어? 많이 보고 싶어.'));
+      await tester.tap(find.text('今天过得怎么样？我很想你。'));
       await tester.pumpAndSettle();
       expect(original, findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -104,8 +110,6 @@ void main() {
       await tester.pumpWidget(screen(voice()));
       await tester.pumpAndSettle();
       expect(find.text('번역 중...'), findsNothing);
-      await tester.tap(find.text('今天过得怎么样？我很想你。'));
-      await tester.pumpAndSettle();
       expect(find.text('오늘 하루 어땠어? 많이 보고 싶어.'), findsOneWidget);
     },
   );
@@ -173,7 +177,9 @@ void main() {
     await tester.tap(find.text('今天过得怎么样？我很想你。'));
     await tester.pumpAndSettle();
     expect(find.text('오늘 하루 어땠어? 많이 보고 싶어.'), findsNothing);
-    await tester.pumpWidget(screen(voice(content: '안녕하세요')));
+    await tester.pumpWidget(
+      screen(voice(content: '안녕하세요').copyWith(translatedContent: '안녕하세요')),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('안녕하세요'));
     await tester.pumpAndSettle();
@@ -246,7 +252,7 @@ void main() {
       final Rect bubble = tester.getRect(
         find.byKey(const ValueKey('incoming-bubble-voice')),
       );
-      final Rect text = tester.getRect(find.text('今天过得怎么样？我很想你。'));
+      final Rect text = tester.getRect(find.text('오늘 하루 어땠어? 많이 보고 싶어.'));
       expect(text.left, greaterThan(bubble.left));
       expect(text.right, lessThan(bubble.right));
       expect(tester.takeException(), isNull);

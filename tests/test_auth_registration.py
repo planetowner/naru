@@ -15,11 +15,13 @@ import httpx
 from fastapi import FastAPI
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
+from pydantic import ValidationError
 
 from app.database import get_session
 from app.models import User
 from app.passwords import verify_password
 from app.routes.auth import router
+from app.schemas import DisplayNameUpdate, RegisterRequest
 from app.security import decode_access_token, decode_refresh_token
 
 
@@ -45,8 +47,10 @@ class RegistrationTests(unittest.IsolatedAsyncioTestCase):
             "/auth/register",
             json={
                 "username": "  June  ",
+                "display_name": "  June 🌿  ",
                 "password": " secret ",
                 "password_confirmation": " secret ",
+                "preferred_language": "es",
                 **overrides,
             },
         )
@@ -55,18 +59,19 @@ class RegistrationTests(unittest.IsolatedAsyncioTestCase):
         def inserted_user(statement):
             values = statement.compile(dialect=postgresql.dialect()).params
             self.assertEqual(values["username"], "June")
-            self.assertEqual(values["display_name"], "June")
+            self.assertEqual(values["display_name"], "June 🌿")
             self.assertNotEqual(values["password_hash"], " secret ")
             self.assertTrue(verify_password(" secret ", values["password_hash"]))
             self.assertFalse(verify_password("secret", values["password_hash"]))
             self.assertNotIn("password_confirmation", values)
+            self.assertEqual(values["preferred_language"], "es")
             return User(
                 id=self.user_id,
                 username=values["username"],
                 display_name=values["display_name"],
                 password_hash=values["password_hash"],
                 token_version=0,
-                preferred_language="ko",
+                preferred_language=values["preferred_language"],
             )
 
         self.session.scalar.side_effect = inserted_user
@@ -74,8 +79,9 @@ class RegistrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 201, response.text)
         session = response.json()
         self.assertEqual(session["user"]["username"], "June")
-        self.assertEqual(session["user"]["display_name"], "June")
+        self.assertEqual(session["user"]["display_name"], "June 🌿")
         self.assertNotIn("password_hash", session["user"])
+        self.assertEqual(session["user"]["preferred_language"], "es")
         self.assertEqual(decode_access_token(session["access_token"]), (self.user_id, 0))
         self.assertEqual(decode_refresh_token(session["refresh_token"]), (self.user_id, 0))
         self.session.commit.assert_awaited_once()
@@ -117,8 +123,13 @@ class RegistrationTests(unittest.IsolatedAsyncioTestCase):
         for invalid in [
             {"username": "   "},
             {"username": "x" * 51},
+            {"display_name": "   "},
+            {"display_name": ""},
+            {"display_name": "🌿" * 101},
             {"password": ""},
             {"password_confirmation": ""},
+            {"preferred_language": "pt"},
+            {"preferred_language": ""},
         ]:
             with self.subTest(invalid=invalid):
                 response = await self._register(**invalid)
@@ -128,6 +139,47 @@ class RegistrationTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(response.status_code, 422)
         self.session.scalar.assert_not_awaited()
+
+    async def test_all_supported_languages_are_stored_and_returned(self) -> None:
+        for code in ("ko", "ja", "zh-CN", "en", "es", "fr", "de", "it"):
+            with self.subTest(language=code):
+                def inserted_user(statement):
+                    values = statement.compile(dialect=postgresql.dialect()).params
+                    self.assertEqual(values["preferred_language"], code)
+                    return User(**{**values, "id": self.user_id, "token_version": 0})
+                self.session.scalar.side_effect = inserted_user
+                response = await self._register(preferred_language=code)
+                self.assertEqual(response.status_code, 201, response.text)
+                self.assertEqual(response.json()["user"]["preferred_language"], code)
+
+    async def test_language_is_required_before_account_creation(self) -> None:
+        response = await self.client.post("/auth/register", json={
+            "username": "June", "password": "secret", "password_confirmation": "secret",
+            "display_name": "June 🌿",
+        })
+        self.assertEqual(response.status_code, 422)
+        self.session.scalar.assert_not_awaited()
+
+    async def test_display_name_is_required_before_account_creation(self) -> None:
+        response = await self.client.post("/auth/register", json={
+            "username": "June", "password": "secret", "password_confirmation": "secret",
+            "preferred_language": "es",
+        })
+        self.assertEqual(response.status_code, 422)
+        self.session.scalar.assert_not_awaited()
+        self.session.commit.assert_not_awaited()
+
+    def test_registration_and_name_changes_share_unicode_name_rules(self) -> None:
+        for name in ("  준 María 小林 🌿  ", "🌿" * 100):
+            with self.subTest(name=name):
+                registration = RegisterRequest(username="June", password="secret",
+                    password_confirmation="secret", preferred_language="es", display_name=name)
+                update = DisplayNameUpdate(display_name=name)
+                self.assertEqual(registration.display_name, name.strip())
+                self.assertEqual(update.display_name, registration.display_name)
+        for name in ("", " \n\t ", "🌿" * 101):
+            with self.subTest(name=name), self.assertRaises(ValidationError):
+                DisplayNameUpdate(display_name=name)
 
     async def test_login_uses_the_same_trimmed_username(self) -> None:
         self.session.scalar.return_value = None

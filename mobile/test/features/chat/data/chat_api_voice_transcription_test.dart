@@ -30,7 +30,39 @@ void main() {
   ChatApi api(http.Client client) => ChatApi(
     baseUri: Uri.parse('https://api.example.com'),
     accessToken: 'test-token',
+    preferredLanguage: 'en',
     client: client,
+  );
+
+  test(
+    'reply kind and counts survive server decoding and the existing cache',
+    () {
+      final client = api(
+        MockClient((_) async => throw StateError('unexpected request')),
+      );
+      for (final kind in ['text', 'photo', 'call']) {
+        final json = voiceJson()
+          ..['reply_to'] = {
+            'message_id': 'original',
+            'sender_id': '2',
+            'content': 'Photo',
+            'message_type': kind,
+            'photo_count': 3,
+            'call_outcome': kind == 'call' ? 'cancelled' : null,
+          };
+        final message = client.messageFromJson(json);
+        final reply = client
+            .messageFromJson(client.messageToCacheJson(message))
+            .replyTo!;
+        expect(reply.messageType, kind);
+        expect(reply.photoCount, 3);
+        expect(reply.content, 'Photo');
+        expect(
+          reply.callOutcome,
+          kind == 'call' ? ChatCallOutcome.cancelled : null,
+        );
+      }
+    },
   );
 
   test(

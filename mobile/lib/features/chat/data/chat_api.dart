@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 import '../../auth/domain/app_user.dart';
+import '../../account/domain/friend_search_result.dart';
 import '../domain/chat_link.dart';
 import '../domain/chat_message.dart';
 import 'chat_api_exception.dart';
@@ -75,17 +76,24 @@ final class ChatConversationContext {
 }
 
 final class ChatApi {
-  const ChatApi({
+  ChatApi({
     required http.Client client,
     required Uri baseUri,
     required String accessToken,
+    required String preferredLanguage,
   }) : _client = client,
        _baseUri = baseUri,
-       _accessToken = accessToken;
+       _accessToken = accessToken,
+       _preferredLanguage = preferredLanguage;
 
   final http.Client _client;
   final Uri _baseUri;
   final String _accessToken;
+  final String _preferredLanguage;
+  // 계정·언어마다 새 ChatApi를 만들므로 전송과 조회가 같은 언어의 요청만 공유해요.
+  final Map<String, Future<Map<String, Object?>?>> _deviceLinkPreviews = {};
+  final Map<(String, String, DateTime?), Future<ChatLinkPreview>>
+  _linkPreviews = {};
 
   static const int _maxConcurrentPhotoUploads = 3;
   static const Duration _conversationRequestTimeout = Duration(seconds: 15);
@@ -98,6 +106,72 @@ final class ChatApi {
 
   Map<String, String> get _jsonHeaders {
     return <String, String>{..._headers, 'Content-Type': 'application/json'};
+  }
+
+  Future<AppUser> getUser(String userId) async => _userFromResponse(
+    await _client.get(_baseUri.resolve('/users/$userId'), headers: _headers),
+  );
+
+  Future<FriendSearchResult?> searchUser(String username) async {
+    final response = await _client.get(
+      _baseUri
+          .resolve('/users/search')
+          .replace(queryParameters: {'username': username.trim()}),
+      headers: _headers,
+    );
+    _checkUserResponse(response);
+    final data = jsonDecode(response.body);
+    return data == null
+        ? null
+        : FriendSearchResult.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<AppUser> addFriend(String userId) async => _userFromResponse(
+    await _client.post(
+      _baseUri.resolve('/users/friends/$userId'),
+      headers: _headers,
+    ),
+  );
+
+  Future<String> uploadProfilePhoto({
+    required Uint8List bytes,
+    required String fileName,
+    required String mimeType,
+  }) => _uploadMediaAsset(
+    kind: 'photo',
+    fileName: fileName,
+    mimeType: mimeType,
+    bytes: bytes,
+  );
+
+  Future<AppUser> updateProfile({
+    required String displayName,
+    required String preferredLanguage,
+    String? photoAssetId,
+  }) async => _userFromResponse(
+    await _client.patch(
+      _baseUri.resolve('/users/me'),
+      headers: _jsonHeaders,
+      body: jsonEncode({
+        'display_name': displayName.trim(),
+        'preferred_language': preferredLanguage,
+        'photo_asset_id': ?photoAssetId,
+      }),
+    ),
+  );
+
+  AppUser _userFromResponse(http.Response response) {
+    _checkUserResponse(response);
+    return AppUser.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  void _checkUserResponse(http.Response response) {
+    if (response.statusCode != 200) {
+      throw ChatApiException(
+        _readErrorMessage(response, fallback: 'User request failed.'),
+        statusCode: response.statusCode,
+      );
+    }
   }
 
   Future<List<AppUser>> listUsers() async {
@@ -171,7 +245,7 @@ final class ChatApi {
       );
     }
 
-    final List<ChatMessage> messages = _messagesFromJson(decodedBody);
+    final List<ChatMessage> messages = await _messagesFromJson(decodedBody);
 
     final String? hasMoreHeader = response.headers['x-has-more'];
     final bool hasMore =
@@ -211,7 +285,7 @@ final class ChatApi {
       );
     }
 
-    final List<ChatMessage> messages = _messagesFromJson(
+    final List<ChatMessage> messages = await _messagesFromJson(
       decodedBody['messages'] as List<dynamic>,
     );
 
@@ -259,17 +333,92 @@ final class ChatApi {
     return response;
   }
 
-  List<ChatMessage> _messagesFromJson(List<dynamic> items) {
-    return items
-        .map((dynamic item) {
-          if (item is! Map<String, dynamic>) {
-            throw const ChatApiException(
-              'The server returned an invalid message.',
-            );
-          }
-          return messageFromJson(item);
-        })
-        .toList(growable: false);
+  Future<List<ChatMessage>> _messagesFromJson(List<dynamic> items) {
+    return resolveLinkPreviews(
+      items
+          .map((dynamic item) {
+            if (item is! Map<String, dynamic>) {
+              throw const ChatApiException(
+                'The server returned an invalid message.',
+              );
+            }
+            return messageFromJson(item);
+          })
+          .toList(growable: false),
+    );
+  }
+
+  // REST·실시간 수신·디스크 캐시 모두 보는 사람의 언어로 같은 카드를 읽어요.
+  Future<List<ChatMessage>> resolveLinkPreviews(
+    Iterable<ChatMessage> messages,
+  ) => Future.wait(messages.map(resolveLinkPreview));
+
+  Future<ChatMessage> resolveLinkPreview(ChatMessage message) async {
+    final ChatLinkPreview? preview = message.linkPreview;
+    if (preview == null ||
+        (preview.language == _preferredLanguage && preview.hasDetails)) {
+      return message;
+    }
+    final localized = await _linkPreviews.putIfAbsent((
+      message.id,
+      preview.url,
+      message.editedAt,
+    ), () => _fetchLocalizedLinkPreview(message, preview));
+    return message.copyWith(linkPreview: localized);
+  }
+
+  Future<ChatLinkPreview> _fetchLocalizedLinkPreview(
+    ChatMessage message,
+    ChatLinkPreview preview,
+  ) async {
+    Map<String, dynamic>? metadata = preview.language == _preferredLanguage
+        ? _linkPreviewToMetadata(preview)
+        : null;
+    try {
+      if (metadata == null) {
+        final response = await _client
+            .get(
+              _baseUri.resolve('/messages/${message.id}/link-preview'),
+              headers: _headers,
+            )
+            .timeout(_conversationRequestTimeout);
+        if (response.statusCode == 200) {
+          metadata = jsonDecode(response.body) as Map<String, dynamic>;
+        }
+      }
+    } on Exception {
+      // 카드 수집이 실패해도 대화와 원래 링크는 열 수 있어야 해요.
+    }
+    if (!_linkPreviewFromMetadata(metadata, message.content)!.hasDetails) {
+      final device = await _deviceLinkPreviewMetadata(preview.url);
+      if (device != null) metadata = device;
+    }
+    return _linkPreviewFromMetadata(metadata, message.content)!;
+  }
+
+  Map<String, Object?> _linkPreviewToMetadata(ChatLinkPreview preview) => {
+    'language': preview.language,
+    'url': preview.url,
+    'canonical_url': preview.canonicalUrl,
+    'domain': preview.domain,
+    'title': preview.title,
+    'description': preview.description,
+    'site_name': preview.siteName,
+    'image_url': preview.imageUrl,
+  };
+
+  Future<Map<String, Object?>?> _deviceLinkPreviewMetadata(
+    String content,
+  ) async {
+    final String? url = firstChatUrlInText(content);
+    final Uri? uri = url == null ? null : Uri.tryParse(url);
+    if (uri == null) return null;
+    return _deviceLinkPreviews.putIfAbsent(
+      uri.toString(),
+      () => DeviceLinkPreviewFetcher(
+        client: _client,
+      ).fetch(uri, language: _preferredLanguage),
+    );
   }
 
   Future<Map<String, int>> listUnreadMessageCounts() async {
@@ -361,17 +510,8 @@ final class ChatApi {
         'url': previewUrl,
         'domain': chatDomainForUrl(previewUrl),
       };
-      final Uri? previewUri = Uri.tryParse(previewUrl);
-
-      if (previewUri != null) {
-        // 서버가 차단되는 사이트만 기기에서 미리 읽어 fallback 메타데이터로 보내요.
-        final Map<String, Object?>? devicePreview =
-            await DeviceLinkPreviewFetcher(client: _client).fetch(previewUri);
-
-        if (devicePreview != null) {
-          metadata.addAll(devicePreview);
-        }
-      }
+      final devicePreview = await _deviceLinkPreviewMetadata(content);
+      if (devicePreview != null) metadata.addAll(devicePreview);
     }
 
     return _createMessage(
@@ -1170,10 +1310,14 @@ final class ChatApi {
     required String messageId,
     required String content,
   }) async {
+    final metadata = await _deviceLinkPreviewMetadata(content);
     final http.Response response = await _client.patch(
       _baseUri.resolve('/messages/$messageId'),
       headers: _jsonHeaders,
-      body: jsonEncode(<String, Object?>{'content': content}),
+      body: jsonEncode(<String, Object?>{
+        'content': content,
+        'metadata': ?metadata,
+      }),
     );
 
     if (response.statusCode != 200) {
@@ -1271,7 +1415,7 @@ final class ChatApi {
     return _messageFromResponse(response);
   }
 
-  ChatMessage _messageFromResponse(
+  Future<ChatMessage> _messageFromResponse(
     http.Response response, {
     String invalidKind = 'message',
   }) {
@@ -1279,7 +1423,7 @@ final class ChatApi {
     if (decodedBody is! Map<String, dynamic>) {
       throw ChatApiException('The server returned an invalid $invalidKind.');
     }
-    return messageFromJson(decodedBody);
+    return resolveLinkPreview(messageFromJson(decodedBody));
   }
 
   ChatMessage messageFromJson(Map<String, dynamic> json) {
@@ -1342,11 +1486,10 @@ final class ChatApi {
   }
 
   Map<String, Object?> messageToCacheJson(ChatMessage message) {
-    final String messageType;
+    final String messageType = message.messageType;
     final Map<String, Object?>? metadata;
 
     if (message.isPhotoMessage) {
-      messageType = 'photo';
       metadata = <String, Object?>{
         'photos': message.photoAttachments
             .map(
@@ -1364,7 +1507,6 @@ final class ChatApi {
       };
     } else if (message.isVideoMessage) {
       final ChatVideoAttachment video = message.videoAttachment!;
-      messageType = 'video';
       metadata = <String, Object?>{
         'video': <String, Object?>{
           'media_asset_id': video.mediaAssetId,
@@ -1378,7 +1520,6 @@ final class ChatApi {
       };
     } else if (message.isFileMessage) {
       final ChatFileAttachment file = message.fileAttachment!;
-      messageType = 'file';
       metadata = <String, Object?>{
         'file': <String, Object?>{
           'name': file.name,
@@ -1389,7 +1530,6 @@ final class ChatApi {
       };
     } else if (message.isVoiceMemoMessage) {
       final ChatVoiceMemoAttachment voiceMemo = message.voiceMemoAttachment!;
-      messageType = 'voice_memo';
       metadata = <String, Object?>{
         'duration_ms': voiceMemo.duration.inMilliseconds,
         'media_asset_id': voiceMemo.mediaAssetId,
@@ -1400,26 +1540,14 @@ final class ChatApi {
       };
     } else if (message.isCallMessage) {
       final ChatCallAttachment call = message.callAttachment!;
-      messageType = 'call';
       metadata = <String, Object?>{
         'kind': _callKindToApi(call.kind),
         'outcome': _callOutcomeToApi(call.outcome),
         'duration_ms': call.duration.inMilliseconds,
       };
     } else if (message.isLinkMessage) {
-      final ChatLinkPreview preview = message.linkPreview!;
-      messageType = 'link';
-      metadata = <String, Object?>{
-        'url': preview.url,
-        'canonical_url': preview.canonicalUrl,
-        'domain': preview.domain,
-        'title': preview.title,
-        'description': preview.description,
-        'site_name': preview.siteName,
-        'image_url': preview.imageUrl,
-      };
+      metadata = _linkPreviewToMetadata(message.linkPreview!);
     } else {
-      messageType = 'text';
       metadata = null;
     }
 
@@ -1439,6 +1567,11 @@ final class ChatApi {
               'message_id': replyTo.messageId,
               'sender_id': replyTo.senderId,
               'content': replyTo.content,
+              'message_type': replyTo.messageType,
+              'photo_count': replyTo.photoCount,
+              'call_outcome': replyTo.callOutcome == null
+                  ? null
+                  : _callOutcomeToApi(replyTo.callOutcome!),
             },
       'created_at': message.createdAt.toUtc().toIso8601String(),
       'edited_at': message.editedAt?.toUtc().toIso8601String(),
@@ -1467,6 +1600,16 @@ final class ChatApi {
     Map<String, dynamic>? metadata,
     String content,
   ) {
+    final localized = metadata?['previews_by_language'];
+    if (localized is Map && localized[_preferredLanguage] is Map) {
+      metadata = Map<String, dynamic>.from(
+        localized[_preferredLanguage] as Map,
+      );
+    }
+    if (metadata?['language'] != _preferredLanguage) {
+      // 언어를 모르는 예전 카드도 다시 수집할 때까지 제목·설명을 섞지 않아요.
+      metadata = null;
+    }
     final Object? metadataUrl = metadata == null ? null : metadata['url'];
     final Object? metadataCanonicalUrl = metadata == null
         ? null
@@ -1502,6 +1645,7 @@ final class ChatApi {
       description: _optionalString(metadataDescription),
       siteName: _optionalString(metadataSiteName),
       imageUrl: _optionalString(metadataImageUrl),
+      language: _optionalString(metadata?['language']),
     );
   }
 
@@ -1520,6 +1664,11 @@ final class ChatApi {
       messageId: _requiredString(value['message_id'], 'message_id'),
       senderId: _requiredString(value['sender_id'], 'sender_id'),
       content: value['content'] as String,
+      messageType: value['message_type'] as String?,
+      photoCount: value['photo_count'] as int? ?? 0,
+      callOutcome: value['call_outcome'] == null
+          ? null
+          : _callOutcomeFromApi(value['call_outcome'] as String),
     );
   }
 
@@ -1603,7 +1752,7 @@ final class ChatApi {
         (file['name'] as String?) ?? (file['file_name'] as String?) ?? '';
 
     return ChatFileAttachment(
-      name: fileName.isEmpty ? 'File' : fileName,
+      name: fileName,
       mediaAssetId: file['media_asset_id'] as String?,
       mimeType: file['mime_type'] as String?,
       sizeBytes: file['size_bytes'] as int? ?? 0,

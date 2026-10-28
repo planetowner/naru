@@ -33,6 +33,13 @@ final class AuthSession {
   final String tokenType;
   final AppUser user;
 
+  AuthSession withUser(AppUser user) => AuthSession(
+    accessToken: accessToken,
+    refreshToken: refreshToken,
+    tokenType: tokenType,
+    user: user,
+  );
+
   DateTime? get accessTokenExpiresAt {
     try {
       final List<String> tokenParts = accessToken.split('.');

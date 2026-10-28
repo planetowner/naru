@@ -8,6 +8,8 @@ from typing import Optional, Sequence
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
 
+from app.languages import SUPPORTED_LANGUAGE_NAMES
+
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 ENV_PATH = PROJECT_ROOT / ".env"
@@ -53,12 +55,6 @@ if not OPENAI_MODEL:
 TRANSLATION_PROVIDER_NAME = "openai"
 TRANSLATION_MODEL = OPENAI_MODEL
 
-SUPPORTED_LANGUAGE_NAMES = {
-    "ko": "한국어",
-    "zh-CN": "중국어 간체",
-}
-
-
 openai_client = AsyncOpenAI(
     api_key=OPENAI_API_KEY,
     timeout=60.0,
@@ -86,74 +82,16 @@ def language_name(language_code: str) -> str:
     return name
 
 
-def normalize_language_code(
-    language_code: Optional[str],
-) -> Optional[str]:
-    normalized = (language_code or "").strip().replace(
-        "_",
-        "-",
-    ).lower()
-
-    if not normalized:
-        return None
-
-    if normalized == "ko" or normalized.startswith("ko-"):
-        return "ko"
-
-    if normalized == "zh" or normalized.startswith("zh-"):
-        return "zh-CN"
-
-    return normalized
-
-
-def infer_text_language(text: str) -> Optional[str]:
-    korean_count = 0
-    chinese_count = 0
-
-    for character in text:
-        codepoint = ord(character)
-
-        if (
-            0xAC00 <= codepoint <= 0xD7AF
-            or 0x1100 <= codepoint <= 0x11FF
-            or 0x3130 <= codepoint <= 0x318F
-        ):
-            korean_count += 1
-        elif (
-            0x3400 <= codepoint <= 0x4DBF
-            or 0x4E00 <= codepoint <= 0x9FFF
-            or 0xF900 <= codepoint <= 0xFAFF
-        ):
-            chinese_count += 1
-
-    if korean_count == 0 and chinese_count == 0:
-        return None
-
-    if korean_count >= chinese_count:
-        return "ko"
-
-    return "zh-CN"
-
-
 def should_translate_text(
     text: str,
     *,
-    source_language: Optional[str],
     target_language: Optional[str],
 ) -> bool:
-    cleaned_text = text.strip()
-
-    if not cleaned_text:
-        return False
-
-    normalized_target = normalize_language_code(target_language)
-    inferred_language = infer_text_language(cleaned_text)
-
-    # 한글이나 한자가 없는 영문·숫자·기호·이모지는 그대로 보내요.
-    if normalized_target is None or inferred_language is None:
-        return False
-
-    return inferred_language != normalized_target
+    # 설정 언어와 실제 입력 언어는 다를 수 있어요. 언어 판별은 번역 모델에 맡겨요.
+    # 숫자·기호·이모지만 있는 메시지는 번역하지 않아요.
+    return bool((target_language or "").strip()) and any(
+        character.isalpha() for character in text
+    )
 
 
 def build_context_text(
@@ -181,13 +119,15 @@ def build_context_text(
 
 def build_system_prompt() -> str:
     return (
-        "너는 한국어와 중국어 간체 사이의 연인 메신저 대화를 "
+        "너는 여러 언어의 메신저 대화를 "
         "번역하는 전문 번역가다.\n"
+        "발신자의 설정 언어는 참고 정보다. 실제 메시지의 언어를 판별해 "
+        "수신자의 언어로 번역하라. 이미 수신자의 언어라면 원문을 그대로 반환하라.\n"
         "줄임말, 오타, 인터넷 은어, 비속어, 욕설, 반어법, "
         "짜증, 체념, 비꼼, 애교, 이모지와 문장 강도를 "
         "최대한 그대로 보존하라.\n"
         "욕설이나 거친 표현이 있으면 무조건 순화하지 말고, "
-        "대상 언어에서 실제 연인이 사용할 법한 비슷한 강도의 "
+        "대상 언어에서 실제 대화에 사용할 법한 비슷한 강도의 "
         "자연스러운 표현으로 번역하라.\n"
         "다만 원문보다 더 심한 욕설이나 공격성을 추가하지 마라.\n"
         "이전 대화는 번역 대상 문장의 의미와 말투를 파악하는 "
@@ -220,7 +160,6 @@ async def translate_message(
 
     if not should_translate_text(
         cleaned_text,
-        source_language=source_language,
         target_language=target_language,
     ):
         return TranslationResult(
@@ -240,7 +179,7 @@ async def translate_message(
         reasoning={"effort": "none"},
         instructions=build_system_prompt(),
         input=(
-            f"원문 언어: {source_language_name}\n"
+            f"발신자 설정 언어: {source_language_name}\n"
             f"번역 언어: {target_language_name}\n\n"
             "최근 대화 맥락:\n"
             f"{context_text}\n\n"

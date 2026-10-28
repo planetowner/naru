@@ -50,6 +50,8 @@ abstract final class AppIcons {
   static const IconData mic = IconData(0xe31d, fontFamily: _outlined);
   static const IconData micOff = IconData(0xe02b, fontFamily: _outlined);
   static const IconData person = IconData(0xf0d3, fontFamily: _outlined);
+  static const IconData personAdd = IconData(0xea4d, fontFamily: _outlined);
+  static const IconData settings = IconData(0xe8b8, fontFamily: _outlined);
   static const IconData phoneDisabled = IconData(0xe9cc, fontFamily: _outlined);
   static const IconData phoneInTalk = IconData(0xe61d, fontFamily: _outlined);
   static const IconData phoneMissed = IconData(0xe61f, fontFamily: _outlined);

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../../core/l10n/app_strings.dart';
 import '../../../design_system/app_typography.dart';
 import '../../../design_system/components/app_media_viewer_chrome.dart';
 import '../data/chat_photo_library.dart';
@@ -428,11 +429,7 @@ final class _ChatPhotoEditorScreenState extends State<ChatPhotoEditorScreen> {
 
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text('Media editing could not be completed.'),
-          ),
-        );
+        ..showSnackBar(SnackBar(content: Text(context.l10n.mediaEditFailed)));
       setState(() {
         _sending = false;
       });
@@ -637,7 +634,7 @@ final class ChatPhotoEditorTopBar extends StatelessWidget {
                             TextSpan(
                               children: <InlineSpan>[
                                 TextSpan(text: '$photoCount'),
-                                const TextSpan(text: ' Send'),
+                                TextSpan(text: ' ${context.l10n.send}'),
                               ],
                             ),
                             key: const ValueKey<String>(

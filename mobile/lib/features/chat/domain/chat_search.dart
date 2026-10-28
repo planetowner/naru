@@ -1,16 +1,7 @@
 import 'chat_link.dart';
 import 'chat_message.dart';
 
-enum ChatSearchCategory {
-  messages('Messages', 'Search messages'),
-  media('Media', 'Search filenames'),
-  links('Links', 'Search titles or URLs'),
-  files('Files', 'Search filenames');
-
-  const ChatSearchCategory(this.label, this.hint);
-  final String label;
-  final String hint;
-}
+enum ChatSearchCategory { messages, media, links, files }
 
 enum ChatSearchMediaFilter { all, photos, videos }
 
@@ -60,7 +51,7 @@ final class ChatSearchEntry {
       photo?.fileName ??
       video?.fileName ??
       file?.name ??
-      (video == null ? 'Photo' : 'Video');
+      '';
 
   bool matches(String query) {
     final String normalized = query.trim().toLowerCase();

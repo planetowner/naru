@@ -6,6 +6,9 @@ import 'package:naru/features/chat/presentation/chat_conversation_view.dart';
 Widget _buildVoiceMemoScreen(ChatMessage message, {DateTime? initialClock}) {
   return MaterialApp(
     home: ChatConversationView(
+      currentUserName: 'Me',
+      otherParticipantName: 'Lia',
+
       initialMessages: <ChatMessage>[message],
       currentUserId: '1',
       initialClock: initialClock,

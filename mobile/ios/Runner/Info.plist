@@ -6,6 +6,17 @@
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>ko</string>
+		<string>ja</string>
+		<string>zh-Hans</string>
+		<string>es</string>
+		<string>fr</string>
+		<string>de</string>
+		<string>it</string>
+	</array>
 	<key>CFBundleDisplayName</key>
 	<string>naru</string>
 	<key>CFBundleExecutable</key>
@@ -92,7 +103,7 @@
 	<string>naru needs access to your camera so you can take and send photos in chats.</string>
 
 	<key>NSMicrophoneUsageDescription</key>
-	<string>naru needs access to your microphone so you can record and send voice memos in chats.</string>
+	<string>naru needs access to your microphone so you can record voice messages and make calls.</string>
 
 	<key>PHPhotoLibraryPreventAutomaticLimitedAccessAlert</key>
 	<true/>

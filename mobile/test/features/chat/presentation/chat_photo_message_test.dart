@@ -200,7 +200,11 @@ final class _IncomingPhotoHarnessState extends State<_IncomingPhotoHarness> {
 
   @override
   Widget build(BuildContext context) {
-    return ChatConversationView(initialMessages: _messages);
+    return ChatConversationView(
+      currentUserName: 'Me',
+      otherParticipantName: 'Lia',
+      initialMessages: _messages,
+    );
   }
 }
 
@@ -282,6 +286,9 @@ final class _PhotoRefreshHarnessState extends State<_PhotoRefreshHarness> {
   @override
   Widget build(BuildContext context) {
     return ChatConversationView(
+      currentUserName: 'Me',
+      otherParticipantName: 'Lia',
+
       initialMessages: <ChatMessage>[_message],
       onCreatePhotoThumbnailAccessUrl: ({required String mediaAssetId}) {
         return Completer<Uri>().future;
@@ -340,6 +347,9 @@ final class _PhotoMessageIdentityHarnessState
   @override
   Widget build(BuildContext context) {
     return ChatConversationView(
+      currentUserName: 'Me',
+      otherParticipantName: 'Lia',
+
       initialMessages: <ChatMessage>[
         _message,
         ChatMessage(
@@ -445,7 +455,13 @@ void main() {
           );
         });
         await tester.pumpWidget(
-          MaterialApp(home: ChatConversationView(initialMessages: messages)),
+          MaterialApp(
+            home: ChatConversationView(
+              currentUserName: 'Me',
+              otherParticipantName: 'Lia',
+              initialMessages: messages,
+            ),
+          ),
         );
         await tester.pumpAndSettle();
         final Finder quote = find.byKey(
@@ -548,6 +564,9 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: ChatConversationView(
+          currentUserName: 'Me',
+          otherParticipantName: 'Lia',
+
           initialMessages: <ChatMessage>[message],
           onCreatePhotoThumbnailAccessUrl: ({required String mediaAssetId}) {
             return accessUrl.future;
@@ -603,6 +622,9 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: ChatConversationView(
+            currentUserName: 'Me',
+            otherParticipantName: 'Lia',
+
             controller: controller,
             initialMessages: <ChatMessage>[message],
             onCreatePhotoThumbnailAccessUrl:
@@ -663,6 +685,9 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: ChatConversationView(
+            currentUserName: 'Me',
+            otherParticipantName: 'Lia',
+
             initialMessages: <ChatMessage>[message],
             onCreateMediaAssetAccessUrl: ({required String mediaAssetId}) {
               originalAccessUrlRequests++;
@@ -744,6 +769,9 @@ void main() {
           await tester.pumpWidget(
             MaterialApp(
               home: ChatConversationView(
+                currentUserName: 'Me',
+                otherParticipantName: 'Lia',
+
                 initialMessages: <ChatMessage>[message],
                 onCreateMediaAssetAccessUrl:
                     ({required String mediaAssetId}) async {
@@ -767,6 +795,19 @@ void main() {
         );
         await tester.pumpAndSettle();
 
+        // 파일 조회는 실제 비동기 작업이라 애니메이션 정착만으로 완료를 알 수 없어요.
+        await _pumpRealAsyncUntil(
+          tester,
+          () => find
+              .byKey(
+                const ValueKey<String>(
+                  'photo-viewer-original-prefetched-original-photo',
+                ),
+              )
+              .evaluate()
+              .isNotEmpty,
+          failureReason: '미리 받은 원본 사진이 표시되지 않았습니다.',
+        );
         final Image originalImage = tester.widget<Image>(
           find.byKey(
             const ValueKey<String>(
@@ -860,6 +901,9 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: ChatConversationView(
+            currentUserName: 'Me',
+            otherParticipantName: 'Lia',
+
             initialMessages: <ChatMessage>[message],
             onCreateMediaAssetAccessUrl: ({required String mediaAssetId}) {
               return originalAccessUrl.future;

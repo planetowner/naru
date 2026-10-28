@@ -1,3 +1,5 @@
+import '../../../core/media/pick_photo.dart';
+import '../../../core/l10n/app_strings.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
@@ -49,6 +51,7 @@ import 'chat_duration_formatter.dart';
 import 'chat_media_file.dart';
 import 'chat_media_viewer_scaffold.dart';
 import 'chat_message_style.dart';
+import 'chat_message_labels.dart';
 import '../../../design_system/components/app_navigation_bar.dart';
 import 'chat_voice_call_screen.dart';
 import 'chat_photo_editor_screen.dart';
@@ -286,7 +289,7 @@ Future<void> _openChatWebUri(BuildContext context, Uri uri) async {
 
   messenger
     ..hideCurrentSnackBar()
-    ..showSnackBar(const SnackBar(content: Text('Unable to open this link.')));
+    ..showSnackBar(SnackBar(content: Text(context.l10n.linkOpenFailed)));
 }
 
 final class _ChatLinkOpenerScope extends InheritedWidget {
@@ -445,10 +448,9 @@ final class ChatConversationView extends StatefulWidget {
     this.onEnsureMessageLoaded,
     this.showLatestReadReceipt = true,
     this.currentUserId = _currentUserId,
-    this.currentUserName = _currentUserName,
-    this.currentUserPreferredLanguage = _currentUserPreferredLanguage,
+    required this.currentUserName,
     this.otherParticipantId = _otherParticipantId,
-    this.otherParticipantName = _otherParticipantName,
+    required this.otherParticipantName,
     this.otherParticipantProfileImageUrl,
     this.onSendTextMessage,
     this.onSendPhotoMessages,
@@ -490,7 +492,6 @@ final class ChatConversationView extends StatefulWidget {
   final bool showLatestReadReceipt;
   final String currentUserId;
   final String currentUserName;
-  final String currentUserPreferredLanguage;
   final String otherParticipantId;
   final String otherParticipantName;
   final String? otherParticipantProfileImageUrl;
@@ -517,10 +518,7 @@ final class ChatConversationView extends StatefulWidget {
   final int nextLocalMessageId;
 
   static const String _currentUserId = '1';
-  static const String _currentUserName = 'Me';
-  static const String _currentUserPreferredLanguage = 'ko';
   static const String _otherParticipantId = '2';
-  static const String _otherParticipantName = 'Lia';
   static const Color _chatBackgroundColor = AppColors.white;
 
   @override
@@ -1145,10 +1143,8 @@ final class _ChatConversationViewState extends State<ChatConversationView>
       return null;
     }
 
-    return ChatReplyReference(
-      messageId: replyingToMessage.id,
-      senderId: replyingToMessage.senderId,
-      content: replyingToContent,
+    return replyingToMessage.replyReference(
+      displayedContent: replyingToContent,
     );
   }
 
@@ -1377,7 +1373,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
           pendingMessage: pendingMessage,
           sentMessage: null,
         );
-        _showChatOperationFailure('The selected video could not be loaded.');
+        _showChatOperationFailure(context.l10n.mediaLoadFailed);
         return;
       }
 
@@ -1479,7 +1475,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
         pendingMessage: pendingMessage,
         sentMessage: null,
       );
-      _showChatOperationFailure('Video sending failed.');
+      _showChatOperationFailure(context.l10n.sendFailed);
     }
   }
 
@@ -1599,7 +1595,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
         pendingMessages: pendingMessages,
         sentMessages: const <ChatMessage>[],
       );
-      _showChatOperationFailure('The selected photos could not be loaded.');
+      _showChatOperationFailure(context.l10n.mediaLoadFailed);
       return;
     }
 
@@ -1692,7 +1688,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
         pendingMessages: pendingMessages,
         sentMessages: const <ChatMessage>[],
       );
-      _showChatOperationFailure('Photo sending failed.');
+      _showChatOperationFailure(context.l10n.sendFailed);
     }
   }
 
@@ -1725,7 +1721,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
             true;
       }
     } on Object {
-      _showChatOperationFailure('The selected photo could not be edited.');
+      if (mounted) _showChatOperationFailure(context.l10n.mediaEditFailed);
     } finally {
       _quickPhotoPreviewOpen = false;
     }
@@ -1849,18 +1845,12 @@ final class _ChatConversationViewState extends State<ChatConversationView>
   }
 
   Future<void> _openCamera() async {
-    final ImagePicker picker = ImagePicker();
-
     // image_picker가 기기의 기본 카메라 앱을 열어요.
     // iOS는 권한 결정을 기억하고, Android는 카메라 앱에 위임해요.
     XFile? capture;
 
     try {
-      capture = await picker.pickImage(
-        source: ImageSource.camera,
-        imageQuality: 92,
-        maxWidth: 1920,
-      );
+      capture = await pickPhoto(ImageSource.camera);
     } on PlatformException catch (_) {
       if (!mounted) {
         return;
@@ -1868,9 +1858,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
 
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(content: Text('The camera is not available.')),
-        );
+        ..showSnackBar(SnackBar(content: Text(context.l10n.cameraUnavailable)));
 
       return;
     }
@@ -1945,7 +1933,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
         messageListState.addMessages(messages);
       } catch (error, stackTrace) {
         recordPhotoSendFailure(error, stackTrace);
-        _showChatOperationFailure('Photo sending failed.');
+        _showChatOperationFailure(context.l10n.sendFailed);
         return;
       }
     }
@@ -1971,7 +1959,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
-          const SnackBar(content: Text('The file picker is not available.')),
+          SnackBar(content: Text(context.l10n.filePickerUnavailable)),
         );
 
       return;
@@ -2004,7 +1992,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
         }
 
         if (fileBytes == null || fileBytes.isEmpty) {
-          _showChatOperationFailure('The selected file could not be read.');
+          _showChatOperationFailure(context.l10n.fileReadFailed);
           return;
         }
 
@@ -2033,7 +2021,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
           messageListState.addMessage(message);
         }
       } catch (_) {
-        _showChatOperationFailure('File sending failed.');
+        _showChatOperationFailure(context.l10n.fileSendFailed);
         return;
       }
     }
@@ -2082,7 +2070,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
 
         messageListState.addMessage(message);
       } catch (_) {
-        _showChatOperationFailure('Voice memo sending failed.');
+        _showChatOperationFailure(context.l10n.sendFailed);
         return;
       }
     }
@@ -3028,7 +3016,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        _messageCopyConfirmationKey.currentState?.show('Copied');
+        _messageCopyConfirmationKey.currentState?.show(context.l10n.copied);
       }
     });
   }
@@ -3171,7 +3159,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
 
         didUpdate = messageListState.replaceMessage(updatedMessage);
       } catch (_) {
-        _showChatOperationFailure('Message editing failed.');
+        _showChatOperationFailure(context.l10n.messageEditFailed);
         return;
       }
     }
@@ -3247,7 +3235,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
           });
         }
 
-        _showChatOperationFailure('Message sending failed.');
+        _showChatOperationFailure(context.l10n.sendFailed);
         return;
       }
     }
@@ -3310,7 +3298,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
           ..showSnackBar(
-            const SnackBar(content: Text('Video call is not available yet.')),
+            SnackBar(content: Text(context.l10n.videoCallUnavailable)),
           );
     }
   }
@@ -3401,7 +3389,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
         _scheduleScrollToBottom(animate: true);
         return message;
       } catch (_) {
-        _showChatOperationFailure('Call record saving failed.');
+        _showChatOperationFailure(context.l10n.callRecordFailed);
         return null;
       }
     }
@@ -3458,7 +3446,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
       }
     } catch (_) {
       if (mounted) {
-        _showChatOperationFailure('Call record saving failed.');
+        _showChatOperationFailure(context.l10n.callRecordFailed);
       }
     }
   }
@@ -3561,16 +3549,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
     return '${resultIndex + 1}/${_searchResultMessageIds.length}';
   }
 
-  String get _searchNoResultsText {
-    switch (_normalizeChatLanguageCode(widget.currentUserPreferredLanguage)) {
-      case 'ko':
-        return '검색 결과 없음';
-      case 'zh-CN':
-        return '查无结果';
-      default:
-        return 'No results';
-    }
-  }
+  String get _searchNoResultsText => context.l10n.noResults;
 
   @override
   Widget build(BuildContext context) {
@@ -3706,8 +3685,7 @@ final class _ChatConversationViewState extends State<ChatConversationView>
                           onEnsureMessageLoaded: widget.onEnsureMessageLoaded,
                           showLatestReadReceipt: widget.showLatestReadReceipt,
                           currentUserId: widget.currentUserId,
-                          currentUserPreferredLanguage:
-                              widget.currentUserPreferredLanguage,
+
                           otherParticipantId: widget.otherParticipantId,
                           otherParticipantName: widget.otherParticipantName,
                           otherParticipantProfileImageUrl:
@@ -4064,7 +4042,7 @@ final class _QuickPhotoPrompt extends StatelessWidget {
           },
           child: Semantics(
             button: true,
-            label: 'Send photo',
+            label: context.l10n.sendPhoto,
             child: SizedBox(
               key: const ValueKey<String>('quick-photo-prompt'),
               width: cardWidth,
@@ -4122,7 +4100,7 @@ final class _QuickPhotoPrompt extends StatelessWidget {
                                 onTap: openPreview,
                                 child: Center(
                                   child: Text(
-                                    'Send',
+                                    context.l10n.send,
                                     textAlign: TextAlign.center,
                                     style: AppTypography.subTypography11
                                         .copyWith(
@@ -4245,7 +4223,7 @@ final class _QuickPhotoPreviewScreenState
                   },
                   style: TextButton.styleFrom(foregroundColor: AppColors.white),
                   child: Text(
-                    'Cancel',
+                    context.l10n.cancel,
                     style: AppTypography.subTypography10.copyWith(
                       color: AppColors.white,
                       fontWeight: AppTypography.regular,
@@ -4285,7 +4263,7 @@ final class _QuickPhotoPreviewScreenState
                           },
                           child: Center(
                             child: Text(
-                              'Send',
+                              context.l10n.send,
                               style: AppTypography.typography6.copyWith(
                                 color: AppColors.white,
                                 fontWeight: AppTypography.bold,
@@ -4377,7 +4355,7 @@ final class _ChatTopBar extends StatelessWidget {
                   left: AppMediaViewerChrome.horizontalMargin,
                   top: 0,
                   child: Tooltip(
-                    message: 'Back',
+                    message: context.l10n.back,
                     child: AppTopBarButtonSurface(
                       key: const ValueKey<String>('chat-back-group'),
                       height: AppMediaViewerChrome.buttonDimension,
@@ -4452,7 +4430,7 @@ final class _ChatTopBar extends StatelessWidget {
                       children: [
                         _ChatTopBarActionButton(
                           key: const ValueKey<String>('chat-search-button'),
-                          tooltip: 'Search',
+                          tooltip: context.l10n.search,
                           onPressed: onSearchPressed,
                           icon: const Icon(
                             AppIcons.search,
@@ -4463,7 +4441,7 @@ final class _ChatTopBar extends StatelessWidget {
                         ),
                         _ChatTopBarActionButton(
                           key: const ValueKey<String>('chat-call-button'),
-                          tooltip: 'Call',
+                          tooltip: context.l10n.call,
                           onPressed: onCallPressed,
                           icon: const Icon(
                             AppIcons.call,
@@ -4670,7 +4648,7 @@ final class _ChatSearchToolbar extends StatelessWidget {
             Positioned(
               left: 0,
               child: Tooltip(
-                message: 'Search by date',
+                message: context.l10n.filterByDate,
                 child: SizedBox.square(
                   key: const ValueKey<String>('chat-search-date-button'),
                   dimension: ChatComposerStyle.defaultActionDimension,
@@ -4705,14 +4683,14 @@ final class _ChatSearchToolbar extends StatelessWidget {
                 children: [
                   _ComposerCircleButton.neutral(
                     buttonKey: const ValueKey<String>('chat-search-older'),
-                    tooltip: 'Older search result',
+                    tooltip: context.l10n.olderResult,
                     icon: AppIcons.keyboardArrowUp,
                     onPressed: canMoveOlder ? onMoveOlder : null,
                   ),
                   const SizedBox(width: AppSpacing.space4),
                   _ComposerCircleButton.neutral(
                     buttonKey: const ValueKey<String>('chat-search-newer'),
-                    tooltip: 'Newer search result',
+                    tooltip: context.l10n.newerResult,
                     icon: AppIcons.keyboardArrowDown,
                     onPressed: canMoveNewer ? onMoveNewer : null,
                   ),
@@ -4747,16 +4725,6 @@ final class _SearchDateSheetState extends State<_SearchDateSheet> {
 
   // 연·월 휠의 한 줄과 선택 배경은 높이가 같아야 해요.
   static const double _pickerItemExtent = 45;
-
-  static const List<String> _weekdayLabels = <String>[
-    'S',
-    'M',
-    'T',
-    'W',
-    'T',
-    'F',
-    'S',
-  ];
 
   late final Set<DateTime> _enabledDates;
   late final List<DateTime> _enabledMonths;
@@ -4898,7 +4866,7 @@ final class _SearchDateSheetState extends State<_SearchDateSheet> {
       child: Row(
         children: [
           _MonthChevronButton(
-            semanticLabel: 'Previous month',
+            semanticLabel: context.l10n.previousMonth,
             icon: AppIcons.chevronLeft,
             enabled: !_monthPickerOpen && _canMoveToPreviousMonth,
             onPressed: () {
@@ -4917,7 +4885,7 @@ final class _SearchDateSheetState extends State<_SearchDateSheet> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      _formatSearchMonth(_visibleMonth),
+                      formatChatMonth(_visibleMonth, context.l10n),
                       // 달력 배치에 연결된 기존 글자 크기와 행간을 유지해요.
                       style: AppTypography.typography4.copyWith(
                         color: AppColors.textPrimary,
@@ -4936,7 +4904,7 @@ final class _SearchDateSheetState extends State<_SearchDateSheet> {
             ),
           ),
           _MonthChevronButton(
-            semanticLabel: 'Next month',
+            semanticLabel: context.l10n.nextMonth,
             icon: AppIcons.chevronRight,
             enabled: !_monthPickerOpen && _canMoveToNextMonth,
             onPressed: () {
@@ -4960,7 +4928,7 @@ final class _SearchDateSheetState extends State<_SearchDateSheet> {
         const SizedBox(height: 18.0),
         Row(
           children: [
-            for (final String label in _weekdayLabels)
+            for (final String label in context.l10n.calendarWeekdays.split(','))
               Expanded(
                 child: Center(
                   child: Text(
@@ -5053,7 +5021,7 @@ final class _SearchDateSheetState extends State<_SearchDateSheet> {
                         for (final int year in years)
                           Center(
                             child: Text(
-                              '$year',
+                              context.l10n.calendarYear(year),
                               style: AppTypography.typography3.copyWith(
                                 color: year == _temporaryYear
                                     ? AppColors.grey900
@@ -5079,7 +5047,7 @@ final class _SearchDateSheetState extends State<_SearchDateSheet> {
                         for (final int month in months)
                           Center(
                             child: Text(
-                              chatMonthName(month),
+                              chatMonthName(month, strings: context.l10n),
                               style: AppTypography.typography3.copyWith(
                                 color: month == _temporaryMonth
                                     ? AppColors.grey900
@@ -5102,14 +5070,14 @@ final class _SearchDateSheetState extends State<_SearchDateSheet> {
             Expanded(
               child: AppButton(
                 secondary: true,
-                label: 'Cancel',
+                label: context.l10n.cancel,
                 onPressed: _cancelMonthPicker,
               ),
             ),
             const SizedBox(width: 10.0),
             Expanded(
               child: AppButton(
-                label: 'OK',
+                label: context.l10n.ok,
                 onPressed: canApply ? _applyMonthPicker : null,
               ),
             ),
@@ -5450,7 +5418,7 @@ final class _CallNowSheet extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'Call Now',
+                  context.l10n.callNow,
                   style: AppTypography.typography5.copyWith(
                     color: AppColors.textPrimary,
                     fontWeight: AppTypography.bold,
@@ -5458,7 +5426,7 @@ final class _CallNowSheet extends StatelessWidget {
                 ),
                 const SizedBox(height: 18),
                 _CallNowOption(
-                  label: 'Voice Call',
+                  label: context.l10n.voiceCall,
                   icon: AppIcons.call,
                   onTap: () {
                     Navigator.of(context).pop(_CallNowAction.voice);
@@ -5466,7 +5434,7 @@ final class _CallNowSheet extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.space12),
                 _CallNowOption(
-                  label: 'Video Call',
+                  label: context.l10n.videoCall,
                   icon: AppIcons.videocam,
                   onTap: () {
                     Navigator.of(context).pop(_CallNowAction.video);
@@ -5655,6 +5623,7 @@ final class _VoiceMemoSheetState extends State<_VoiceMemoSheet> {
   }
 
   Future<void> _startRecording() async {
+    final l10n = context.l10n;
     _timer?.cancel();
     await _amplitudeSubscription?.cancel();
     _amplitudeSubscription = null;
@@ -5664,7 +5633,7 @@ final class _VoiceMemoSheetState extends State<_VoiceMemoSheet> {
       await _previewPlayer.stop();
 
       if (!await _recorder.hasPermission()) {
-        _showVoiceMemoFailure('Microphone permission is required.');
+        _showVoiceMemoFailure(l10n.microphonePermission);
         return;
       }
 
@@ -5711,11 +5680,12 @@ final class _VoiceMemoSheetState extends State<_VoiceMemoSheet> {
       _timer = null;
       await _amplitudeSubscription?.cancel();
       _amplitudeSubscription = null;
-      _showVoiceMemoFailure('Voice memo recording failed.');
+      _showVoiceMemoFailure(l10n.recordingFailed);
     }
   }
 
   Future<void> _stopRecording() async {
+    final l10n = context.l10n;
     if (_mode != _VoiceMemoSheetMode.recording) {
       return;
     }
@@ -5753,7 +5723,7 @@ final class _VoiceMemoSheetState extends State<_VoiceMemoSheet> {
         _waveformSamples = waveformSamples;
       });
     } catch (_) {
-      _showVoiceMemoFailure('Voice memo recording failed.');
+      _showVoiceMemoFailure(l10n.recordingFailed);
     }
   }
 
@@ -5785,6 +5755,7 @@ final class _VoiceMemoSheetState extends State<_VoiceMemoSheet> {
   }
 
   Future<void> _togglePlayback() async {
+    final l10n = context.l10n;
     if (_mode == _VoiceMemoSheetMode.playing) {
       await _previewPlayer.pause();
 
@@ -5801,7 +5772,7 @@ final class _VoiceMemoSheetState extends State<_VoiceMemoSheet> {
     final String? recordingPath = _recordingPath;
 
     if (recordingPath == null) {
-      _showVoiceMemoFailure('Voice memo audio is not available.');
+      _showVoiceMemoFailure(l10n.audioUnavailable);
       return;
     }
 
@@ -5819,11 +5790,12 @@ final class _VoiceMemoSheetState extends State<_VoiceMemoSheet> {
 
       unawaited(_previewPlayer.play());
     } catch (_) {
-      _showVoiceMemoFailure('Voice memo playback failed.');
+      _showVoiceMemoFailure(l10n.playbackFailed);
     }
   }
 
   Future<void> _sendVoiceMemo() async {
+    final l10n = context.l10n;
     if (_mode == _VoiceMemoSheetMode.recording) {
       await _stopRecording();
     }
@@ -5835,7 +5807,7 @@ final class _VoiceMemoSheetState extends State<_VoiceMemoSheet> {
     final String? recordingPath = _recordingPath;
 
     if (recordingPath == null) {
-      _showVoiceMemoFailure('Voice memo audio is not available.');
+      _showVoiceMemoFailure(l10n.audioUnavailable);
       return;
     }
 
@@ -5843,7 +5815,7 @@ final class _VoiceMemoSheetState extends State<_VoiceMemoSheet> {
       final Uint8List audioBytes = await File(recordingPath).readAsBytes();
 
       if (audioBytes.isEmpty) {
-        _showVoiceMemoFailure('Voice memo audio is empty.');
+        _showVoiceMemoFailure(l10n.audioUnavailable);
         return;
       }
 
@@ -5868,7 +5840,7 @@ final class _VoiceMemoSheetState extends State<_VoiceMemoSheet> {
         ),
       );
     } catch (_) {
-      _showVoiceMemoFailure('Voice memo sending failed.');
+      _showVoiceMemoFailure(l10n.sendFailed);
     }
   }
 
@@ -5892,7 +5864,7 @@ final class _VoiceMemoSheetState extends State<_VoiceMemoSheet> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'Voice Memo',
+                context.l10n.voiceMemo,
                 style: AppTypography.typography5.copyWith(
                   color: AppColors.textPrimary,
                   fontWeight: AppTypography.bold,
@@ -6314,8 +6286,8 @@ final class _ActiveVoiceCallBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final String semanticLabel = connected
-        ? 'Voice call ${formatChatCallDuration(elapsed)}'
-        : 'Voice call connecting';
+        ? '${context.l10n.voiceCall} ${formatChatCallDuration(elapsed)}'
+        : '${context.l10n.voiceCall} ${context.l10n.connecting}';
 
     return Align(
       alignment: Alignment.centerLeft,
@@ -6419,10 +6391,6 @@ int _daysInMonth(int year, int month) {
   return DateTime(year, month + 1, 0).day;
 }
 
-String _formatSearchMonth(DateTime month) {
-  return '${month.year}.${month.month.toString().padLeft(2, '0')}';
-}
-
 ChatLinkPreview? _linkPreviewForContent(String content) {
   final String? url = firstChatUrlInText(content);
 
@@ -6445,10 +6413,7 @@ bool _isLinkOnlyMessage(ChatMessage message) {
   return remainingText.isEmpty;
 }
 
-bool _messageNeedsTranslation(
-  ChatMessage message, {
-  required String currentUserPreferredLanguage,
-}) {
+bool _messageNeedsTranslation(ChatMessage message) {
   if (message.isPhotoMessage ||
       message.isVideoMessage ||
       message.isFileMessage ||
@@ -6459,82 +6424,10 @@ bool _messageNeedsTranslation(
     return false;
   }
 
-  final String content = message.content.trim();
-
-  if (content.isEmpty) {
-    return false;
-  }
-
-  final String? targetLanguage =
-      _normalizeChatLanguageCode(message.translatedLanguage) ??
-      _normalizeChatLanguageCode(currentUserPreferredLanguage);
-  final String? contentLanguage = _inferMessageContentLanguage(content);
-
-  if (targetLanguage != null && contentLanguage != null) {
-    return contentLanguage != targetLanguage;
-  }
-
-  final String? sourceLanguage = _normalizeChatLanguageCode(
-    message.sourceLanguage,
-  );
-
-  if (sourceLanguage != null && targetLanguage != null) {
-    return sourceLanguage != targetLanguage;
-  }
-
-  return contentLanguage != null;
-}
-
-String? _normalizeChatLanguageCode(String? languageCode) {
-  final String normalized = (languageCode ?? '')
-      .trim()
-      .replaceAll('_', '-')
-      .toLowerCase();
-
-  if (normalized.isEmpty) {
-    return null;
-  }
-
-  if (normalized == 'ko' || normalized.startsWith('ko-')) {
-    return 'ko';
-  }
-
-  if (normalized == 'zh' || normalized.startsWith('zh-')) {
-    return 'zh-CN';
-  }
-
-  return normalized;
-}
-
-String? _inferMessageContentLanguage(String text) {
-  int koreanCount = 0;
-  int chineseCount = 0;
-
-  for (final int rune in text.runes) {
-    if (_isHangulRune(rune)) {
-      koreanCount++;
-    } else if (_isCjkIdeographRune(rune)) {
-      chineseCount++;
-    }
-  }
-
-  if (koreanCount == 0 && chineseCount == 0) {
-    return null;
-  }
-
-  return koreanCount >= chineseCount ? 'ko' : 'zh-CN';
-}
-
-bool _isHangulRune(int rune) {
-  return (rune >= 0xAC00 && rune <= 0xD7AF) ||
-      (rune >= 0x1100 && rune <= 0x11FF) ||
-      (rune >= 0x3130 && rune <= 0x318F);
-}
-
-bool _isCjkIdeographRune(int rune) {
-  return (rune >= 0x3400 && rune <= 0x4DBF) ||
-      (rune >= 0x4E00 && rune <= 0x9FFF) ||
-      (rune >= 0xF900 && rune <= 0xFAFF);
+  // 언어 추측을 앱에서 반복하지 않고 서버가 만든 번역을 사용해요.
+  // 원문과 같은 번역이나 숫자·이모지만 있는 메시지는 전환할 필요가 없어요.
+  return message.translatedContent != message.content &&
+      RegExp(r'\p{L}', unicode: true).hasMatch(message.content);
 }
 
 List<_SearchMatch> _searchMatchesIn(String text, String query) {
@@ -6760,7 +6653,6 @@ final class _MessageList extends StatefulWidget {
     required this.onEnsureMessageLoaded,
     required this.showLatestReadReceipt,
     required this.currentUserId,
-    required this.currentUserPreferredLanguage,
     required this.otherParticipantId,
     required this.otherParticipantName,
     required this.otherParticipantProfileImageUrl,
@@ -6803,7 +6695,6 @@ final class _MessageList extends StatefulWidget {
   final ChatMessageLoader? onEnsureMessageLoaded;
   final bool showLatestReadReceipt;
   final String currentUserId;
-  final String currentUserPreferredLanguage;
   final String otherParticipantId;
   final String otherParticipantName;
   final String? otherParticipantProfileImageUrl;
@@ -6862,7 +6753,7 @@ final class _MessageListState extends State<_MessageList>
     milliseconds: 400,
   );
   static const Duration _scrollDateRefreshInterval = Duration(milliseconds: 50);
-  final Set<String> _showTranslatedMessageIds = <String>{};
+  final Set<String> _showOriginalMessageIds = <String>{};
   final Set<String> _historyPageBoundaryMessageIds = <String>{};
   final Map<String, GlobalKey> _messageBubbleKeys = <String, GlobalKey>{};
   final Map<String, double> _rememberedMessageScrollOffsets =
@@ -7057,7 +6948,9 @@ final class _MessageListState extends State<_MessageList>
   }
 
   void _resolveBottomSettle() {
-    if (!mounted || !_bottomSettleActive || _bottomPinCanceledByUserNavigation) {
+    if (!mounted ||
+        !_bottomSettleActive ||
+        _bottomPinCanceledByUserNavigation) {
       _bottomSettleActive = false;
       _completeBottomSettle();
       return;
@@ -7480,7 +7373,9 @@ final class _MessageListState extends State<_MessageList>
       _bottomPinCanceledByUserNavigation = false;
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && widget.pinToBottom && !_bottomPinCanceledByUserNavigation) {
+        if (mounted &&
+            widget.pinToBottom &&
+            !_bottomPinCanceledByUserNavigation) {
           unawaited(scrollToBottom(animate: false));
         }
       });
@@ -9634,29 +9529,28 @@ final class _MessageListState extends State<_MessageList>
       return;
     }
 
-    if (!_messageNeedsTranslation(
-      message,
-      currentUserPreferredLanguage: widget.currentUserPreferredLanguage,
-    )) {
+    if (!_messageNeedsTranslation(message)) {
       return;
     }
 
     switch (message.translationStatus) {
       case ChatTranslationStatus.none:
-        unawaited(_startTranslation(messageId));
+        _retryTranslation(messageId);
 
       case ChatTranslationStatus.translated:
         if (message.translatedContent == null) {
+          // 이전 앱은 번역을 건너뛴 메시지도 완료 상태로 캐시했어요.
+          _retryTranslation(messageId);
           return;
         }
 
         _preserveBottomDuringNextContentResize();
 
         setState(() {
-          if (_showTranslatedMessageIds.contains(messageId)) {
-            _showTranslatedMessageIds.remove(messageId);
+          if (_showOriginalMessageIds.contains(messageId)) {
+            _showOriginalMessageIds.remove(messageId);
           } else {
-            _showTranslatedMessageIds.add(messageId);
+            _showOriginalMessageIds.add(messageId);
           }
         });
 
@@ -9676,7 +9570,7 @@ final class _MessageListState extends State<_MessageList>
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
-          const SnackBar(content: Text('File preview is not available yet.')),
+          SnackBar(content: Text(context.l10n.filePreviewUnavailable)),
         );
       return;
     }
@@ -9726,9 +9620,7 @@ final class _MessageListState extends State<_MessageList>
 
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(content: Text('File downloaded. Path copied.')),
-        );
+        ..showSnackBar(SnackBar(content: Text(context.l10n.fileDownloaded)));
     } catch (_) {
       if (!mounted) {
         return;
@@ -9736,9 +9628,7 @@ final class _MessageListState extends State<_MessageList>
 
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(content: Text('The file could not be opened.')),
-        );
+        ..showSnackBar(SnackBar(content: Text(context.l10n.fileOpenFailed)));
     }
   }
 
@@ -9780,7 +9670,7 @@ final class _MessageListState extends State<_MessageList>
     _preserveBottomDuringNextContentResize();
 
     setState(() {
-      _showTranslatedMessageIds.remove(messageId);
+      _showOriginalMessageIds.remove(messageId);
       _messages[messageIndex] = currentMessage.copyWith(
         transcriptionStatus: transcribe
             ? ChatTranscriptionStatus.transcribing
@@ -9847,31 +9737,31 @@ final class _MessageListState extends State<_MessageList>
 
       _messages.sort(compareChatMessages);
 
-      if (retriedMessage.translationStatus ==
-              ChatTranslationStatus.translated &&
-          retriedMessage.translatedContent != null) {
-        _showTranslatedMessageIds.add(messageId);
-      } else {
-        _showTranslatedMessageIds.remove(messageId);
-      }
+      _showOriginalMessageIds.remove(messageId);
     });
     if (retriedMessageWasAdded) {
       _scrollbarRangeTracker.reset();
     }
   }
 
+  // 받은 번역은 기본으로 표시하고, 사용자가 원문을 고른 경우만 기억해요.
+  bool _showsTranslation(ChatMessage message) =>
+      message.senderId != widget.currentUserId &&
+      message.translationStatus == ChatTranslationStatus.translated &&
+      message.translatedContent != null &&
+      !_showOriginalMessageIds.contains(message.id);
+
   String _displayedContentFor(ChatMessage message) {
     if (message.isPhotoMessage ||
         message.isVideoMessage ||
         message.isFileMessage ||
         message.isCallMessage) {
-      return message.replyPreviewContent;
+      return message.localizedPreview(context.l10n);
     }
 
     final String? translatedContent = message.translatedContent;
 
-    if (_showTranslatedMessageIds.contains(message.id) &&
-        translatedContent != null) {
+    if (_showsTranslation(message) && translatedContent != null) {
       return translatedContent;
     }
 
@@ -9930,7 +9820,7 @@ final class _MessageListState extends State<_MessageList>
         context: context,
         requestFocus: false,
         barrierDismissible: true,
-        barrierLabel: 'Dismiss message actions',
+        barrierLabel: context.l10n.dismissActions,
         // 배경 어두움과 메뉴 그림자는 역할이 달라 같은 알파여도 따로 관리해요.
         barrierColor: AppColors.black.withAlpha(31),
         transitionDuration: Duration(milliseconds: 140),
@@ -9990,7 +9880,7 @@ final class _MessageListState extends State<_MessageList>
         return;
 
       case ChatMessageAction.reply:
-        widget.onReplySelected(message, message.replyPreviewContent);
+        widget.onReplySelected(message, message.localizedPreview(context.l10n));
         return;
 
       case ChatMessageAction.edit:
@@ -10029,7 +9919,7 @@ final class _MessageListState extends State<_MessageList>
     setState(() {
       _messages.removeWhere((ChatMessage message) => message.id == messageId);
 
-      _showTranslatedMessageIds.remove(messageId);
+      _showOriginalMessageIds.remove(messageId);
       _messageBubbleKeys.remove(_messagePresentationId(message));
 
       if (_highlightedMessageId == messageId) {
@@ -10065,17 +9955,14 @@ final class _MessageListState extends State<_MessageList>
       return;
     }
 
-    if (!_messageNeedsTranslation(
-      currentMessage,
-      currentUserPreferredLanguage: widget.currentUserPreferredLanguage,
-    )) {
+    if (!_messageNeedsTranslation(currentMessage)) {
       return;
     }
 
     _preserveBottomDuringNextContentResize();
 
     setState(() {
-      _showTranslatedMessageIds.remove(messageId);
+      _showOriginalMessageIds.remove(messageId);
 
       _messages[messageIndex] = currentMessage.copyWith(
         translationStatus: ChatTranslationStatus.translating,
@@ -10123,7 +10010,7 @@ final class _MessageListState extends State<_MessageList>
         clearTranslationFailureReason: true,
       );
 
-      _showTranslatedMessageIds.add(messageId);
+      _showOriginalMessageIds.remove(messageId);
     });
   }
 
@@ -10439,26 +10326,14 @@ final class _MessageListState extends State<_MessageList>
     if (status == ChatTranscriptionStatus.none) return null;
 
     if (status != ChatTranscriptionStatus.transcribed) {
-      final (String, String, String) labels =
-          switch (_normalizeChatLanguageCode(
-            widget.currentUserPreferredLanguage,
-          )) {
-            'ko' => ('텍스트로 변환 중...', '음성을 텍스트로 변환하지 못했어요.', '다시 해보기'),
-            'zh-CN' => ('正在转为文字...', '暂时无法将语音转为文字。', '重试'),
-            _ => (
-              'Transcribing...',
-              "Couldn't transcribe this voice memo.",
-              'Retry',
-            ),
-          };
       final ChatMessageProcessingRetrier? retry = widget.onRetryTranscription;
       return _MessageProcessingStatus(
         statusKey: 'transcription-${message.id}',
         loading: status == ChatTranscriptionStatus.transcribing,
         failed: status == ChatTranscriptionStatus.failed,
-        loadingText: labels.$1,
-        failureText: labels.$2,
-        retryText: labels.$3,
+        loadingText: context.l10n.transcribing,
+        failureText: context.l10n.transcriptionFailed,
+        retryText: context.l10n.retry,
         onRetry: retry == null
             ? null
             : () => unawaited(
@@ -10468,12 +10343,7 @@ final class _MessageListState extends State<_MessageList>
     }
 
     final bool isIncoming = message.senderId != widget.currentUserId;
-    final bool canTranslate =
-        isIncoming &&
-        _messageNeedsTranslation(
-          message,
-          currentUserPreferredLanguage: widget.currentUserPreferredLanguage,
-        );
+    final bool canTranslate = isIncoming && _messageNeedsTranslation(message);
     // 음성의 원문·번역·재시도·검색 강조도 문자 메시지의 본문 컴포넌트를 사용해요.
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -10481,9 +10351,9 @@ final class _MessageListState extends State<_MessageList>
       child: _MessageTextContent(
         message: message,
         currentUserId: widget.currentUserId,
-        currentUserPreferredLanguage: widget.currentUserPreferredLanguage,
+
         otherParticipantName: widget.otherParticipantName,
-        showTranslation: _showTranslatedMessageIds.contains(message.id),
+        showTranslation: _showsTranslation(message),
         isActiveSearchResult:
             message.id ==
             (_highlightedMessageId ?? widget.activeSearchMessageId),
@@ -10515,17 +10385,22 @@ final class _MessageListState extends State<_MessageList>
       _MessageGroup(
         group: group,
         currentUserId: widget.currentUserId,
-        currentUserPreferredLanguage: widget.currentUserPreferredLanguage,
+
         otherParticipantName: widget.otherParticipantName,
         otherParticipantProfileImageUrl: widget.otherParticipantProfileImageUrl,
         latestReadMessageId: latestReadMessageId,
         now: _messageClock,
-        shownTranslatedMessageIds: _showTranslatedMessageIds,
+        shownTranslatedMessageIds: group.messages
+            .where(_showsTranslation)
+            .map((message) => message.id)
+            .toSet(),
         highlightedMessageId:
             _highlightedMessageId ?? widget.activeSearchMessageId,
         searchQuery: widget.searchQuery,
         voiceMemoTextBuilder: _buildVoiceMemoText,
-        canRequestTranslation: widget.onTranslateMessage != null,
+        canRequestTranslation:
+            widget.onTranslateMessage != null ||
+            widget.onRetryTranslation != null,
         canRetryTranslation:
             widget.onTranslateMessage != null ||
             widget.onRetryTranslation != null,
@@ -10977,7 +10852,10 @@ final class _MessageScrollDateBubbleOverlay extends StatelessWidget {
                         padding: EdgeInsets.symmetric(horizontal: 10),
                         child: Center(
                           child: Text(
-                            formatChatScrollDate(metrics.date!),
+                            formatChatScrollDate(
+                              metrics.date!,
+                              strings: context.l10n,
+                            ),
                             maxLines: 1,
                             style: AppTypography.typography7.copyWith(
                               color: AppColors.white,
@@ -11007,7 +10885,7 @@ final class _ScrollToLatestMessageButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      label: 'Scroll to latest message',
+      label: context.l10n.scrollToLatest,
       child: DecoratedBox(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
@@ -11064,7 +10942,7 @@ final class _BackToReplyMessageButton extends StatelessWidget {
             vertical: AppSpacing.space8,
           ),
           child: Text(
-            'Back to Reply Message',
+            context.l10n.backToReply,
             style: AppTypography.typography7.copyWith(
               color: AppColors.textPrimary,
               fontWeight: AppTypography.bold,
@@ -11216,7 +11094,7 @@ final class _MessageActionMenuItem extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  action.label,
+                  action.label(context),
                   style: AppTypography.typography6.copyWith(
                     color: isDestructive ? AppColors.red500 : AppColors.grey900,
                     fontWeight: AppTypography.regular,
@@ -11237,12 +11115,12 @@ final class _MessageActionMenuItem extends StatelessWidget {
 }
 
 extension on ChatMessageAction {
-  String get label {
+  String label(BuildContext context) {
     return switch (this) {
-      ChatMessageAction.copy => 'Copy',
-      ChatMessageAction.reply => 'Reply',
-      ChatMessageAction.edit => 'Edit',
-      ChatMessageAction.unsend => 'Unsend',
+      ChatMessageAction.copy => context.l10n.copy,
+      ChatMessageAction.reply => context.l10n.reply,
+      ChatMessageAction.edit => context.l10n.edit,
+      ChatMessageAction.unsend => context.l10n.unsend,
     };
   }
 
@@ -11253,6 +11131,21 @@ extension on ChatMessageAction {
       ChatMessageAction.edit => AppIcons.edit,
       ChatMessageAction.unsend => AppIcons.delete,
     };
+  }
+}
+
+final class _MessageContentDivider extends StatelessWidget {
+  const _MessageContentDivider({required this.isOutgoing, super.key});
+
+  final bool isOutgoing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Divider(
+      height: ChatMessageStyle.contentDividerThickness,
+      thickness: ChatMessageStyle.contentDividerThickness,
+      color: ChatMessageStyle.contentDividerColor(isOutgoing: isOutgoing),
+    );
   }
 }
 
@@ -11284,9 +11177,9 @@ final class _ReplyMessageBody extends StatelessWidget {
     if (replyTo == null) {
       messageBody = child;
     } else {
-      final String authorLabel = replyTo.senderId == currentUserId
-          ? 'Me'
-          : otherParticipantName;
+      final String replyTitle = replyTo.senderId == currentUserId
+          ? context.l10n.replyToMe
+          : context.l10n.replyToName(otherParticipantName);
 
       final Widget quotedArea = GestureDetector(
         key: ValueKey<String>('reply-quote-area-${message.id}'),
@@ -11304,13 +11197,13 @@ final class _ReplyMessageBody extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Reply to $authorLabel',
+              replyTitle,
               key: ValueKey<String>('reply-message-title-${message.id}'),
               style: ChatMessageStyle.replyTitle(isOutgoing: isOutgoing),
             ),
             const SizedBox(height: 1.0),
             _SearchHighlightedText(
-              text: replyTo.content,
+              text: replyPreviewLabel(replyTo, context.l10n),
               query: searchQuery,
               key: ValueKey<String>('reply-message-preview-${message.id}'),
               maxLines: 1,
@@ -11324,11 +11217,9 @@ final class _ReplyMessageBody extends StatelessWidget {
       messageBody = _ReplyMessageLayout(
         key: ValueKey<String>('reply-message-${message.id}'),
         quote: quotedArea,
-        divider: Divider(
+        divider: _MessageContentDivider(
           key: ValueKey<String>('reply-message-divider-${message.id}'),
-          height: ChatMessageStyle.replyDividerThickness,
-          thickness: ChatMessageStyle.replyDividerThickness,
-          color: ChatMessageStyle.replyDividerColor(isOutgoing: isOutgoing),
+          isOutgoing: isOutgoing,
         ),
         body: _MessageEditStatusBody(
           message: message,
@@ -11431,9 +11322,9 @@ final class _RenderReplyMessageLayout extends RenderBox
       Size(
         width,
         quoteSize.height +
-            ChatMessageStyle.replyDividerGap +
+            ChatMessageStyle.contentDividerGap +
             dividerSize.height +
-            ChatMessageStyle.replyDividerGap +
+            ChatMessageStyle.contentDividerGap +
             bodySize.height,
       ),
     );
@@ -11469,9 +11360,9 @@ final class _RenderReplyMessageLayout extends RenderBox
         body.parentData! as _ReplyMessageParentData;
 
     final double dividerTop =
-        quote.size.height + ChatMessageStyle.replyDividerGap;
+        quote.size.height + ChatMessageStyle.contentDividerGap;
     final double bodyTop =
-        dividerTop + divider.size.height + ChatMessageStyle.replyDividerGap;
+        dividerTop + divider.size.height + ChatMessageStyle.contentDividerGap;
 
     quoteParentData.offset = Offset.zero;
     dividerParentData.offset = Offset(0, dividerTop);
@@ -11528,7 +11419,7 @@ final class _MessageEditStatusBody extends StatelessWidget {
         child,
         const SizedBox(height: 1.0),
         Text(
-          'Edited',
+          context.l10n.edited,
           key: ValueKey<String>('message-edited-${message.id}'),
           style: ChatMessageStyle.editedLabel(isOutgoing: isOutgoing),
         ),
@@ -11567,7 +11458,7 @@ final class _DateSeparator extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                formatChatDate(date),
+                formatChatDate(date, strings: context.l10n),
                 style: AppTypography.typography7.copyWith(
                   color: AppColors.grey700,
                   fontWeight: AppTypography.regular,
@@ -11591,7 +11482,6 @@ final class _MessageGroup extends StatelessWidget {
   const _MessageGroup({
     required this.group,
     required this.currentUserId,
-    required this.currentUserPreferredLanguage,
     required this.otherParticipantName,
     required this.otherParticipantProfileImageUrl,
     required this.latestReadMessageId,
@@ -11617,7 +11507,6 @@ final class _MessageGroup extends StatelessWidget {
 
   final ChatMessageGroup group;
   final String currentUserId;
-  final String currentUserPreferredLanguage;
   final String otherParticipantName;
   final String? otherParticipantProfileImageUrl;
   final String? latestReadMessageId;
@@ -11666,7 +11555,7 @@ final class _MessageGroup extends StatelessWidget {
     return _IncomingMessageGroup(
       messages: group.messages,
       currentUserId: currentUserId,
-      currentUserPreferredLanguage: currentUserPreferredLanguage,
+
       otherParticipantName: otherParticipantName,
       otherParticipantProfileImageUrl: otherParticipantProfileImageUrl,
       shownTranslatedMessageIds: shownTranslatedMessageIds,
@@ -11694,7 +11583,6 @@ final class _IncomingMessageGroup extends StatelessWidget {
   const _IncomingMessageGroup({
     required this.messages,
     required this.currentUserId,
-    required this.currentUserPreferredLanguage,
     required this.otherParticipantName,
     required this.otherParticipantProfileImageUrl,
     required this.shownTranslatedMessageIds,
@@ -11718,7 +11606,6 @@ final class _IncomingMessageGroup extends StatelessWidget {
 
   final List<ChatMessage> messages;
   final String currentUserId;
-  final String currentUserPreferredLanguage;
   final String otherParticipantName;
   final String? otherParticipantProfileImageUrl;
   final Set<String> shownTranslatedMessageIds;
@@ -11762,7 +11649,7 @@ final class _IncomingMessageGroup extends StatelessWidget {
                 _IncomingMessageRow(
                   message: messages[index],
                   currentUserId: currentUserId,
-                  currentUserPreferredLanguage: currentUserPreferredLanguage,
+
                   otherParticipantName: otherParticipantName,
                   showTail: index == 0,
                   showTime: index == messages.length - 1,
@@ -11872,7 +11759,6 @@ final class _IncomingMessageRow extends StatelessWidget {
   const _IncomingMessageRow({
     required this.message,
     required this.currentUserId,
-    required this.currentUserPreferredLanguage,
     required this.otherParticipantName,
     required this.showTail,
     required this.showTime,
@@ -11897,7 +11783,6 @@ final class _IncomingMessageRow extends StatelessWidget {
 
   final ChatMessage message;
   final String currentUserId;
-  final String currentUserPreferredLanguage;
   final String otherParticipantName;
   final bool showTail;
   final bool showTime;
@@ -11927,10 +11812,7 @@ final class _IncomingMessageRow extends StatelessWidget {
     final bool isCallMessage = message.isCallMessage;
     final bool isVoiceMemoMessage = message.isVoiceMemoMessage;
     final bool isLinkMessage = message.isLinkMessage;
-    final bool canUseTranslation = _messageNeedsTranslation(
-      message,
-      currentUserPreferredLanguage: currentUserPreferredLanguage,
-    );
+    final bool canUseTranslation = _messageNeedsTranslation(message);
     final bool canTapBubble =
         isFileMessage ||
         (!isPhotoMessage &&
@@ -12014,7 +11896,7 @@ final class _IncomingMessageRow extends StatelessWidget {
             : _MessageTextContent(
                 message: message,
                 currentUserId: currentUserId,
-                currentUserPreferredLanguage: currentUserPreferredLanguage,
+
                 otherParticipantName: otherParticipantName,
                 showTranslation: showTranslation,
                 isActiveSearchResult: isHighlighted,
@@ -12080,7 +11962,6 @@ final class _MessageTextContent extends StatelessWidget {
   const _MessageTextContent({
     required this.message,
     required this.currentUserId,
-    required this.currentUserPreferredLanguage,
     required this.otherParticipantName,
     required this.showTranslation,
     required this.isActiveSearchResult,
@@ -12093,7 +11974,6 @@ final class _MessageTextContent extends StatelessWidget {
 
   final ChatMessage message;
   final String currentUserId;
-  final String currentUserPreferredLanguage;
   final String otherParticipantName;
   final bool showTranslation;
   final bool isActiveSearchResult;
@@ -12200,44 +12080,11 @@ final class _MessageTextContent extends StatelessWidget {
               : 'idle'}-${message.id}',
       loading: loading,
       failed: failed,
-      loadingText: _translationLoadingText,
-      failureText: _translationFailureText,
-      retryText: _translationRetryText,
+      loadingText: context.l10n.translating,
+      failureText: context.l10n.translationFailed,
+      retryText: context.l10n.retry,
       onRetry: canRetryTranslation ? onRetryTranslation : null,
     );
-  }
-
-  String get _translationFailureText {
-    switch (_normalizeChatLanguageCode(currentUserPreferredLanguage)) {
-      case 'ko':
-        return '지금은 이 메시지를 번역할 수 없어요.';
-      case 'zh-CN':
-        return '暂时无法翻译这条消息。';
-      default:
-        return "Couldn't translate this message.";
-    }
-  }
-
-  String get _translationRetryText {
-    switch (_normalizeChatLanguageCode(currentUserPreferredLanguage)) {
-      case 'ko':
-        return '다시 해보기';
-      case 'zh-CN':
-        return '重试';
-      default:
-        return 'Retry';
-    }
-  }
-
-  String get _translationLoadingText {
-    switch (_normalizeChatLanguageCode(currentUserPreferredLanguage)) {
-      case 'ko':
-        return '번역 중...';
-      case 'zh-CN':
-        return '正在翻译...';
-      default:
-        return 'Translating...';
-    }
   }
 }
 
@@ -12709,7 +12556,7 @@ final class _LinkPreviewCard extends StatelessWidget {
 
     return Semantics(
       link: true,
-      label: 'Open $domain',
+      label: context.l10n.openLink(domain),
       child: GestureDetector(
         key: ValueKey<String>('link-preview-card-${preview.url}'),
         behavior: HitTestBehavior.opaque,
@@ -12941,7 +12788,11 @@ final class _OutgoingMessageGroup extends StatelessWidget {
                 right: ChatMessageStyle.horizontalPadding,
               ),
               child: Text(
-                formatReadReceipt(readAt: messages[index].readAt!, now: now),
+                formatReadReceipt(
+                  readAt: messages[index].readAt!,
+                  now: now,
+                  strings: context.l10n,
+                ),
                 textAlign: TextAlign.right,
                 style: AppTypography.subTypography12.copyWith(
                   color: AppColors.textTertiary,
@@ -13483,9 +13334,9 @@ final class _VideoDownloadRetryIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const _MediaStatusIndicator(
+    return _MediaStatusIndicator(
       icon: Icon(AppIcons.refresh, size: 24, color: AppColors.white),
-      label: 'Try again',
+      label: context.l10n.retry,
     );
   }
 }
@@ -13495,12 +13346,12 @@ final class _VideoEncodingIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const _MediaStatusIndicator(
+    return _MediaStatusIndicator(
       icon: SizedBox.square(
         dimension: 15,
         child: Icon(AppIcons.image, size: 15, color: AppColors.white),
       ),
-      label: 'Encoding…',
+      label: context.l10n.encoding,
     );
   }
 }
@@ -15058,6 +14909,8 @@ Future<void> _saveViewerMedia({
   required BuildContext context,
   required GlobalKey<_ActionConfirmationState> confirmationKey,
   required String mediaLabel,
+  required String savedText,
+  required String failureText,
   required Future<void> Function(ClipboardDiagnostics diagnostics) save,
   String Function(Object error)? errorDetails,
 }) async {
@@ -15072,7 +14925,7 @@ Future<void> _saveViewerMedia({
       return;
     }
 
-    confirmationKey.currentState?.show('$mediaLabel saved');
+    confirmationKey.currentState?.show(savedText);
     totalStopwatch.stop();
     diagnostics.record(
       '[$logPrefix] stage=confirmation '
@@ -15093,9 +14946,7 @@ Future<void> _saveViewerMedia({
 
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(content: Text('$mediaLabel could not be saved.')),
-      );
+      ..showSnackBar(SnackBar(content: Text(failureText)));
   } finally {
     // 진단할 때만 아래 줄의 주석을 풀어 클립보드 복사를 켜요.
     // unawaited(diagnostics.copyToClipboard());
@@ -15441,9 +15292,7 @@ final class _PhotoViewerScreenState extends State<_PhotoViewerScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
-          ..showSnackBar(
-            const SnackBar(content: Text('Photo could not be edited.')),
-          );
+          ..showSnackBar(SnackBar(content: Text(context.l10n.mediaEditFailed)));
       }
     } finally {
       _mediaActionInProgress = false;
@@ -15484,9 +15333,7 @@ final class _PhotoViewerScreenState extends State<_PhotoViewerScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
-          ..showSnackBar(
-            const SnackBar(content: Text('Photo could not be shared.')),
-          );
+          ..showSnackBar(SnackBar(content: Text(context.l10n.shareFailed)));
       }
     } finally {
       if (shareFile != null) {
@@ -15507,6 +15354,8 @@ final class _PhotoViewerScreenState extends State<_PhotoViewerScreen> {
       context: context,
       confirmationKey: _saveConfirmationKey,
       mediaLabel: 'Photo',
+      savedText: context.l10n.photoSaved,
+      failureText: context.l10n.photoSaveFailed,
       errorDetails: _photoSavePlatformErrorDetails,
       save: (diagnostics) async {
         final ChatPhotoFile sourceFile = await _loadPhotoSource(
@@ -15535,7 +15384,7 @@ final class _PhotoViewerScreenState extends State<_PhotoViewerScreen> {
               await PhotoManager.editor.saveImage(
                 imageBytes,
                 filename: 'naru-$timestamp.jpg',
-                title: 'naru Photo',
+                title: 'naru-$timestamp.jpg',
                 creationDate: DateTime.now(),
               );
             }
@@ -15979,9 +15828,7 @@ final class _VideoViewerScreenState extends State<_VideoViewerScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
-          ..showSnackBar(
-            const SnackBar(content: Text('Video could not be edited.')),
-          );
+          ..showSnackBar(SnackBar(content: Text(context.l10n.mediaEditFailed)));
       }
     } finally {
       _mediaActionInProgress = false;
@@ -16006,9 +15853,7 @@ final class _VideoViewerScreenState extends State<_VideoViewerScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
-          ..showSnackBar(
-            const SnackBar(content: Text('Video could not be shared.')),
-          );
+          ..showSnackBar(SnackBar(content: Text(context.l10n.shareFailed)));
       }
     } finally {
       _mediaActionInProgress = false;
@@ -16024,6 +15869,8 @@ final class _VideoViewerScreenState extends State<_VideoViewerScreen> {
       context: context,
       confirmationKey: _saveConfirmationKey,
       mediaLabel: 'Video',
+      savedText: context.l10n.videoSaved,
+      failureText: context.l10n.videoSaveFailed,
       save: (diagnostics) async {
         diagnostics.record('[video-save] stage=bytes_source source=local_file');
         await _saveToPhotoLibrary(diagnostics, () async {
@@ -16720,7 +16567,7 @@ final class _MediaViewerTopBar extends StatelessWidget {
                         ),
                         Text(
                           key: ValueKey<String>('$keyPrefix-timestamp'),
-                          _formatPhotoViewerTimestamp(sentAt),
+                          formatMediaTimestamp(sentAt, context),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.center,
@@ -16949,7 +16796,10 @@ final class _PhotoViewerThumbnailBar extends StatelessWidget {
                   ),
                   const SizedBox(width: 5.0),
                   Text(
-                    'Number ${currentIndex + 1} out of ${attachments.length}',
+                    context.l10n.mediaPosition(
+                      currentIndex + 1,
+                      attachments.length,
+                    ),
                     style: AppTypography.subTypography13.copyWith(
                       color: AppColors.white,
                       fontWeight: AppTypography.regular,
@@ -17040,40 +16890,6 @@ BoxFit _photoViewerFit({
   return BoxFit.contain;
 }
 
-String _formatPhotoViewerTimestamp(DateTime date) {
-  final DateTime local = date.toLocal();
-  final int hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
-  final String minute = local.minute.toString().padLeft(2, '0');
-  final String period = local.hour < 12 ? 'AM' : 'PM';
-
-  return '${_shortMonthName(local.month)} '
-      '${local.day}, '
-      '${local.year} at '
-      '$hour:$minute $period';
-}
-
-String _shortMonthName(int month) {
-  return switch (month) {
-    DateTime.january => 'Jan',
-    DateTime.february => 'Feb',
-    DateTime.march => 'Mar',
-    DateTime.april => 'Apr',
-    DateTime.may => 'May',
-    DateTime.june => 'Jun',
-    DateTime.july => 'Jul',
-    DateTime.august => 'Aug',
-    DateTime.september => 'Sep',
-    DateTime.october => 'Oct',
-    DateTime.november => 'Nov',
-    DateTime.december => 'Dec',
-    _ => throw ArgumentError.value(
-      month,
-      'month',
-      'Month must be between 1 and 12.',
-    ),
-  };
-}
-
 String _formatFileSize(int bytes) {
   if (bytes < 1024) {
     return '$bytes B';
@@ -17123,12 +16939,13 @@ final class _CallMessagePresentation {
 _CallMessagePresentation _callMessagePresentation(
   ChatCallAttachment attachment,
   bool isOutgoing,
+  BuildContext context,
 ) {
   if (!isOutgoing &&
       (attachment.outcome == ChatCallOutcome.cancelled ||
           attachment.outcome == ChatCallOutcome.noAnswer)) {
-    return const _CallMessagePresentation(
-      label: 'Missed Call',
+    return _CallMessagePresentation(
+      label: callOutcomeLabel(ChatCallOutcome.missed, context.l10n),
       icon: AppIcons.phoneMissed,
       iconColor: AppColors.red500,
       showsDuration: false,
@@ -17136,33 +16953,33 @@ _CallMessagePresentation _callMessagePresentation(
   }
 
   return switch (attachment.outcome) {
-    ChatCallOutcome.started => const _CallMessagePresentation(
-      label: 'Voice Call',
+    ChatCallOutcome.started => _CallMessagePresentation(
+      label: callOutcomeLabel(ChatCallOutcome.started, context.l10n),
       icon: AppIcons.call,
       // 상태별 의미만 통화 전용으로 관리하고, 색상 값은 디자인 시스템에서 가져와요.
       iconColor: AppColors.green500,
       showsDuration: false,
     ),
-    ChatCallOutcome.ended => const _CallMessagePresentation(
-      label: 'End voice call',
+    ChatCallOutcome.ended => _CallMessagePresentation(
+      label: callOutcomeLabel(ChatCallOutcome.ended, context.l10n),
       icon: AppIcons.call,
       iconColor: AppColors.grey900,
       showsDuration: true,
     ),
-    ChatCallOutcome.cancelled => const _CallMessagePresentation(
-      label: 'Canceled',
+    ChatCallOutcome.cancelled => _CallMessagePresentation(
+      label: callOutcomeLabel(ChatCallOutcome.cancelled, context.l10n),
       icon: AppIcons.phoneDisabled,
       iconColor: AppColors.grey500,
       showsDuration: false,
     ),
-    ChatCallOutcome.missed => const _CallMessagePresentation(
-      label: 'Missed Call',
+    ChatCallOutcome.missed => _CallMessagePresentation(
+      label: callOutcomeLabel(ChatCallOutcome.missed, context.l10n),
       icon: AppIcons.phoneMissed,
       iconColor: AppColors.red500,
       showsDuration: false,
     ),
-    ChatCallOutcome.noAnswer => const _CallMessagePresentation(
-      label: 'No Answer',
+    ChatCallOutcome.noAnswer => _CallMessagePresentation(
+      label: callOutcomeLabel(ChatCallOutcome.noAnswer, context.l10n),
       icon: AppIcons.phoneDisabled,
       iconColor: AppColors.grey500,
       showsDuration: false,
@@ -17192,6 +17009,7 @@ final class _CallMessageBubble extends StatelessWidget {
     final _CallMessagePresentation presentation = _callMessagePresentation(
       attachment,
       isOutgoing,
+      context,
     );
     final String? durationText = presentation.showsDuration
         ? formatChatCallDuration(attachment.duration)
@@ -17983,11 +17801,9 @@ final class _VoiceMemoMessageBubbleState
                   SizedBox(
                     height: 56,
                     child: Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        10,
-                        AppSpacing.space8,
-                        14,
-                        AppSpacing.space8,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: ChatMessageStyle.horizontalPadding,
+                        vertical: AppSpacing.space8,
                       ),
                       child: Row(
                         children: [
@@ -18109,7 +17925,25 @@ final class _VoiceMemoMessageBubbleState
                         ChatMessageStyle.horizontalPadding,
                         AppSpacing.space12,
                       ),
-                      child: widget.textContent,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: ChatMessageStyle.contentDividerGap,
+                            ),
+                            child: _MessageContentDivider(
+                              key: ValueKey<String>(
+                                'voice-message-divider-${widget.messageId}',
+                              ),
+                              // 음성 카드는 발신·수신 모두 흰 배경이라 같은 회색 선을 사용해요.
+                              isOutgoing: false,
+                            ),
+                          ),
+                          widget.textContent!,
+                        ],
+                      ),
                     ),
                 ],
               ),
@@ -18177,7 +18011,7 @@ final class _FileMessageContent extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  attachment.name,
+                  attachment.name.isEmpty ? context.l10n.file : attachment.name,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: AppTypography.typography6.copyWith(
@@ -18464,16 +18298,8 @@ final class _MessageTime extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final DateTime localCreatedAt = createdAt.toLocal();
-
-    final String formattedTime = MaterialLocalizations.of(context)
-        .formatTimeOfDay(
-          TimeOfDay.fromDateTime(localCreatedAt),
-          alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(context),
-        );
-
     return Text(
-      formattedTime,
+      formatChatTime(createdAt, context),
       style: AppTypography.subTypography12.copyWith(
         color: AppColors.textTertiary,
       ),
@@ -18660,34 +18486,34 @@ final class _ChatAttachmentPanel extends StatelessWidget {
   final VoidCallback onFilePressed;
   final VoidCallback onVoiceMemoPressed;
 
-  static const List<_AttachmentPanelActionData> _actions = [
+  List<_AttachmentPanelActionData> _actions(BuildContext context) => [
     _AttachmentPanelActionData(
       id: 'photo',
-      label: 'Photo',
+      label: context.l10n.photo,
       icon: AppIcons.image,
       foregroundColor: AppColors.green500,
     ),
     _AttachmentPanelActionData(
       id: 'camera',
-      label: 'Camera',
+      label: context.l10n.camera,
       icon: AppIcons.camera,
       foregroundColor: AppColors.blue500,
     ),
     _AttachmentPanelActionData(
       id: 'call',
-      label: 'Call',
+      label: context.l10n.call,
       icon: AppIcons.call,
       foregroundColor: AppColors.green500,
     ),
     _AttachmentPanelActionData(
       id: 'file',
-      label: 'File',
+      label: context.l10n.file,
       icon: AppIcons.file,
       foregroundColor: AppColors.grey700,
     ),
     _AttachmentPanelActionData(
       id: 'voice-memo',
-      label: 'Voice Memo',
+      label: context.l10n.voiceMemo,
       icon: AppIcons.graphicEq,
       foregroundColor: AppColors.red500,
     ),
@@ -18695,6 +18521,7 @@ final class _ChatAttachmentPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final actions = _actions(context);
     final double bottomSafePadding = MediaQuery.viewPaddingOf(context).bottom;
 
     return Material(
@@ -18717,9 +18544,9 @@ final class _ChatAttachmentPanel extends StatelessWidget {
             crossAxisCount: 4,
             mainAxisExtent: 106,
           ),
-          itemCount: _actions.length,
+          itemCount: actions.length,
           itemBuilder: (BuildContext context, int index) {
-            final _AttachmentPanelActionData action = _actions[index];
+            final _AttachmentPanelActionData action = actions[index];
 
             final VoidCallback onPressed;
 
@@ -18895,8 +18722,9 @@ final class _MessageComposer extends StatelessWidget {
 
     final String? replyTitle = replyTarget == null
         ? null
-        : 'Reply to '
-              '${replyTarget.senderId == currentUserId ? 'Me' : otherParticipantName}';
+        : replyTarget.senderId == currentUserId
+        ? context.l10n.replyToMe
+        : context.l10n.replyToName(otherParticipantName);
 
     return TextFieldTapRegion(
       child: Padding(
@@ -18927,7 +18755,7 @@ final class _MessageComposer extends StatelessWidget {
                   child: isEditing
                       ? _buildContextComposer(
                           keyPrefix: 'edit',
-                          title: 'Edit message',
+                          title: context.l10n.editMessage,
                           preview: editingOriginalContent ?? '',
                           hintText: '',
                           onCancel: onCancelEdit,
@@ -18936,7 +18764,7 @@ final class _MessageComposer extends StatelessWidget {
                                   buttonKey: const ValueKey<String>(
                                     'edit-save',
                                   ),
-                                  tooltip: 'Save edit',
+                                  tooltip: context.l10n.saveEdit,
                                   icon: AppIcons.check,
                                   iconSize: 24.0,
                                   backgroundColor: AppColors.grey900,
@@ -18954,14 +18782,14 @@ final class _MessageComposer extends StatelessWidget {
                           keyPrefix: 'reply',
                           title: replyTitle!,
                           preview: replyingToContent ?? '',
-                          hintText: 'Reply to message...',
+                          hintText: context.l10n.replyPlaceholder,
                           onCancel: onCancelReply,
                           action: canSend
                               ? _ComposerCircleButton(
                                   buttonKey: const ValueKey<String>(
                                     'message-send',
                                   ),
-                                  tooltip: 'Send',
+                                  tooltip: context.l10n.send,
                                   icon: AppIcons.send,
                                   iconSize: 23.0,
                                   backgroundColor: AppColors.blue500,
@@ -18974,7 +18802,7 @@ final class _MessageComposer extends StatelessWidget {
                                   ),
                                 ),
                         )
-                      : _buildDefaultComposer(canSend: canSend),
+                      : _buildDefaultComposer(context, canSend: canSend),
                 );
               },
         ),
@@ -18982,7 +18810,7 @@ final class _MessageComposer extends StatelessWidget {
     );
   }
 
-  Widget _buildDefaultComposer({required bool canSend}) {
+  Widget _buildDefaultComposer(BuildContext context, {required bool canSend}) {
     return _ComposerSurface(
       containerKey: const ValueKey<String>('message-composer-default'),
       surfaceKey: const ValueKey<String>('message-composer-surface'),
@@ -18993,7 +18821,9 @@ final class _MessageComposer extends StatelessWidget {
             offsetY: 0,
             child: _ComposerCircleButton.neutral(
               buttonKey: const ValueKey<String>('message-attachment'),
-              tooltip: attachmentPanelOpen ? 'Open keyboard' : 'Attachments',
+              tooltip: attachmentPanelOpen
+                  ? context.l10n.openKeyboard
+                  : context.l10n.attachments,
               icon: attachmentPanelOpen ? AppIcons.close : AppIcons.add,
               onPressed: onToggleAttachmentPanel,
             ),
@@ -19001,7 +18831,7 @@ final class _MessageComposer extends StatelessWidget {
           const SizedBox(width: AppSpacing.space4),
           Expanded(
             child: _buildTextField(
-              hintText: 'Enter a message',
+              hintText: context.l10n.enterMessage,
               textStyle: ChatComposerStyle.defaultInput,
               // 기본 입력창 안내 문구의 승인된 색상은 공통 회색으로 치환하지 않아요.
               hintStyle: ChatComposerStyle.defaultInput.copyWith(
@@ -19020,7 +18850,7 @@ final class _MessageComposer extends StatelessWidget {
               canSend
                   ? _ComposerCircleButton(
                       buttonKey: const ValueKey<String>('message-send'),
-                      tooltip: 'Send',
+                      tooltip: context.l10n.send,
                       icon: AppIcons.send,
                       iconSize: 19.0,
                       dimension: ChatComposerStyle.defaultActionDimension,
@@ -19030,7 +18860,7 @@ final class _MessageComposer extends StatelessWidget {
                     )
                   : _ComposerCircleButton.neutral(
                       buttonKey: const ValueKey<String>('message-voice'),
-                      tooltip: 'Voice message',
+                      tooltip: context.l10n.voiceMemo,
                       icon: AppIcons.graphicEq,
                       iconSize: 18.0,
                       onPressed: onVoiceMemoPressed,

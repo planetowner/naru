@@ -394,7 +394,9 @@ void main() {
     await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
-    await _showMessage(tester, find.text('我等你继续说呢'));
+    await _showMessage(tester, find.text('네가 계속 말해주길 기다리고 있어.'));
+    await tester.tap(find.text('네가 계속 말해주길 기다리고 있어.'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('我等你继续说呢'));
     await tester.pumpAndSettle();
 
@@ -864,6 +866,9 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: ChatConversationView(
+          currentUserName: 'Me',
+          otherParticipantName: 'Lia',
+
           initialMessages: const <ChatMessage>[],
           currentUserId: 'current-user',
           otherParticipantId: 'other-user',
@@ -1645,7 +1650,9 @@ void main() {
     await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
-    await _showMessage(tester, find.text('我等你继续说呢'));
+    await _showMessage(tester, find.text('네가 계속 말해주길 기다리고 있어.'));
+    await tester.tap(find.text('네가 계속 말해주길 기다리고 있어.'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('我等你继续说呢'));
     await tester.pumpAndSettle();
 
@@ -2133,6 +2140,9 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: ChatConversationView(
+            currentUserName: 'Me',
+            otherParticipantName: 'Lia',
+
             initialMessages: _farReplyMessages(),
             initialClock: DateTime(2026, 7, 2),
           ),
@@ -2209,7 +2219,9 @@ void main() {
 
       final Finder originalMessageFinder = find.text('抱歉啦欧巴');
 
-      await _showMessage(tester, originalMessageFinder);
+      await _showMessage(tester, find.text('미안해, 오빠.'));
+      await tester.tap(find.text('미안해, 오빠.'));
+      await tester.pumpAndSettle();
 
       await tester.longPress(originalMessageFinder);
       await tester.pumpAndSettle();
@@ -2639,7 +2651,9 @@ void main() {
     await tester.pumpWidget(const NaruPreviewApp());
     await tester.pumpAndSettle();
 
-    await _showMessage(tester, find.text('抱歉啦欧巴'));
+    await _showMessage(tester, find.text('미안해, 오빠.'));
+    await tester.tap(find.text('미안해, 오빠.'));
+    await tester.pumpAndSettle();
 
     await tester.longPress(find.text('抱歉啦欧巴'));
     await tester.pumpAndSettle();

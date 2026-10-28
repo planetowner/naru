@@ -23,7 +23,8 @@ from fastapi import (
     Response,
     status,
 )
-from sqlalchemy import Select, and_, desc, func, or_, select
+from sqlalchemy import Select, Text, and_, cast, desc, func, or_, select, update
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import SessionLocal
@@ -65,7 +66,6 @@ from app.schemas import (
 from app.translation import (
     TRANSLATION_PROVIDER_NAME,
     TRANSLATION_MODEL,
-    infer_text_language,
     should_translate_text,
     translate_message,
 )
@@ -107,7 +107,6 @@ LINK_PREVIEW_USER_AGENT = (
     "facebookexternalhit/1.1; kakaotalk-scrap/1.0; "
     "+https://devtalk.kakao.com/t/scrap/33984"
 )
-LINK_PREVIEW_ACCEPT_LANGUAGE = "ko-KR,ko;q=0.8,en-US;q=0.6,en;q=0.4"
 URL_PATTERN = re.compile(r"(?i)\b(?:https?://|www\.)[^\s<>'\"]+")
 TRAILING_URL_PUNCTUATION = ".,!?;:)]}…"
 
@@ -317,13 +316,14 @@ def parse_link_preview_html(
 
 def fetch_link_preview_html(
     url: str,
+    language: str,
 ) -> tuple[str, LinkPreviewHTMLParser]:
     request = Request(
         url,
         headers={
             "User-Agent": LINK_PREVIEW_USER_AGENT,
             "Accept": "*/*",
-            "Accept-Language": LINK_PREVIEW_ACCEPT_LANGUAGE,
+            "Accept-Language": language,
         },
     )
 
@@ -351,20 +351,31 @@ def fetch_link_preview_html(
 def build_link_preview_metadata(
     content: str,
     metadata: Optional[dict[str, Any]],
+    *,
+    language: str,
 ) -> Optional[dict[str, Any]]:
     url = first_url_in_text(content)
 
     if url is None:
         return metadata if metadata else None
 
-    fallback = build_fallback_link_preview(url, metadata)
+    # 다른 언어의 카드나 언어 정보가 없는 예전 카드를 섞지 않아요.
+    matching_metadata = (
+        metadata if metadata and metadata.get("language") == language else None
+    )
+    fallback = {
+        **build_fallback_link_preview(url, matching_metadata),
+        "language": language,
+    }
+    # 다른 언어의 카드는 해당 사용자가 조회할 때 서버에서 따로 수집해요.
+    fallback.pop("previews_by_language", None)
     parsed_url = urlparse(url)
 
     if parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
         return fallback
 
     try:
-        fetched_url, parser = fetch_link_preview_html(url)
+        fetched_url, parser = fetch_link_preview_html(url, language)
     except (HTTPError, URLError, TimeoutError, OSError, ValueError) as error:
         logger.warning(
             "Link preview fetch failed for %s: %s: %s",
@@ -790,6 +801,8 @@ def build_metadata(
 
 def build_reply_reference(
     message: Optional[Message],
+    attachments: list[tuple[MessageAttachment, MediaAsset]],
+    call_event: Optional[MessageCallEvent],
 ) -> Optional[MessageReplyReferenceRead]:
     if message is None:
         return None
@@ -798,6 +811,9 @@ def build_reply_reference(
         message_id=message.id,
         sender_id=message.sender_id,
         content=message.body,
+        message_type=message.kind.value,
+        photo_count=len(attachments) if message.kind == MessageKind.PHOTO else 0,
+        call_outcome=call_event.outcome.value if call_event is not None else None,
     )
 
 
@@ -839,13 +855,15 @@ async def build_message_reads(
         )
         reply_messages = {message.id: message for message in reply_result}
 
+    # 답장 원문이 현재 페이지 밖에 있어도 종류·개수는 같은 일괄 조회로 가져와요.
+    related_message_ids = list(set(message_ids) | reply_ids)
     attachment_rows = await session.execute(
         select(MessageAttachment, MediaAsset)
         .join(
             MediaAsset,
             MessageAttachment.media_asset_id == MediaAsset.id,
         )
-        .where(MessageAttachment.message_id.in_(message_ids))
+        .where(MessageAttachment.message_id.in_(related_message_ids))
         .order_by(
             MessageAttachment.message_id,
             MessageAttachment.position,
@@ -864,7 +882,7 @@ async def build_message_reads(
 
     call_result = await session.scalars(
         select(MessageCallEvent).where(
-            MessageCallEvent.message_id.in_(message_ids)
+            MessageCallEvent.message_id.in_(related_message_ids)
         )
     )
     call_events = {
@@ -917,7 +935,6 @@ async def build_message_reads(
             message_has_translatable_text(message)
             and should_translate_text(
                 message.body,
-                source_language=source_language,
                 target_language=recipient.preferred_language,
             )
         )
@@ -926,7 +943,8 @@ async def build_message_reads(
             translation_status = (
                 translation.status.value
                 if translation is not None
-                else TranslationStatus.PENDING.value
+                # 이전에 번역을 건너뛴 기록은 진행 중으로 표시하지 않아요.
+                else "none"
             )
             translated_content = (
                 translation.translated_body
@@ -963,7 +981,9 @@ async def build_message_reads(
                 ),
                 reply_to_message_id=message.reply_to_message_id,
                 reply_to=build_reply_reference(
-                    reply_messages.get(message.reply_to_message_id)
+                    reply_messages.get(message.reply_to_message_id),
+                    attachments_by_message.get(message.reply_to_message_id, []),
+                    call_events.get(message.reply_to_message_id),
                 ),
                 created_at=message.created_at,
                 edited_at=message.edited_at,
@@ -1037,7 +1057,6 @@ async def execute_message_translation(
 
     should_run_translation = should_translate_text(
         message.body,
-        source_language=source_language,
         target_language=recipient.preferred_language,
     )
 
@@ -1223,9 +1242,7 @@ async def transcribe_and_publish_message(message_id: UUID) -> None:
             transcription_status = "failed"
         else:
             transcription_status = "completed"
-            message.source_language = (
-                infer_text_language(message.body) or message.source_language
-            )
+            # 발신 시 저장한 설정 언어를 유지하고, 실제 언어 판별은 번역 모델에 맡겨요.
 
         # 전사 원문도 메시지 본문에 저장해 기존 번역·검색·캐시 흐름을 공유해요.
         message.metadata_json = {
@@ -1420,6 +1437,7 @@ async def create_message(
             build_link_preview_metadata,
             content,
             message_data.metadata,
+            language=current_user.preferred_language,
         )
 
     direct_conversation = await get_direct_conversation(
@@ -1493,7 +1511,6 @@ async def create_message(
         message.kind == MessageKind.TEXT
         and should_translate_text(
             content,
-            source_language=current_user.preferred_language,
             target_language=recipient.preferred_language,
         )
     )
@@ -1794,6 +1811,70 @@ def _visible_conversation_messages(
         Message.deleted_at.is_(None),
         Message.id.not_in(hidden_message_ids),
     )
+
+
+@router.get("/{message_id}/link-preview")
+async def get_message_link_preview(
+    message_id: UUID,
+    current_user: CurrentUserDependency,
+    session: SessionDependency,
+) -> dict[str, Any]:
+    message = await session.get(Message, message_id)
+    if (
+        message is None
+        or message.deleted_at is not None
+        or message.kind != MessageKind.LINK
+    ):
+        raise HTTPException(status_code=404, detail="Link message not found")
+    direct = await session.get(DirectConversation, message.conversation_id)
+    if direct is None or current_user.id not in direct_participant_ids(direct):
+        raise HTTPException(
+            status_code=403,
+            detail="You are not a participant in this conversation",
+        )
+    visible = await session.scalar(
+        _visible_conversation_messages(
+            conversation_id=message.conversation_id,
+            user_id=current_user.id,
+        ).where(Message.id == message_id)
+    )
+    if visible is None:
+        raise HTTPException(status_code=404, detail="Link message not found")
+
+    language = current_user.preferred_language
+    metadata = message.metadata_json
+    cached = metadata.get("previews_by_language", {}).get(language)
+    if cached is not None:
+        return cached
+    if metadata.get("language") == language:
+        return {
+            key: value for key, value in metadata.items()
+            if key != "previews_by_language"
+        }
+
+    preview = await asyncio.to_thread(
+        build_link_preview_metadata, message.body, None, language=language,
+    )
+    assert preview is not None
+    # 두 사람이 동시에 열어도 각 언어를 보존하고, 수집 중 수정된 메시지는 덮어쓰지 않아요.
+    await session.execute(
+        update(Message)
+        .where(
+            Message.id == message_id,
+            Message.version == message.version,
+            Message.deleted_at.is_(None),
+        )
+        .values(metadata_json=func.jsonb_set(
+            Message.metadata_json,
+            cast(["previews_by_language"], ARRAY(Text)),
+            func.coalesce(
+                Message.metadata_json["previews_by_language"], cast({}, JSONB),
+            ).op("||")(cast({language: preview}, JSONB)),
+        ))
+        .execution_options(synchronize_session=False)
+    )
+    await session.commit()
+    return preview
 
 
 async def _load_message_page(
@@ -2338,7 +2419,12 @@ async def update_message(
         "link" if first_url_in_text(content) is not None else "text"
     )
     updated_metadata = (
-        await asyncio.to_thread(build_link_preview_metadata, content, None)
+        await asyncio.to_thread(
+            build_link_preview_metadata,
+            content,
+            message_data.metadata,
+            language=current_user.preferred_language,
+        )
         if updated_message_type == "link"
         else None
     )
@@ -2388,7 +2474,6 @@ async def update_message(
         )
         should_translate_updated_message = should_translate_text(
             content,
-            source_language=source_language,
             target_language=recipient.preferred_language,
         )
         translation = await session.scalar(

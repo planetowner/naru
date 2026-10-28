@@ -70,6 +70,7 @@ Future<ChatRealtimeService> _pumpConversationHome(
   Future<http.Response> Function(http.Request request)? messageResponder,
   ValueNotifier<bool>? initialLoadComplete,
   bool settle = true,
+  AppUser currentUser = _currentUser,
 }) async {
   final MockClient client = MockClient((http.Request request) async {
     if (request.method == 'GET' && request.url.path == '/users') {
@@ -85,10 +86,7 @@ Future<ChatRealtimeService> _pumpConversationHome(
     }
 
     if (request.method == 'GET' &&
-        (request.url.path == '/messages/conversation/${_otherUser.id}' ||
-            request.url.path.startsWith(
-              '/messages/conversation/${_otherUser.id}/around/',
-            ))) {
+        request.url.path.startsWith('/messages/conversation/')) {
       if (conversationResponder != null) {
         return conversationResponder(request);
       }
@@ -132,16 +130,17 @@ Future<ChatRealtimeService> _pumpConversationHome(
     client: client,
     baseUri: baseUri,
     accessToken: 'test-token',
+    preferredLanguage: currentUser.preferredLanguage,
   );
   final AuthSession session = AuthSession(
     accessToken: 'test-token',
     refreshToken: 'test-refresh-token',
     tokenType: 'bearer',
-    user: _currentUser,
+    user: currentUser,
   );
   final ChatMessageCache messageCache = ChatMessageCache(
     chatApi: chatApi,
-    currentUserId: _currentUser.id,
+    currentUserId: currentUser.id,
     persistenceEnabled: false,
   );
   final ChatRealtimeService realtimeService = ChatRealtimeService(
@@ -217,6 +216,59 @@ Future<void> _moveRouteGestureSlowly(
 }
 
 void main() {
+  testWidgets('all accounts use saved names and the server list order', (
+    tester,
+  ) async {
+    const currentUser = AppUser(
+      id: 'current-user',
+      username: 'liababo',
+      displayName: 'Current Name',
+      preferredLanguage: 'en',
+    );
+    final service = await _pumpConversationHome(
+      tester,
+      currentUser: currentUser,
+      usersResponder: (_) async => http.Response(
+        jsonEncode([
+          {
+            'id': 'family-user',
+            'username': 'yunjung5437',
+            'display_name': 'Family Name',
+            'viewer_display_name': 'Old Family Alias',
+            'preferred_language': 'ko',
+          },
+          {
+            'id': _otherUser.id,
+            'username': 'junebabo',
+            'display_name': 'Public Name',
+            'viewer_display_name': 'Old Partner Alias',
+            'preferred_language': 'en',
+          },
+        ]),
+        200,
+        headers: {'content-type': 'application/json'},
+      ),
+    );
+    addTearDown(service.dispose);
+    expect(
+      tester.getTopLeft(find.text('Family Name')).dy,
+      lessThan(tester.getTopLeft(find.text('Public Name')).dy),
+    );
+    expect(find.text('Old Family Alias'), findsNothing);
+    expect(find.text('Old Partner Alias'), findsNothing);
+    expect(find.text('@junebabo'), findsOneWidget);
+    expect(find.text('@yunjung5437'), findsOneWidget);
+    await tester.tap(find.text('Public Name'));
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byType(ChatConversationView),
+        matching: find.text('Public Name'),
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets(
     'launch covers a slow initial chat list request until it is ready',
     (WidgetTester tester) async {
@@ -288,7 +340,7 @@ void main() {
     await tester.tap(find.text('Retry'));
     await tester.pumpAndSettle();
     expect(find.byType(AppLaunchScreen), findsNothing);
-    expect(find.text('No chat users yet.'), findsOneWidget);
+    expect(find.text('No friends added yet.'), findsOneWidget);
     expect(requestCount, 2);
   });
 

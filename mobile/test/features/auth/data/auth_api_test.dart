@@ -9,6 +9,7 @@ import 'package:naru/features/auth/data/auth_refresh_exception.dart';
 
 void main() {
   const String username = 'test-user';
+  const String displayName = 'June 🌿';
   const String password = 'test-password';
   const String userId = '11111111-1111-4111-8111-111111111111';
 
@@ -89,7 +90,9 @@ void main() {
       expect(jsonDecode(request.body), {
         'username': username,
         'password': password,
+        'display_name': displayName,
         'password_confirmation': password,
+        'preferred_language': 'es',
       });
       return http.Response(
         jsonEncode({
@@ -99,11 +102,12 @@ void main() {
           'user': {
             'id': userId,
             'username': username,
-            'display_name': username,
-            'preferred_language': 'ko',
+            'display_name': displayName,
+            'preferred_language': 'es',
           },
         }),
         201,
+        headers: {'content-type': 'application/json'},
       );
     });
     final api = AuthApi(
@@ -113,11 +117,14 @@ void main() {
     final session = await api.register(
       username: username,
       password: password,
+      displayName: displayName,
       passwordConfirmation: password,
+      preferredLanguage: 'es',
     );
     expect(session.accessToken, 'registered-token');
     expect(session.refreshToken, 'registered-refresh');
-    expect(session.user.displayName, username);
+    expect(session.user.displayName, displayName);
+    expect(session.user.preferredLanguage, 'es');
   });
 
   for (final entry in {
@@ -138,7 +145,9 @@ void main() {
           () => api.register(
             username: username,
             password: password,
+            displayName: displayName,
             passwordConfirmation: password,
+            preferredLanguage: 'es',
           ),
           throwsA(
             isA<AuthException>().having(
@@ -173,7 +182,9 @@ void main() {
       () => api.register(
         username: 'x' * 51,
         password: password,
+        displayName: displayName,
         passwordConfirmation: password,
+        preferredLanguage: 'es',
       ),
       throwsA(
         isA<AuthException>().having(

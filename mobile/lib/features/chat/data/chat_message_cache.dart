@@ -535,17 +535,16 @@ final class ChatMessageCache {
     return null;
   }
 
-  ChatCachedConversation _segmentSnapshot(
+  Future<ChatCachedConversation> _segmentSnapshot(
     _ChatMessageCacheEntry entry,
     _ChatMessageCacheSegment segment, {
     int startIndex = 0,
     int? endIndex,
-  }) {
+  }) async {
     final int end = endIndex ?? segment.messageIds.length;
     return ChatCachedConversation(
-      messages: _messagesForIds(
-        entry,
-        segment.messageIds.sublist(startIndex, end),
+      messages: await _chatApi.resolveLinkPreviews(
+        _messagesForIds(entry, segment.messageIds.sublist(startIndex, end)),
       ),
       hasMoreOlder: startIndex > 0 || segment.hasMoreOlder,
       hasMoreNewer: end < segment.messageIds.length || segment.hasMoreNewer,

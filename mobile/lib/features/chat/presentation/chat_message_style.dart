@@ -28,10 +28,10 @@ abstract final class ChatMessageStyle {
 
   static const double tailHorizontalOffset = -7;
 
-  // 구분선 위아래 간격은 실제 배치와 크기 측정에서 같은 규격을 사용해요.
-  static const double replyDividerGap = 7;
+  // 답장과 음성 카드의 구분선은 실제 배치와 크기 측정에서 같은 규격을 사용해요.
+  static const double contentDividerGap = 7;
 
-  static const double replyDividerThickness = 1;
+  static const double contentDividerThickness = 1;
 
   static const Duration translationFadeDuration = Duration(milliseconds: 160);
 
@@ -56,7 +56,7 @@ abstract final class ChatMessageStyle {
     );
   }
 
-  static Color replyDividerColor({required bool isOutgoing}) {
+  static Color contentDividerColor({required bool isOutgoing}) {
     return isOutgoing ? AppColors.white.withAlpha(56) : AppColors.grey200;
   }
 

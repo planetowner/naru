@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
 import 'core/config/app_config.dart';
+import 'core/l10n/app_strings.dart';
 import 'core/notifications/notification_service.dart';
 import 'design_system/app_theme.dart';
 import 'design_system/components/app_launch_screen.dart';
@@ -13,6 +14,8 @@ import 'features/auth/data/auth_exception.dart';
 import 'features/auth/data/auth_refresh_exception.dart';
 import 'features/auth/data/auth_session_store.dart';
 import 'features/auth/domain/auth_session.dart';
+import 'features/auth/domain/app_user.dart';
+import 'features/auth/domain/app_language.dart';
 import 'features/auth/presentation/auth_screen.dart';
 import 'features/chat/data/chat_api.dart';
 import 'features/chat/data/chat_realtime_service.dart';
@@ -35,8 +38,7 @@ final class NaruApp extends StatefulWidget {
   }
 }
 
-final class _NaruAppState extends State<NaruApp>
-    with WidgetsBindingObserver {
+final class _NaruAppState extends State<NaruApp> with WidgetsBindingObserver {
   static const Duration _accessTokenRefreshLeadTime = Duration(days: 1);
   static const Duration _accessTokenRefreshRetryDelay = Duration(minutes: 5);
 
@@ -49,6 +51,7 @@ final class _NaruAppState extends State<NaruApp>
   Timer? _accessTokenRefreshTimer;
 
   AuthSession? _session;
+  AppLanguage? _onboardingLanguage;
   ChatApi? _chatApi;
   ChatRealtimeService? _chatRealtimeService;
   bool _isRestoringSession = true;
@@ -174,14 +177,18 @@ final class _NaruAppState extends State<NaruApp>
   Future<void> _authenticate({
     required String username,
     required String password,
+    String? displayName,
     String? passwordConfirmation,
+    String? preferredLanguage,
   }) async {
     final AuthSession session = passwordConfirmation == null
         ? await _authApi.login(username: username, password: password)
         : await _authApi.register(
             username: username,
+            displayName: displayName!,
             password: password,
             passwordConfirmation: passwordConfirmation,
+            preferredLanguage: preferredLanguage!,
           );
 
     // 가입과 로그인은 보안 저장·채팅 연결·알림 등록을 같은 순서로 처리해요.
@@ -204,6 +211,16 @@ final class _NaruAppState extends State<NaruApp>
       _session = session;
     });
 
+    unawaited(_configureNotifications(session));
+  }
+
+  Future<void> _updateProfile(AppUser user) async {
+    final current = _session!;
+    final session = current.withUser(user);
+    await _authSessionStore.save(session);
+    if (!mounted) return;
+    _activateChatSession(session);
+    setState(() => _session = session);
     unawaited(_configureNotifications(session));
   }
 
@@ -309,6 +326,7 @@ final class _NaruAppState extends State<NaruApp>
       client: _httpClient,
       baseUri: widget.appConfig.apiBaseUri,
       accessToken: session.accessToken,
+      preferredLanguage: session.user.preferredLanguage,
     );
     final ChatRealtimeService realtimeService = ChatRealtimeService(
       chatApi: chatApi,
@@ -366,7 +384,11 @@ final class _NaruAppState extends State<NaruApp>
     final AuthSession? session = _session;
 
     if (session == null) {
-      return AuthScreen(onSubmit: _authenticate);
+      return AuthScreen(
+        onSubmit: _authenticate,
+        onLanguageChanged: (language) =>
+            setState(() => _onboardingLanguage = language),
+      );
     }
 
     final ChatApi? chatApi = _chatApi;
@@ -377,12 +399,14 @@ final class _NaruAppState extends State<NaruApp>
     }
 
     return ChatConversationHomeScreen(
-      key: ValueKey<String>(session.accessToken),
+      // 언어가 바뀌면 메모리 캐시도 새 언어의 API로 다시 읽어요.
+      key: ValueKey((session.accessToken, session.user.preferredLanguage)),
       chatApi: chatApi,
       realtimeService: realtimeService,
       session: session,
       controller: _chatController,
       onInitialLoadComplete: _handleInitialChatListLoaded,
+      onProfileUpdated: _updateProfile,
     );
   }
 
@@ -402,6 +426,12 @@ final class _NaruAppState extends State<NaruApp>
       title: 'naru',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
+      locale: _session != null
+          ? AppLanguage.fromCode(_session!.user.preferredLanguage).locale
+          : _onboardingLanguage?.locale,
+      localeListResolutionCallback: AppLanguage.resolveLocales,
+      supportedLocales: AppLocalizations.supportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
       // 시작 화면과 앱 화면 모두 흰 배경에 맞는 상태 막대 색을 사용해요.
       builder: (BuildContext context, Widget? child) {
         return AppLaunchGate(

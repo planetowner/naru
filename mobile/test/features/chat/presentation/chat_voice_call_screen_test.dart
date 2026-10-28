@@ -78,7 +78,7 @@ void main() {
         profileRect ??= rect;
         expect(rect, profileRect);
         expect(rect.size, const Size(112, 112));
-        final title = tester.widget<Text>(find.text('Voice call'));
+        final title = tester.widget<Text>(find.text('Voice Call'));
         expect(title.style!.fontSize, 18);
         expect(title.style!.height, 1.5);
         expect(title.style!.fontWeight, FontWeight.w700);
@@ -133,6 +133,8 @@ void main() {
     await tester.pumpWidget(
       _shell(
         const ChatConversationView(
+          currentUserName: 'Me',
+
           initialMessages: [],
           otherParticipantName: 'Lia',
         ),
@@ -146,7 +148,7 @@ void main() {
     );
     await tester.tap(find.byTooltip('Search'));
     await tester.pumpAndSettle();
-    final search = tester.widget<Text>(find.text('Search chat'));
+    final search = tester.widget<Text>(find.text('Search'));
     expect(search.style, participant.style);
     expect(tester.getSize(find.byType(AppNavigationBar)), const Size(390, 56));
     expect(tester.getSize(find.byTooltip('Close search')), const Size(44, 44));
@@ -154,7 +156,14 @@ void main() {
     await tester.pumpAndSettle();
     await _openCall(tester);
     expect(
-      tester.widget<Text>(find.text('Voice call')).style,
+      tester
+          .widget<Text>(
+            find.descendant(
+              of: find.byType(AppNavigationBar),
+              matching: find.text('Voice Call'),
+            ),
+          )
+          .style,
       participant.style,
     );
     await tester.tap(find.byTooltip('End call'));
@@ -172,6 +181,8 @@ void main() {
       await tester.pumpWidget(
         _shell(
           const ChatConversationView(
+            currentUserName: 'Me',
+
             initialMessages: [],
             otherParticipantName: 'Lia',
           ),

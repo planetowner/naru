@@ -44,10 +44,10 @@ void main() {
     );
   });
 
-  test('shows the weekday for two to six days', () {
+  test('shows elapsed days for two to six days', () {
     expect(
       formatReadReceipt(readAt: DateTime(2026, 6, 26, 12), now: now),
-      'Seen Friday',
+      'Seen 4 days ago',
     );
   });
 
@@ -61,13 +61,13 @@ void main() {
     );
   });
 
-  test('shows only Seen for older receipts', () {
+  test('shows elapsed weeks for older receipts', () {
     expect(
       formatReadReceipt(
         readAt: now.subtract(const Duration(days: 20)),
         now: now,
       ),
-      'Seen',
+      'Seen 2 weeks ago',
     );
   });
 }

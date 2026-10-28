@@ -22,6 +22,7 @@ void main() {
       }),
       baseUri: Uri.parse('https://api.example.com'),
       accessToken: 'test-token',
+      preferredLanguage: 'en',
     );
   });
 

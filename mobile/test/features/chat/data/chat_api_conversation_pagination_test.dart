@@ -27,6 +27,7 @@ void main() {
       client: client,
       baseUri: Uri.parse('https://api.example.com'),
       accessToken: 'test-token',
+      preferredLanguage: 'en',
     );
 
     final ChatConversationPage page = await chatApi.listConversation(
@@ -53,6 +54,7 @@ void main() {
       client: client,
       baseUri: Uri.parse('https://api.example.com'),
       accessToken: 'test-token',
+      preferredLanguage: 'en',
     );
 
     final ChatConversationPage page = await chatApi.listConversation(
@@ -84,6 +86,7 @@ void main() {
       client: client,
       baseUri: Uri.parse('https://api.example.com'),
       accessToken: 'test-token',
+      preferredLanguage: 'en',
     );
 
     final ChatConversationPage page = await chatApi.listConversation(
@@ -117,6 +120,7 @@ void main() {
       client: client,
       baseUri: Uri.parse('https://api.example.com'),
       accessToken: 'test-token',
+      preferredLanguage: 'en',
     );
 
     final ChatConversationContext context = await chatApi
@@ -150,6 +154,7 @@ void main() {
           client: MockClient((_) async => http.Response('{}', statusCode)),
           baseUri: Uri.parse('https://api.example.com'),
           accessToken: 'test-token',
+          preferredLanguage: 'en',
         );
 
         await expectLater(
@@ -183,6 +188,7 @@ void main() {
         ),
         baseUri: Uri.parse('https://api.example.com'),
         accessToken: 'test-token',
+        preferredLanguage: 'en',
       );
 
       await expectLater(
@@ -202,6 +208,7 @@ void main() {
         client: MockClient((_) async => throw http.ClientException('offline')),
         baseUri: Uri.parse('https://api.example.com'),
         accessToken: 'test-token',
+        preferredLanguage: 'en',
       );
 
       await expectLater(

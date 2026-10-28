@@ -60,8 +60,9 @@ async def register(
         insert(User)
         .values(
             username=registration.username,
-            display_name=registration.username,
+            display_name=registration.display_name,
             password_hash=hash_password(registration.password),
+            preferred_language=registration.preferred_language,
         )
         .on_conflict_do_nothing(index_elements=[User.username])
         .returning(User)

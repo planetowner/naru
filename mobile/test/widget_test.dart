@@ -136,7 +136,7 @@ void main() {
         .dx;
 
     final double secondIncomingLeft = tester
-        .getTopLeft(find.text('我等你继续说呢'))
+        .getTopLeft(find.text('네가 계속 말해주길 기다리고 있어.'))
         .dx;
 
     final double firstOutgoingRight = tester

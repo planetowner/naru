@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'localized_test_app.dart';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -105,15 +106,18 @@ final class TestChatPhotoLibrary implements ChatPhotoLibrary {
 }
 
 final class NaruPreviewApp extends StatelessWidget {
-  const NaruPreviewApp({super.key});
+  const NaruPreviewApp({this.language = 'en', super.key});
+  final String language;
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'naru',
-      debugShowCheckedModeBanner: false,
+    return LocalizedTestApp(
+      language: language,
       theme: AppTheme.light,
       home: ChatConversationView(
+        currentUserName: 'Me',
+        otherParticipantName: 'Lia',
+
         photoLibrary: const TestChatPhotoLibrary(),
         initialMessages: buildPreviewMessages(),
         initialClock: DateTime(2026, 7, 1, 12, 51),

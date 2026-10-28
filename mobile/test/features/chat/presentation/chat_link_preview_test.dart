@@ -12,6 +12,9 @@ Widget _buildLinkPreviewScreen({
 }) {
   return MaterialApp(
     home: ChatConversationView(
+      currentUserName: 'Me',
+      otherParticipantName: 'Lia',
+
       onOpenLink: onOpenLink,
       initialMessages: <ChatMessage>[
         ChatMessage(

@@ -1,11 +1,11 @@
 # naru
 
-naru is a private two-person chat app with a FastAPI backend and a
+naru is a private messaging app with a FastAPI backend and a
 Flutter client.
 
-It supports real-time direct messaging between Korean- and Simplified
-Chinese-speaking users, with context-aware text translation powered by
-OpenAI.
+It supports real-time direct messaging and context-aware translation into each
+recipient’s selected language: Korean, Japanese, Simplified Chinese, English,
+Spanish, French, German, or Italian. Translation is powered by OpenAI.
 
 ## Current Features
 
@@ -22,11 +22,10 @@ OpenAI.
 - Conversation search
 - Text message editing
 - Message deletion within the 5-minute unsend window
-- Korean to Simplified Chinese text translation
-- Simplified Chinese to Korean text translation
+- Text translation into the recipient’s language across all eight supported languages
 - Conversation-context-aware translation
 - Original text preserved alongside translated text
-- Automatic voice memo transcription, followed by the same Korean/Chinese translation
+- Automatic voice memo transcription, followed by translation into the recipient’s language
 - Real-time message, read receipt, edit, delete, and translation updates
 - Flutter login and chat client
 - iOS APNs message notifications with profile images, grouping, media previews,
@@ -130,11 +129,15 @@ configured transcription model through its existing OpenAI API key.
 
 ## User Administration
 
-Friends can sign up in the app with a username, password, and password
-confirmation. Both the app and `POST /auth/register` check that the passwords
+Friends can sign up in the app with a username, display name, password, and
+password confirmation, then choose their language. Both the app and `POST /auth/register` check that the passwords
 match. Usernames are trimmed, must contain 1–50 characters, and are unique
 without regard to case. Passwords must be nonempty; their whitespace is preserved.
-The display name initially uses the username. No email or nickname is required.
+Display names are required, trimmed, and contain 1–100 Unicode characters.
+Registration and display-name changes share the same validation. The saved
+`display_name` is used consistently in chats and message/call notifications;
+usernames identify accounts for login and friend lookup, and appear under display
+names as `@username` in the shared profile row. No email is required.
 
 Registration returns the same access/refresh-token session as `POST /auth/login`,
 so a new account enters the chat immediately. Duplicate usernames return `409`,
@@ -155,6 +158,19 @@ To change a user's password:
 ```bash
 python -m scripts.set_user_password USERNAME NEW_PASSWORD
 ```
+
+The chat list (`GET /users`) includes only friends added by the current user.
+`GET /users/search?username=...` finds an exact, case-insensitive username;
+`POST /users/friends/{friend_id}` adds a one-way, idempotent relationship.
+Existing accounts are not automatically added as friends. The `user_friends`
+table is created by the existing startup schema initialization on deployment.
+
+Settings saves display name, preferred language, and an optional owned photo
+asset through `PATCH /users/me`. Photos use the existing media upload/complete
+flow. The saved profile URL resolves the currently selected photo to a fresh
+signed storage URL, including for iOS notification images. Previous profile
+photo URLs stop resolving after replacement. Saving settings also updates the
+stored app session and locale; notifications use the same saved account fields.
 
 ## Flutter Client Configuration
 
@@ -178,6 +194,34 @@ flutter build ios --dart-define=API_BASE_URL=https://YOUR_BACKEND_DOMAIN
 
 See [docs/ios-notifications.md](docs/ios-notifications.md) for Apple Developer
 capabilities, APNs configuration, payload behavior, and real-device checks.
+
+## Localization
+
+UI text and push notification templates share the eight `app/locales/app_*.arb`
+files. Edit these source files, then run `flutter gen-l10n` from `mobile/`.
+Flutter generates the Dart accessors in `mobile/lib/core/l10n/generated/`;
+these generated files are excluded from Git. The server reads the same ARB files.
+
+Before onboarding selection, the app follows the device language (English for
+unsupported languages). Selection updates the UI immediately; after login, the
+account language takes priority. Names, counts, and dates use placeholders and
+shared formatters. Message and media timestamps share locale-aware formatting
+and the device’s 24-hour setting. Read receipts continue to show elapsed weeks
+after 30 days. The server model and manual user-creation script default to
+English when no language is supplied; normal signup requires a selected language.
+The startup schema compatibility step updates the database default without
+changing existing users’ language selections.
+
+iOS permission descriptions live in `mobile/ios/Runner/InfoPlist.xcstrings`,
+because iOS reads native bundle resources rather than Flutter’s ARB catalog.
+The catalog covers the same eight languages. These system dialogs follow the
+iOS app language setting, independently of the onboarding language selection.
+
+Link previews request the viewing account's language through `Accept-Language`.
+The server stores language variants in the existing message metadata, and the app
+uses the same resolver for REST, live messages, and cached history. Device fetching
+for sites that block the server also uses the account language. This requests a
+localized page when the site supports it; it does not translate the page itself.
 
 ## Tests and Checks
 
@@ -307,5 +351,5 @@ app's Sign up screen.
 ## Project Status
 
 The backend authentication, messaging, read receipts, WebSocket delivery,
-bidirectional Korean-Chinese text translation, and Flutter client login/chat
+translation into the recipient’s selected language, and Flutter client login/chat
 flows are implemented.

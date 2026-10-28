@@ -49,6 +49,9 @@ void main() {
     await openSearch(
       tester,
       ChatConversationView(
+        currentUserName: 'Me',
+        otherParticipantName: 'Lia',
+
         initialMessages: [
           fileMessage('a', 'Search notes.pdf'),
           fileMessage('b', 'budget.xlsx'),
@@ -90,6 +93,9 @@ void main() {
     await openSearch(
       tester,
       ChatConversationView(
+        currentUserName: 'Me',
+        otherParticipantName: 'Lia',
+
         initialMessages: [fileMessage('latest', 'recent.pdf')],
         onLoadSearchPage: ({beforeMessageId}) async {
           calls.add(beforeMessageId);
@@ -148,6 +154,9 @@ void main() {
       await openSearch(
         tester,
         ChatConversationView(
+          currentUserName: 'Me',
+          otherParticipantName: 'Lia',
+
           initialMessages: const [],
           onLoadSearchPage: ({beforeMessageId}) async => ChatConversationPage(
             hasMore: false,
@@ -206,6 +215,9 @@ void main() {
     await openSearch(
       tester,
       ChatConversationView(
+        currentUserName: 'Me',
+        otherParticipantName: 'Lia',
+
         initialMessages: const [],
         onLoadSearchPage: ({beforeMessageId}) async => ChatConversationPage(
           hasMore: false,
@@ -256,6 +268,9 @@ void main() {
     await openSearch(
       tester,
       ChatConversationView(
+        currentUserName: 'Me',
+        otherParticipantName: 'Lia',
+
         initialMessages: const [],
         onLoadSearchPage: ({beforeMessageId}) => pending.future,
       ),
@@ -279,6 +294,9 @@ void main() {
       await openSearch(
         tester,
         ChatConversationView(
+          currentUserName: 'Me',
+          otherParticipantName: 'Lia',
+
           initialMessages: [
             ChatMessage(
               id: 'link',
@@ -308,6 +326,9 @@ void main() {
     await openSearch(
       tester,
       ChatConversationView(
+        currentUserName: 'Me',
+        otherParticipantName: 'Lia',
+
         initialMessages: const [],
         onLoadSearchPage: ({beforeMessageId}) async => ChatConversationPage(
           hasMore: false,

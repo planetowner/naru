@@ -92,6 +92,9 @@ Widget _buildScreen(_QuickPhotoLibrary photoLibrary) {
   return MaterialApp(
     theme: AppTheme.light,
     home: ChatConversationView(
+      currentUserName: 'Me',
+      otherParticipantName: 'Lia',
+
       photoLibrary: photoLibrary,
       initialMessages: const <ChatMessage>[],
     ),

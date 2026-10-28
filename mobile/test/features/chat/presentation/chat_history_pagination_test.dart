@@ -129,6 +129,9 @@ final class _PaginationHarnessState extends State<_PaginationHarness> {
   Widget build(BuildContext context) {
     return MaterialApp(
       home: ChatConversationView(
+        currentUserName: 'Me',
+        otherParticipantName: 'Lia',
+
         initialMessages: messages,
         hasMoreMessages: hasMoreMessages,
         loadingOlderMessages: loadingOlderMessages,
@@ -188,6 +191,9 @@ final class _NewerPaginationHarnessState
   Widget build(BuildContext context) {
     return MaterialApp(
       home: ChatConversationView(
+        currentUserName: 'Me',
+        otherParticipantName: 'Lia',
+
         initialMessages: messages,
         hasMoreNewerMessages: hasMoreNewerMessages,
         loadingNewerMessages: loadingNewerMessages,
@@ -242,6 +248,9 @@ final class _OlderPageAvalancheHarnessState
   Widget build(BuildContext context) {
     return MaterialApp(
       home: ChatConversationView(
+        currentUserName: 'Me',
+        otherParticipantName: 'Lia',
+
         initialMessages: messages,
         hasMoreMessages: true,
         loadingOlderMessages: loadingOlderMessages,
@@ -261,6 +270,9 @@ void main() {
     Widget buildConversation(Key key) {
       return MaterialApp(
         home: ChatConversationView(
+          currentUserName: 'Me',
+          otherParticipantName: 'Lia',
+
           key: key,
           initialMessages: messages,
           initialClock: DateTime(2026, 7, 2),
@@ -494,6 +506,9 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: ChatConversationView(
+            currentUserName: 'Me',
+            otherParticipantName: 'Lia',
+
             initialMessages: _messages(0, 200),
             initialClock: DateTime(2026, 7, 1, 12),
           ),
@@ -570,6 +585,9 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: ChatConversationView(
+            currentUserName: 'Me',
+            otherParticipantName: 'Lia',
+
             initialMessages: _messages(0, 200),
             initialClock: DateTime(2026, 7, 1, 12),
           ),
@@ -604,6 +622,9 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: ChatConversationView(
+            currentUserName: 'Me',
+            otherParticipantName: 'Lia',
+
             initialMessages: _messages(0, 200),
             initialClock: DateTime(2026, 7, 1, 12),
           ),

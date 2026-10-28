@@ -9,6 +9,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  intl: ^0.20.2
   # 앱 아이콘과 별개로 Flutter 기본 iOS UI가 빌드 중 참조하는 글꼴이에요.
   cupertino_icons: ^1.0.8
   file_picker: ^8.1.0
@@ -31,6 +34,7 @@ dev_dependencies:
   video_player_platform_interface: ^6.9.0
 
 flutter:
+  generate: true
   uses-material-design: true
   assets:
     # 네이티브 시작 화면과 같은 원본에서 만든 해상도별 로고를 사용해요.

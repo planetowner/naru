@@ -42,6 +42,9 @@ void main() {
           await tester.pumpWidget(
             MaterialApp(
               home: ChatConversationView(
+                currentUserName: 'Me',
+                otherParticipantName: 'Lia',
+
                 initialMessages: [
                   original,
                   ChatMessage(

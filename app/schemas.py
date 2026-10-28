@@ -1,18 +1,16 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal, Optional
+from typing import Annotated, Any, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
 
-LanguageCode = Literal[
-    "ko",
-    "zh-CN",
-]
+from app.languages import LanguageCode
 
 TranslationStatus = Literal[
+    "none",
     "pending",
     "completed",
     "failed",
@@ -43,17 +41,28 @@ class UserRead(BaseModel):
 
     id: UUID
     username: str
+    # 모든 상대에게 계정에 저장된 표시 이름 하나만 보여줘요.
     display_name: str
-    viewer_display_name: Optional[str] = None
     profile_image_url: Optional[str] = None
     preferred_language: LanguageCode
 
 
+# 가입과 이름 변경은 같은 공백·길이 규칙으로 저장해요.
+DisplayName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
+
+
 class DisplayNameUpdate(BaseModel):
-    display_name: str = Field(
-        min_length=1,
-        max_length=100,
-    )
+    display_name: DisplayName
+
+
+class ProfileUpdate(DisplayNameUpdate):
+    preferred_language: LanguageCode
+    photo_asset_id: Optional[UUID] = None
+
+
+class FriendSearchRead(BaseModel):
+    user: UserRead
+    is_friend: bool
 
 
 class PasswordChangeRequest(BaseModel):
@@ -85,7 +94,9 @@ class LoginRequest(BaseModel):
 
 
 class RegisterRequest(LoginRequest):
+    display_name: DisplayName
     password_confirmation: str = Field(min_length=1)
+    preferred_language: LanguageCode
 
 
 class RefreshTokenRequest(BaseModel):
@@ -222,6 +233,7 @@ class MessageUpdate(BaseModel):
         min_length=1,
         max_length=10000,
     )
+    metadata: Optional[dict[str, Any]] = None
 
 
 class CallOutcomeUpdate(BaseModel):
@@ -233,6 +245,9 @@ class MessageReplyReferenceRead(BaseModel):
     message_id: UUID
     sender_id: UUID
     content: str
+    message_type: MessageType
+    photo_count: int = 0
+    call_outcome: Optional[str] = None
 
 
 class MessageRead(BaseModel):

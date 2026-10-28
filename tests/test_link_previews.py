@@ -2,7 +2,12 @@ import io
 import os
 import unittest
 from email.message import Message
-from unittest.mock import patch
+from unittest.mock import AsyncMock, Mock, patch
+from types import SimpleNamespace
+from uuid import uuid4
+
+from fastapi import BackgroundTasks, HTTPException
+from sqlalchemy.dialects import postgresql
 from urllib.error import HTTPError
 from urllib.request import Request
 
@@ -15,6 +20,9 @@ os.environ.setdefault("OPENAI_API_KEY", "test-openai-api-key")
 os.environ.setdefault("JWT_SECRET", "test-jwt-secret")
 
 from app.routes import messages as message_routes
+from app.languages import SUPPORTED_LANGUAGE_NAMES
+from app.models import DirectConversation, Message as ChatMessage, MessageKind, User
+from app.schemas import MessageCreate, MessageUpdate
 
 
 class FakeHTTPResponse:
@@ -84,7 +92,7 @@ class LinkPreviewMetadataTests(unittest.TestCase):
             self.assertEqual(headers["accept"], "*/*")
             self.assertEqual(
                 headers["accept-language"],
-                "ko-KR,ko;q=0.8,en-US;q=0.6,en;q=0.4",
+                "ko",
             )
             self.assertEqual(
                 timeout,
@@ -97,7 +105,7 @@ class LinkPreviewMetadataTests(unittest.TestCase):
             "urlopen",
             side_effect=fake_urlopen,
         ):
-            preview = message_routes.build_link_preview_metadata(url, None)
+            preview = message_routes.build_link_preview_metadata(url, None, language="ko")
 
         self.assertIsNotNone(preview)
         assert preview is not None
@@ -147,6 +155,7 @@ class LinkPreviewMetadataTests(unittest.TestCase):
             preview = message_routes.build_link_preview_metadata(
                 requested_url,
                 None,
+                language="ko",
             )
 
         self.assertIsNotNone(preview)
@@ -178,7 +187,7 @@ class LinkPreviewMetadataTests(unittest.TestCase):
             "urlopen",
             return_value=response,
         ):
-            preview = message_routes.build_link_preview_metadata(url, None)
+            preview = message_routes.build_link_preview_metadata(url, None, language="ko")
 
         self.assertIsNotNone(preview)
         assert preview is not None
@@ -197,7 +206,7 @@ class LinkPreviewMetadataTests(unittest.TestCase):
             patch.object(message_routes, "urlopen", side_effect=error),
             self.assertLogs(message_routes.logger, level="WARNING") as logs,
         ):
-            preview = message_routes.build_link_preview_metadata(url, None)
+            preview = message_routes.build_link_preview_metadata(url, None, language="ko")
 
         self.assertIsNotNone(preview)
         assert preview is not None
@@ -210,6 +219,7 @@ class LinkPreviewMetadataTests(unittest.TestCase):
         url = "https://m.fmkorea.com/10166678809"
         image_url = "https://image.fmkorea.com/files/preview.jpg"
         metadata = {
+            "language": "ko",
             "url": url,
             "canonical_url": "https://www.fmkorea.com/10166678809",
             "domain": "m.fmkorea.com",
@@ -224,7 +234,7 @@ class LinkPreviewMetadataTests(unittest.TestCase):
             patch.object(message_routes, "urlopen", side_effect=error),
             patch.object(message_routes.logger, "warning"),
         ):
-            preview = message_routes.build_link_preview_metadata(url, metadata)
+            preview = message_routes.build_link_preview_metadata(url, metadata, language="ko")
 
         self.assertIsNotNone(preview)
         assert preview is not None
@@ -233,6 +243,143 @@ class LinkPreviewMetadataTests(unittest.TestCase):
         self.assertEqual(preview["description"], metadata["description"])
         self.assertEqual(preview["site_name"], metadata["site_name"])
         self.assertEqual(preview["image_url"], image_url)
+
+
+    def test_all_supported_languages_are_requested_and_tagged(self) -> None:
+        url = "https://example.com/article"
+        for language in SUPPORTED_LANGUAGE_NAMES:
+            with self.subTest(language=language):
+                response = FakeHTTPResponse(
+                    f'<head><title>Title {language}</title></head>'.encode(), url=url,
+                )
+                with patch.object(message_routes, "urlopen", return_value=response) as fetch:
+                    preview = message_routes.build_link_preview_metadata(url, None, language=language)
+                headers = dict((key.lower(), value) for key, value in fetch.call_args.args[0].header_items())
+                self.assertEqual(headers["accept-language"], language)
+                self.assertEqual(preview["language"], language)
+                self.assertEqual(preview["title"], f"Title {language}")
+
+    def test_failure_does_not_reuse_a_different_or_unknown_language(self) -> None:
+        url = "https://example.com/article"
+        for old_language in (None, "ko"):
+            metadata = {"title": "한국어 제목", "description": "한국어 설명", "language": old_language}
+            with patch.object(message_routes, "urlopen", side_effect=OSError("offline")), \
+                    patch.object(message_routes.logger, "warning"):
+                preview = message_routes.build_link_preview_metadata(url, metadata, language="es")
+            self.assertEqual(preview["language"], "es")
+            self.assertEqual(preview["url"], url)
+            self.assertNotIn("title", preview)
+            self.assertNotIn("description", preview)
+
+    def test_client_metadata_cannot_supply_other_viewers_cached_cards(self) -> None:
+        metadata = {"language": "ko", "title": "제목", "previews_by_language": {"es": {"title": "wrong"}}}
+        with patch.object(message_routes, "urlopen", side_effect=OSError("offline")), \
+                patch.object(message_routes.logger, "warning"):
+            result = message_routes.build_link_preview_metadata("https://example.com", metadata, language="ko")
+        self.assertNotIn("previews_by_language", result)
+        self.assertEqual(result["title"], "제목")
+
+
+class ViewerLinkPreviewTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.sender_id, self.viewer_id = uuid4(), uuid4()
+        self.direct = DirectConversation(conversation_id=uuid4(), user_one_id=self.sender_id, user_two_id=self.viewer_id)
+        self.message = ChatMessage(id=uuid4(), conversation_id=self.direct.conversation_id,
+                                   sender_id=self.sender_id, kind=MessageKind.LINK,
+                                   body="https://example.com/article", version=3, deleted_at=None,
+                                   metadata_json={"url": "https://example.com/article", "language": "ko", "title": "한국어 제목"})
+        self.viewer = SimpleNamespace(id=self.viewer_id, preferred_language="es")
+        self.session = SimpleNamespace(
+            get=AsyncMock(side_effect=lambda model, _: self.message if model is ChatMessage else self.direct),
+            scalar=AsyncMock(return_value=self.message), execute=AsyncMock(), commit=AsyncMock(),
+        )
+
+    async def read_preview(self):
+        return await message_routes.get_message_link_preview(self.message.id, self.viewer, self.session)
+
+    async def test_each_viewers_language_is_fetched_and_cached_separately(self):
+        for language in SUPPORTED_LANGUAGE_NAMES:
+            with self.subTest(language=language):
+                self.viewer.preferred_language = language
+                response = FakeHTTPResponse(f'<head><title>Title {language}</title></head>'.encode(), url=self.message.body)
+                with patch.object(message_routes, "urlopen", return_value=response) as fetch:
+                    preview = await self.read_preview()
+                    if language == "ko":
+                        fetch.assert_not_called()
+                        self.assertEqual(preview["title"], "한국어 제목")
+                    else:
+                        self.assertEqual(preview["title"], f"Title {language}")
+                        headers = {key.lower(): value for key, value in fetch.call_args.args[0].header_items()}
+                        self.assertEqual(headers["accept-language"], language)
+                        statement = self.session.execute.call_args.args[0].compile(dialect=postgresql.dialect())
+                        # 원래 메타데이터에 해당 언어만 합치고 메시지 버전도 검사해요.
+                        self.assertIn("jsonb_set(messages.metadata", str(statement))
+                        self.assertIn("||", str(statement))
+                        self.assertIn("messages.version =", str(statement))
+                        self.assertIn({language: preview}, list(statement.params.values()))
+                    self.message.metadata_json.setdefault("previews_by_language", {})[language] = preview
+                    fetch.reset_mock()
+                    self.assertEqual(await self.read_preview(), preview)
+                    fetch.assert_not_called()
+                self.assertEqual(preview["language"], language)
+
+    async def test_create_and_edit_collect_the_authors_language_not_the_receivers(self):
+        self.viewer.id = self.sender_id
+        self.viewer.preferred_language = "fr"
+        receiver = SimpleNamespace(id=self.viewer_id, preferred_language="de")
+        self.session.get.side_effect = lambda model, _: receiver if model is User else self.message
+        self.session.scalar.return_value = self.direct
+        self.session.add = Mock()
+        self.session.flush = AsyncMock()
+        self.session.refresh = AsyncMock()
+        result = SimpleNamespace(model_dump=lambda **_: {})
+        # 라우트의 실제 수집 경로를 확인하고 DB·실시간 전송만 대신해요.
+        with patch.object(message_routes, "get_direct_conversation", AsyncMock(return_value=self.direct)), \
+                patch.object(message_routes, "add_message_payload_records", AsyncMock()), \
+                patch.object(message_routes, "update_conversation_latest_message", AsyncMock()), \
+                patch.object(message_routes, "build_single_message_read", AsyncMock(return_value=result)), \
+                patch.object(message_routes, "publish_created_message", AsyncMock()), \
+                patch.object(message_routes, "send_to_direct_participants", AsyncMock()):
+            for editing in (False, True):
+                response = FakeHTTPResponse(b'<head><title>Bonjour</title></head>', url=self.message.body)
+                with patch.object(message_routes, "urlopen", return_value=response) as fetch:
+                    if editing:
+                        await message_routes.update_message(self.message.id, MessageUpdate(content=self.message.body),
+                            BackgroundTasks(), self.viewer, self.session)
+                        metadata = self.message.metadata_json
+                    else:
+                        await message_routes.create_message(MessageCreate(recipient_id=self.viewer_id, content=self.message.body),
+                            BackgroundTasks(), self.viewer, self.session)
+                        metadata = self.session.add.call_args.args[0].metadata_json
+                    headers = {key.lower(): value for key, value in fetch.call_args.args[0].header_items()}
+                    self.assertEqual(headers["accept-language"], "fr")
+                    self.assertEqual(metadata["language"], "fr")
+                    self.assertEqual(metadata["title"], "Bonjour")
+
+    async def test_unknown_legacy_language_is_refetched_for_the_viewer(self):
+        self.message.metadata_json.pop("language")
+        response = FakeHTTPResponse(b'<head><title>Hola</title></head>', url=self.message.body)
+        with patch.object(message_routes, "urlopen", return_value=response):
+            preview = await self.read_preview()
+        self.assertEqual(preview["title"], "Hola")
+        self.assertEqual(preview["language"], "es")
+
+    async def test_nonparticipant_cannot_fetch_or_read_a_cached_preview(self):
+        self.viewer.id = uuid4()
+        with patch.object(message_routes, "urlopen") as fetch, self.assertRaises(HTTPException) as error:
+            await self.read_preview()
+        self.assertEqual(error.exception.status_code, 403)
+        fetch.assert_not_called()
+        self.session.execute.assert_not_called()
+
+    async def test_hidden_or_deleted_messages_cannot_be_previewed(self):
+        for deleted in (False, True):
+            self.message.deleted_at = object() if deleted else None
+            self.session.scalar.return_value = None
+            with patch.object(message_routes, "urlopen") as fetch, self.assertRaises(HTTPException) as error:
+                await self.read_preview()
+            self.assertEqual(error.exception.status_code, 404)
+            fetch.assert_not_called()
 
 
 if __name__ == "__main__":

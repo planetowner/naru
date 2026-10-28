@@ -31,17 +31,23 @@ Service Extension, and PushKit/CallKit.
   the authenticated `/ws` connection. A missed or unanswered call is then sent
   as a normal APNs alert.
 
-Localized summaries are fixed to the verified reference behavior:
+Notification titles use the sender’s saved display name. Summaries use the
+recipient’s `preferred_language` and the shared `app/locales/app_*.arb` catalog
+(Korean, Japanese, Simplified Chinese, English, Spanish, French, German, Italian).
+Unsupported language values fall back to English.
 
-| Event | Korean | Simplified Chinese |
-| --- | --- | --- |
-| Photo | `사진을 보냈습니다.` | `照片` |
-| Video | `동영상을 보냈습니다.` | `视频` |
-| File | `파일: {파일명}` | `文件: {파일명}` |
-| Voice memo | `음성메시지를 보냈습니다.` | `语音备忘录` |
-| Missed call | `부재중 보이스톡` | `未接听语音通话` |
-| Reply | `답장` | `答复` |
-| Send | `전송` | `发送` |
+| Event | Shared translation key |
+| --- | --- |
+| Photo | `notificationPhoto` |
+| Video | `notificationVideo` |
+| File | `notificationNamedFile` / `notificationFile` |
+| Voice memo | `notificationVoiceMemo` |
+| Missed call | `notificationMissedCall` |
+| Reply | `reply` |
+| Send | `send` |
+
+Reply and Send action titles come from the app’s current localization through
+`NotificationBridge`; the server and app reuse the same catalog.
 
 ## Apple Developer setup
 
@@ -165,7 +171,7 @@ PushKit/CallKit delivery must be validated on a real device.
 Verify each item with the app in foreground, background, force-quit where iOS
 permits delivery, and on the locked screen:
 
-1. Korean and Chinese text, including a long message.
+1. Text in all eight supported languages, including a long message and mixed-language text.
 2. Photo, video, and voice memo summaries; only photo has a right-side and
    expanded attachment.
 3. Reply from a temporary banner and from the expanded lock-screen alert.
@@ -174,6 +180,6 @@ permits delivery, and on the locked screen:
    after authentication.
 6. Incoming voice call while locked and unlocked, answer, reject, caller
    cancel, and caller timeout.
-7. Missed-call alert in Korean and Simplified Chinese.
+7. Missed-call alerts in each recipient’s selected language across all eight languages.
 8. Notification-disabled, banner-disabled, sound-disabled, and badge-disabled
    system settings.

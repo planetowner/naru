@@ -12,12 +12,14 @@ final class AppRoundIconButton extends StatelessWidget {
     this.backgroundColor = AppColors.surface,
     this.foregroundColor = AppColors.textPrimary,
     this.borderColor = AppColors.border,
+    this.isLoading = false,
     super.key,
   });
 
   final IconData icon;
   final String tooltip;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
+  final bool isLoading;
   final Color backgroundColor;
   final Color foregroundColor;
   final Color borderColor;
@@ -25,15 +27,24 @@ final class AppRoundIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Semantics(
     button: true,
+    enabled: onPressed != null && !isLoading,
     label: tooltip,
     child: Tooltip(
       message: tooltip,
       excludeFromSemantics: true,
       child: AppMediaViewerChromeButton(
-        onPressed: onPressed,
+        onPressed: isLoading ? null : onPressed,
         backgroundColor: backgroundColor,
         borderColor: borderColor,
-        child: Icon(icon, size: 24, color: foregroundColor),
+        child: isLoading
+            ? SizedBox.square(
+                dimension: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: foregroundColor,
+                ),
+              )
+            : Icon(icon, size: 24, color: foregroundColor),
       ),
     ),
   );

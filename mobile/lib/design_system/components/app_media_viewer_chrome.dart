@@ -143,7 +143,7 @@ final class AppMediaViewerChromeButton extends StatelessWidget {
     super.key,
   });
 
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
   final Widget child;
   final double dimension;
   final double? width;

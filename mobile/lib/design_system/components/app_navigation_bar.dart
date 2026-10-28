@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/l10n/app_strings.dart';
 
 import '../app_colors.dart';
 import '../app_icons.dart';
@@ -19,7 +20,7 @@ final class AppNavigationBar extends StatelessWidget {
       AppMediaViewerChrome.buttonDimension + AppSpacing.space12;
 
   final String title;
-  final String backTooltip;
+  final String? backTooltip;
   final VoidCallback onBack;
 
   @override
@@ -36,7 +37,7 @@ final class AppNavigationBar extends StatelessWidget {
         children: [
           AppRoundIconButton(
             icon: AppIcons.back,
-            tooltip: backTooltip,
+            tooltip: backTooltip ?? context.l10n.back,
             onPressed: onBack,
           ),
           const SizedBox(width: AppSpacing.space12),

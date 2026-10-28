@@ -32,7 +32,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const NaruPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp(language: 'ko'));
 
     await tester.pumpAndSettle();
 

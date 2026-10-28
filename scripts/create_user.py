@@ -5,6 +5,7 @@ from sqlalchemy import select
 
 from app.database import SessionLocal
 from app.models import User
+from app.languages import DEFAULT_LANGUAGE_CODE, SUPPORTED_LANGUAGE_NAMES
 from app.passwords import hash_password
 
 
@@ -17,8 +18,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--display-name", required=True)
     parser.add_argument(
         "--language",
-        default="ko",
-        choices=("ko", "zh-CN"),
+        default=DEFAULT_LANGUAGE_CODE,
+        choices=tuple(SUPPORTED_LANGUAGE_NAMES),
     )
 
     return parser.parse_args()

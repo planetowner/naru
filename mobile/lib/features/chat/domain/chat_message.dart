@@ -30,11 +30,17 @@ final class ChatReplyReference {
     required this.messageId,
     required this.senderId,
     required this.content,
+    this.messageType,
+    this.photoCount = 0,
+    this.callOutcome,
   });
 
   final String messageId;
   final String senderId;
   final String content;
+  final String? messageType;
+  final int photoCount;
+  final ChatCallOutcome? callOutcome;
 }
 
 final class ChatPhotoAttachment {
@@ -148,6 +154,7 @@ final class ChatLinkPreview {
     this.description,
     this.siteName,
     this.imageUrl,
+    this.language,
   });
 
   final String url;
@@ -157,6 +164,14 @@ final class ChatLinkPreview {
   final String? description;
   final String? siteName;
   final String? imageUrl;
+  final String? language;
+
+  bool get hasDetails => [
+    title,
+    description,
+    siteName,
+    imageUrl,
+  ].any((value) => value != null && value.isNotEmpty);
 }
 
 final class ChatMessage {
@@ -243,42 +258,15 @@ final class ChatMessage {
     return linkPreview != null;
   }
 
-  String get replyPreviewContent {
-    if (isVoiceMemoMessage) {
-      return 'Voice Memo';
-    }
-
-    if (isVideoMessage) {
-      return 'Video';
-    }
-
-    if (isLinkMessage) {
-      return linkPreview!.title ?? linkPreview!.domain;
-    }
-
-    if (isCallMessage) {
-      return switch (callAttachment!.outcome) {
-        ChatCallOutcome.started => 'Voice Call',
-        ChatCallOutcome.ended => 'End voice call',
-        ChatCallOutcome.cancelled => 'Canceled',
-        ChatCallOutcome.missed => 'Missed Call',
-        ChatCallOutcome.noAnswer => 'No Answer',
-      };
-    }
-
-    if (isFileMessage) {
-      return fileAttachment!.name;
-    }
-
-    if (!isPhotoMessage) {
-      return content;
-    }
-
-    if (photoAttachments.length == 1) {
-      return 'Photo';
-    }
-
-    return '${photoAttachments.length} Photos';
+  // 캐시와 답장 미리보기가 같은 기준으로 메시지 종류를 구분해요.
+  String get messageType {
+    if (isPhotoMessage) return 'photo';
+    if (isVideoMessage) return 'video';
+    if (isFileMessage) return 'file';
+    if (isVoiceMemoMessage) return 'voice_memo';
+    if (isCallMessage) return 'call';
+    if (isLinkMessage) return 'link';
+    return 'text';
   }
 
   ChatMessage copyWith({

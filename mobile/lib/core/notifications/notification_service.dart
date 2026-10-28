@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../../features/auth/domain/auth_session.dart';
+import '../l10n/app_strings.dart';
 
 final class NotificationService {
   static const MethodChannel _methodChannel = MethodChannel(
@@ -34,11 +35,14 @@ final class NotificationService {
       return;
     }
 
+    final strings = stringsForLanguage(session.user.preferredLanguage);
     await _methodChannel.invokeMethod<void>('configure', <String, Object>{
       'apiBaseUrl': apiBaseUri.toString(),
       'accessToken': session.accessToken,
       'userId': session.user.id,
       'preferredLanguage': session.user.preferredLanguage,
+      'replyActionTitle': strings.reply,
+      'sendActionTitle': strings.send,
     });
     await _methodChannel.invokeMethod<bool>('requestAuthorization');
     await _methodChannel.invokeMethod<void>('startVoIP');

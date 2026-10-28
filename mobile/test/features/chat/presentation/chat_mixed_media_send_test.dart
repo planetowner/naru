@@ -241,6 +241,9 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: ChatConversationView(
+            currentUserName: 'Me',
+            otherParticipantName: 'Lia',
+
             photoLibrary: _MixedMediaLibrary(),
             videoTranscoder: const _IdentityVideoTranscoder(),
             initialMessages: const <ChatMessage>[],

@@ -36,6 +36,7 @@ void main() {
         final api = ChatApi(
           baseUri: Uri.parse('https://api.example.test'),
           accessToken: 'test',
+          preferredLanguage: 'en',
           client: MockClient((request) async {
             if (request.method == 'PATCH') {
               expect(request.url.path, '/messages/start/call-outcome');

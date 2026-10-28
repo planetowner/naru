@@ -19,6 +19,7 @@ final class AppTextField extends StatelessWidget {
     this.suffixIcon,
     this.autofillHints,
     this.onChanged,
+    this.onTap,
     this.onFieldSubmitted,
     this.validator,
     this.autofocus = false,
@@ -41,6 +42,7 @@ final class AppTextField extends StatelessWidget {
   final Widget? suffixIcon;
   final Iterable<String>? autofillHints;
   final ValueChanged<String>? onChanged;
+  final VoidCallback? onTap;
   final ValueChanged<String>? onFieldSubmitted;
   final FormFieldValidator<String>? validator;
   final bool autofocus;
@@ -74,6 +76,7 @@ final class AppTextField extends StatelessWidget {
       readOnly: readOnly,
       autofillHints: autofillHints,
       onChanged: onChanged,
+      onTap: onTap,
       onFieldSubmitted: onFieldSubmitted,
       validator: validator,
       style: AppControlStyle.inputText,

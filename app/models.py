@@ -26,6 +26,7 @@ from sqlalchemy.dialects.postgresql import CITEXT, JSONB, UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.languages import DEFAULT_LANGUAGE_CODE
 
 
 def enum_values(enum_class: type[enum.Enum]) -> list[str]:
@@ -179,8 +180,8 @@ class User(Base):
     preferred_language: Mapped[str] = mapped_column(
         String(16),
         nullable=False,
-        default="ko",
-        server_default="ko",
+        default=DEFAULT_LANGUAGE_CODE,
+        server_default=DEFAULT_LANGUAGE_CODE,
     )
 
     token_version: Mapped[int] = mapped_column(
@@ -205,6 +206,21 @@ class User(Base):
     disabled_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
+    )
+
+
+class UserFriend(Base):
+    __tablename__ = "user_friends"
+    __table_args__ = (
+        CheckConstraint("user_id <> friend_id", name="user_friends_not_self_check"),
+    )
+
+    # 친구 추가는 단방향이에요. 상대방의 목록에는 자동으로 추가하지 않아요.
+    user_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True,
+    )
+    friend_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True,
     )
 
 

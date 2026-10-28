@@ -31,6 +31,8 @@ htmlcov/
 Thumbs.db
 
 # Build and package output
+# 번역 코드는 app/locales 원본에서 Flutter가 생성해요.
+mobile/lib/core/l10n/generated/
 build/
 dist/
 *.egg-info/

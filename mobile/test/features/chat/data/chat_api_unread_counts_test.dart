@@ -29,6 +29,7 @@ void main() {
       client: client,
       baseUri: Uri.parse('https://api.example.com'),
       accessToken: 'test-token',
+      preferredLanguage: 'en',
     );
 
     expect(await chatApi.listUnreadMessageCounts(), <String, int>{
@@ -52,6 +53,7 @@ void main() {
       client: client,
       baseUri: Uri.parse('https://api.example.com'),
       accessToken: 'test-token',
+      preferredLanguage: 'en',
     );
 
     expect(

@@ -1,0 +1,287 @@
+{
+  "@@locale": "en",
+  "username": "Username",
+  "password": "Password",
+  "logIn": "Log in",
+  "invalidCredentials": "Invalid username or password",
+  "signUp": "Sign up",
+  "confirmPassword": "Confirm password",
+  "passwordMismatch": "Passwords do not match.",
+  "usernameTaken": "This username is already taken",
+  "enterUsername": "Enter your username.",
+  "requestFailed": "Could not complete the request. Please try again.",
+  "sessionSaveFailed": "Could not save your session securely. Please sign in again.",
+  "yourLanguage": "Your language",
+  "languageDescription": "Messages will appear in your language.",
+  "continueAction": "Continue",
+  "noAccount": "Don’t have an account?",
+  "chats": "Chats",
+  "search": "Search",
+  "cancel": "Cancel",
+  "ok": "OK",
+  "back": "Back",
+  "retry": "Retry",
+  "send": "Send",
+  "callNow": "Call Now",
+  "voiceCall": "Voice Call",
+  "videoCall": "Video Call",
+  "enterMessage": "Enter a message",
+  "photo": "Photo",
+  "photos": "Photos",
+  "video": "Video",
+  "videos": "Videos",
+  "camera": "Camera",
+  "call": "Call",
+  "file": "File",
+  "voiceMemo": "Voice Memo",
+  "copy": "Copy",
+  "reply": "Reply",
+  "replyToMe": "Reply to Me",
+  "replyToName": "Reply to {name}",
+  "@replyToName": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "endVoiceCall": "End voice call",
+  "canceled": "Canceled",
+  "missedCall": "Missed Call",
+  "noAnswer": "No Answer",
+  "photoCount": "{count, plural, one{1 photo} other{{count} photos}}",
+  "@photoCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "replyPlaceholder": "Reply to message…",
+  "backToReply": "Back to Reply Message",
+  "edit": "Edit",
+  "editMessage": "Edit message",
+  "edited": "Edited",
+  "unsend": "Unsend",
+  "seenNow": "Seen just now",
+  "seenMinutes": "Seen {count}m ago",
+  "@seenMinutes": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "seenHours": "Seen {count}h ago",
+  "@seenHours": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "seenYesterday": "Seen yesterday",
+  "seenDays": "Seen {count} days ago",
+  "@seenDays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "seenLastWeek": "Seen last week",
+  "seenWeeks": "Seen {count} weeks ago",
+  "@seenWeeks": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarYear": "{year}",
+  "@calendarYear": {
+    "placeholders": {
+      "year": {
+        "type": "int"
+      }
+    }
+  },
+  "calendarMonths": "January,February,March,April,May,June,July,August,September,October,November,December",
+  "calendarWeekdays": "S,M,T,W,T,F,S",
+  "datePattern": "EEEE, MMMM d, y",
+  "previousMonth": "Previous month",
+  "nextMonth": "Next month",
+  "noResults": "No results",
+  "messages": "Messages",
+  "media": "Media",
+  "links": "Links",
+  "files": "Files",
+  "searchMessages": "Search messages",
+  "searchFilenames": "Search filenames",
+  "searchLinks": "Search titles or URLs",
+  "clearSearch": "Clear search",
+  "closeSearch": "Close search",
+  "searchingHistory": "Searching chat history…",
+  "historyLoadFailed": "Couldn’t load all messages",
+  "all": "All",
+  "newestFirst": "Newest first",
+  "filterByDate": "Filter by date",
+  "clearDate": "Clear date filter",
+  "olderResult": "Older search result",
+  "newerResult": "Newer search result",
+  "itemCount": "{count, plural, one{1 item} other{{count} items}}",
+  "@itemCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "resultCount": "{count, plural, one{1 result} other{{count} results}}",
+  "@resultCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sharedLinks": "Shared links",
+  "sharedFiles": "Shared files",
+  "you": "You",
+  "searchIncomplete": "Search is incomplete",
+  "loadingResults": "Results will appear as messages load.",
+  "retryHistory": "Retry to include the rest of this chat.",
+  "tryDifferentSearch": "Try a different search or date.",
+  "sharedMediaEmpty": "Shared photos and videos will appear here.",
+  "sharedLinksEmpty": "Shared links will appear here.",
+  "sharedFilesEmpty": "Shared files will appear here.",
+  "connecting": "Connecting…",
+  "micOff": "Your mic is off",
+  "mute": "Mute",
+  "unmute": "Unmute",
+  "endCall": "End call",
+  "phone": "Phone",
+  "speaker": "Speaker",
+  "bluetoothHeadset": "Bluetooth Headset",
+  "audioOutput": "Audio output",
+  "backToChat": "Back to chat",
+  "transcribing": "Transcribing...",
+  "transcriptionFailed": "Couldn't transcribe this voice message.",
+  "translating": "Translating...",
+  "translationFailed": "Couldn't translate this message.",
+  "copied": "Copied",
+  "saveEdit": "Save edit",
+  "attachments": "Attachments",
+  "openKeyboard": "Open keyboard",
+  "scrollToLatest": "Scroll to latest message",
+  "dismissActions": "Dismiss message actions",
+  "openLink": "Open {name}",
+  "@openLink": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "encoding": "Encoding…",
+  "mediaPosition": "Number {current} out of {total}",
+  "@mediaPosition": {
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "noChatUsers": "No friends added yet.",
+  "chatUsersFailed": "Chat user loading failed.",
+  "conversationFailed": "Conversation loading failed.",
+  "notificationPhoto": "Sent a photo.",
+  "notificationVideo": "Sent a video.",
+  "notificationVoiceMemo": "Sent a voice message.",
+  "notificationFile": "Sent a file.",
+  "notificationNamedFile": "File: {name}",
+  "@notificationNamedFile": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "notificationMissedCall": "Missed voice call",
+  "linkOpenFailed": "Unable to open this link.",
+  "mediaLoadFailed": "The selected media could not be loaded.",
+  "mediaEditFailed": "The selected media could not be edited.",
+  "sendFailed": "Message sending failed.",
+  "cameraUnavailable": "The camera is not available.",
+  "filePickerUnavailable": "The file picker is not available.",
+  "fileReadFailed": "The selected file could not be read.",
+  "messageEditFailed": "Message editing failed.",
+  "videoCallUnavailable": "Video call is not available yet.",
+  "callRecordFailed": "Call record saving failed.",
+  "sendPhoto": "Send photo",
+  "microphonePermission": "Microphone permission is required.",
+  "recordingFailed": "Voice memo recording failed.",
+  "audioUnavailable": "Voice memo audio is not available.",
+  "playbackFailed": "Voice memo playback failed.",
+  "filePreviewUnavailable": "File preview is not available yet.",
+  "fileDownloaded": "File downloaded. Path copied.",
+  "fileOpenFailed": "The file could not be opened.",
+  "photoSaved": "Photo saved",
+  "videoSaved": "Video saved",
+  "photoSaveFailed": "Photo could not be saved.",
+  "videoSaveFailed": "Video could not be saved.",
+  "shareFailed": "Media could not be shared.",
+  "recents": "Recents",
+  "noSharedPhotos": "No photos are currently shared with naru.",
+  "noDevicePhotos": "No photos are available on this device.",
+  "photosLoadFailed": "Photos could not be loaded.",
+  "albumLoadFailed": "This album could not be loaded.",
+  "selectionLimit": "You can select up to 10 items.",
+  "closePhotoPicker": "Close photo picker",
+  "photoAccessRequired": "Photo access is required.",
+  "photoAccessDescription": "Allow photo access in settings to choose photos.",
+  "openSettings": "Open Settings",
+  "collagePhotos": "Collage Photos",
+  "startChatting": "Start chatting",
+  "noFiles": "No files found",
+  "noLinks": "No links found",
+  "noMedia": "No photos or videos found",
+  "fileSendFailed": "File sending failed.",
+  "mediaTimestamp": "{date} at {time}",
+  "@mediaTimestamp": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "showPassword": "Show password",
+  "hidePassword": "Hide password",
+  "showConfirmation": "Show confirm password",
+  "hideConfirmation": "Hide confirm password",
+  "textLengthLimit": "Use {max} characters or fewer.",
+  "@textLengthLimit": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "displayName": "Name",
+  "displayNameHint": "Name shown to others",
+  "enterDisplayName": "Enter your name.",
+  "addFriend": "Add friend",
+  "settings": "Settings",
+  "changePhoto": "Change photo",
+  "language": "Language",
+  "save": "Save",
+  "done": "Done",
+  "userNotFound": "No user found.",
+  "friendAdded": "Friend added"
+}

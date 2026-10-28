@@ -14,6 +14,9 @@ Widget _buildCallMessageScreen(
 
   return MaterialApp(
     home: ChatConversationView(
+      currentUserName: 'Me',
+      otherParticipantName: 'Lia',
+
       key: ValueKey<String>(
         'call-${message.senderId}-${message.recipientId}-'
         '${attachment.outcome.name}-${attachment.duration.inSeconds}',

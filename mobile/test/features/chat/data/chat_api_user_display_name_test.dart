@@ -8,7 +8,7 @@ import 'package:naru/features/chat/data/chat_api.dart';
 
 void main() {
   test(
-    'uses the viewer-specific display name returned by the server',
+    'uses only display_name even when an old response contains an alias',
     () async {
       final MockClient client = MockClient((http.Request request) async {
         expect(request.method, 'GET');
@@ -33,24 +33,26 @@ void main() {
         client: client,
         baseUri: Uri.parse('https://api.example.com'),
         accessToken: 'test-token',
+        preferredLanguage: 'en',
       );
 
       final List<AppUser> users = await chatApi.listUsers();
 
       expect(users.single.displayName, 'Lia');
-      expect(users.single.viewerDisplayName, '애기🤍');
-      expect(users.single.effectiveDisplayName, '애기🤍');
+      expect(users.single.toJson().containsKey('viewer_display_name'), isFalse);
     },
   );
 
-  test('falls back to the global display name for older responses', () async {
-    const AppUser user = AppUser(
-      id: '11111111-1111-4111-8111-111111111111',
-      username: 'unknown-user',
-      displayName: 'Server Name',
-      preferredLanguage: 'ko',
-    );
-
-    expect(user.effectiveDisplayName, 'Server Name');
+  test('old stored user data cannot restore a viewer-specific alias', () {
+    final user = AppUser.fromJson({
+      'id': '11111111-1111-4111-8111-111111111111',
+      'username': 'junebabo',
+      'display_name': 'Saved Name',
+      'viewer_display_name': 'Old Alias',
+      'preferred_language': 'ko',
+    });
+    final restored = AppUser.fromJson(user.toJson());
+    expect(restored.displayName, 'Saved Name');
+    expect(restored.toJson().containsKey('viewer_display_name'), isFalse);
   });
 }

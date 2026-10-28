@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import SessionLocal
-from app.display_names import display_name_for_viewer
+from app.localization import localized_text
 from app.models import (
     CallOutcome,
     ConversationMember,
@@ -249,31 +249,22 @@ def localized_message_body(
     call_event: Optional[MessageCallEvent],
     file_name: Optional[str] = None,
 ) -> Optional[str]:
-    chinese = recipient_language == "zh-CN"
-
     if message.kind in {MessageKind.TEXT, MessageKind.LINK}:
         return message.body
 
-    if message.kind == MessageKind.PHOTO:
-        return "照片" if chinese else "사진을 보냈습니다."
-
-    if message.kind == MessageKind.VIDEO:
-        return "视频" if chinese else "동영상을 보냈습니다."
-
-    if message.kind == MessageKind.VOICE_MEMO:
-        return "语音备忘录" if chinese else "음성메시지를 보냈습니다."
-
-    if message.kind == MessageKind.FILE:
-        if file_name:
-            prefix = "文件" if chinese else "파일"
-            return f"{prefix}: {file_name}"
-
-        return "文件" if chinese else "파일을 보냈습니다."
-
+    media_keys = {
+        MessageKind.PHOTO: "notificationPhoto",
+        MessageKind.VIDEO: "notificationVideo",
+        MessageKind.VOICE_MEMO: "notificationVoiceMemo",
+        MessageKind.FILE: "notificationFile",
+    }
+    if message.kind == MessageKind.FILE and file_name:
+        return localized_text(recipient_language, "notificationNamedFile", name=file_name)
+    if key := media_keys.get(message.kind):
+        return localized_text(recipient_language, key)
     if message.kind == MessageKind.CALL and call_event is not None:
         if call_event.outcome in {CallOutcome.MISSED, CallOutcome.NO_ANSWER}:
-            return "未接听语音通话" if chinese else "부재중 보이스톡"
-
+            return localized_text(recipient_language, "notificationMissedCall")
     return None
 
 
@@ -359,18 +350,13 @@ async def _send_voip_event(
             )
         )
     )
-    caller_name = display_name_for_viewer(
-        viewer_username=recipient.username,
-        subject_username=sender.username,
-        fallback=sender.display_name,
-    )
     payload = {
         "aps": {"content-available": 1},
         "naru_call": {
             "action": "incoming",
             "call_uuid": str(message.id),
             "caller_id": str(sender.id),
-            "caller_name": caller_name,
+            "caller_name": sender.display_name,
             "has_video": call_event.kind.value == "video",
         },
     }
@@ -476,16 +462,11 @@ async def send_message_notification(message_id: UUID) -> None:
             if message.kind == MessageKind.PHOTO
             else None
         )
-        sender_name = display_name_for_viewer(
-            viewer_username=recipient.username,
-            subject_username=sender.username,
-            fallback=sender.display_name,
-        )
         custom_data: dict[str, Any] = {
             "message_id": str(message.id),
             "conversation_id": str(message.conversation_id),
             "sender_id": str(sender.id),
-            "sender_name": sender_name,
+            "sender_name": sender.display_name,
             "sender_image_url": sender.profile_image_url,
             "message_type": message.kind.value,
             "language": recipient.preferred_language,
@@ -497,7 +478,7 @@ async def send_message_notification(message_id: UUID) -> None:
             {
                 "aps": {
                     "alert": {
-                        "title": sender_name,
+                        "title": sender.display_name,
                         "body": body,
                     },
                     "badge": badge,

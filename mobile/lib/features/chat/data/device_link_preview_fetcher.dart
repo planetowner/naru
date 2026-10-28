@@ -21,13 +21,16 @@ final class DeviceLinkPreviewFetcher {
       'AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 '
       'Safari/605.1.15';
 
-  Future<Map<String, Object?>?> fetch(Uri uri) async {
+  Future<Map<String, Object?>?> fetch(
+    Uri uri, {
+    required String language,
+  }) async {
     if (!_usesDeviceFallback(uri)) {
       return null;
     }
 
     try {
-      return await _fetch(uri).timeout(_fetchTimeout);
+      return await _fetch(uri, language).timeout(_fetchTimeout);
     } catch (_) {
       // 미리 보기 실패는 메시지 전송을 막지 않고 서버의 기본 메타데이터에 맡겨요.
       return null;
@@ -42,12 +45,12 @@ final class DeviceLinkPreviewFetcher {
         (host == 'fmkorea.com' || host.endsWith('.fmkorea.com'));
   }
 
-  Future<Map<String, Object?>?> _fetch(Uri uri) async {
+  Future<Map<String, Object?>?> _fetch(Uri uri, String language) async {
     final http.Request request = http.Request('GET', uri)
-      ..headers.addAll(const <String, String>{
+      ..headers.addAll(<String, String>{
         'User-Agent': _userAgent,
         'Accept': 'text/html,application/xhtml+xml',
-        'Accept-Language': 'ko-KR,ko;q=0.9',
+        'Accept-Language': language,
       });
     final http.StreamedResponse response = await _client.send(request);
 
@@ -121,6 +124,7 @@ final class DeviceLinkPreviewFetcher {
     }
 
     return <String, Object?>{
+      'language': language,
       'url': uri.toString(),
       'canonical_url': canonicalUrl,
       'domain': chatDomainForUrl(uri.toString()).toLowerCase(),

@@ -1,3 +1,4 @@
+import '../../../support/localized_test_app.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -30,26 +31,143 @@ Future<void> _scrollConversationToStart(WidgetTester tester) async {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(loadAppFonts);
-  testWidgets('target-language incoming text does not request translation', (
+  for (final cachedStatus in [
+    ChatTranslationStatus.none,
+    ChatTranslationStatus.translated,
+  ]) {
+    testWidgets(
+      'older English in $cachedStatus uses the existing server translation request',
+      (tester) async {
+        int calls = 0;
+        final message = ChatMessage(
+          id: 'legacy-english',
+          senderId: '2',
+          recipientId: '1',
+          content: 'Hello',
+          translationStatus: cachedStatus,
+          createdAt: DateTime(2026, 10, 28),
+          sourceLanguage: 'en',
+          translatedLanguage: 'es',
+        );
+        await tester.pumpWidget(
+          LocalizedTestApp(
+            language: 'es',
+
+            home: ChatConversationView(
+              currentUserName: 'Me',
+              otherParticipantName: 'Lia',
+
+              initialMessages: [message],
+
+              onRetryTranslation: ({required messageId}) async {
+                expect(messageId, message.id);
+                calls++;
+                return message.copyWith(
+                  translatedContent: 'Hola',
+                  translationStatus: ChatTranslationStatus.translated,
+                );
+              },
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Translating...'), findsNothing);
+        await tester.tap(find.text('Hello'));
+        await tester.pumpAndSettle();
+        expect(calls, 1);
+        expect(find.text('Hola'), findsOneWidget);
+      },
+    );
+  }
+
+  testWidgets(
+    'received Spanish translations appear first and original choice survives updates',
+    (tester) async {
+      final korean = ChatMessage(
+        id: 'ko-to-es',
+        senderId: '2',
+        recipientId: '1',
+        content: '안녕하세요',
+        createdAt: DateTime(2026, 10, 28, 12),
+        sourceLanguage: 'ko',
+        translatedLanguage: 'es',
+        translationStatus: ChatTranslationStatus.translating,
+      );
+      final chinese = ChatMessage(
+        id: 'zh-to-es',
+        senderId: '3',
+        recipientId: '1',
+        content: '谢谢',
+        createdAt: DateTime(2026, 10, 28, 12, 1),
+        sourceLanguage: 'zh-CN',
+        translatedLanguage: 'es',
+        translatedContent: 'Gracias',
+        translationStatus: ChatTranslationStatus.translated,
+      );
+      Widget conversation(List<ChatMessage> messages) => LocalizedTestApp(
+        language: 'es',
+
+        home: ChatConversationView(
+          currentUserName: 'Me',
+          otherParticipantName: 'Lia',
+
+          initialMessages: messages,
+        ),
+      );
+      await tester.pumpWidget(conversation([korean, chinese]));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('Gracias'), findsOneWidget);
+      final completed = korean.copyWith(
+        translatedContent: 'Hola',
+        translationStatus: ChatTranslationStatus.translated,
+      );
+      await tester.pumpWidget(conversation([completed, chinese]));
+      await tester.pumpAndSettle();
+      expect(find.text('Hola'), findsOneWidget);
+      await tester.tap(find.text('Hola'));
+      await tester.pumpAndSettle();
+      expect(find.text('안녕하세요'), findsOneWidget);
+      await tester.pumpWidget(
+        conversation([
+          completed.copyWith(readAt: DateTime(2026, 10, 28, 12, 2)),
+          chinese,
+        ]),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('안녕하세요'), findsOneWidget);
+      await tester.tap(find.text('안녕하세요'));
+      await tester.pumpAndSettle();
+      expect(find.text('Hola'), findsOneWidget);
+    },
+  );
+
+  testWidgets('identical translation does not offer another translation', (
     WidgetTester tester,
   ) async {
     int translationRequests = 0;
 
     await tester.pumpWidget(
-      MaterialApp(
+      LocalizedTestApp(
+        language: 'ko',
+
         home: ChatConversationView(
+          currentUserName: 'Me',
+          otherParticipantName: 'Lia',
+
           initialMessages: <ChatMessage>[
             ChatMessage(
               id: 'target-language',
               senderId: '2',
               recipientId: '1',
               content: '앞으로 너에게도 내 진심을 자주 말해 줄게',
+              translatedContent: '앞으로 너에게도 내 진심을 자주 말해 줄게',
+              translationStatus: ChatTranslationStatus.translated,
               createdAt: DateTime(2026, 7, 10, 19, 21),
               sourceLanguage: 'zh-CN',
               translatedLanguage: 'ko',
             ),
           ],
-          currentUserPreferredLanguage: 'ko',
+
           onTranslateMessage: (ChatMessage message) async {
             translationRequests++;
             return 'translated';
@@ -67,12 +185,17 @@ void main() {
     expect(find.text('번역 중...'), findsNothing);
   });
 
-  testWidgets('target-language failed translation status is hidden', (
+  testWidgets('failed translation remains retryable regardless of script', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
-      MaterialApp(
+      LocalizedTestApp(
+        language: 'ko',
+
         home: ChatConversationView(
+          currentUserName: 'Me',
+          otherParticipantName: 'Lia',
+
           initialMessages: <ChatMessage>[
             ChatMessage(
               id: 'target-language-failed',
@@ -86,7 +209,7 @@ void main() {
               translatedLanguage: 'ko',
             ),
           ],
-          currentUserPreferredLanguage: 'ko',
+
           onTranslateMessage: (ChatMessage message) async {
             return 'translated';
           },
@@ -97,16 +220,21 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('너는나를존중해야한다'), findsOneWidget);
-    expect(find.text('지금은 이 메시지를 번역할 수 없어요.'), findsNothing);
-    expect(find.text('다시 해보기'), findsNothing);
+    expect(find.text('지금은 이 메시지를 번역할 수 없어요.'), findsOneWidget);
+    expect(find.text('다시 해보기'), findsOneWidget);
   });
 
   testWidgets('failed translation status uses Chinese user labels', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
-      MaterialApp(
+      LocalizedTestApp(
+        language: 'zh-CN',
+
         home: ChatConversationView(
+          currentUserName: 'Me',
+          otherParticipantName: 'Lia',
+
           initialMessages: <ChatMessage>[
             ChatMessage(
               id: 'chinese-user-failed',
@@ -120,7 +248,7 @@ void main() {
               translatedLanguage: 'zh-CN',
             ),
           ],
-          currentUserPreferredLanguage: 'zh-CN',
+
           onTranslateMessage: (ChatMessage message) async {
             return 'translated';
           },
@@ -139,8 +267,13 @@ void main() {
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
-      MaterialApp(
+      LocalizedTestApp(
+        language: 'zh-CN',
+
         home: ChatConversationView(
+          currentUserName: 'Me',
+          otherParticipantName: 'Lia',
+
           initialMessages: <ChatMessage>[
             ChatMessage(
               id: 'chinese-user-translating',
@@ -153,7 +286,7 @@ void main() {
               translatedLanguage: 'zh-CN',
             ),
           ],
-          currentUserPreferredLanguage: 'zh-CN',
+
           onTranslateMessage: (ChatMessage message) async {
             return 'translated';
           },
@@ -180,8 +313,13 @@ void main() {
     const String content = '欧巴我快要登机了但是我还想再跟你说很多很多话';
 
     await tester.pumpWidget(
-      MaterialApp(
+      LocalizedTestApp(
+        language: 'ko',
+
         home: ChatConversationView(
+          currentUserName: 'Me',
+          otherParticipantName: 'Lia',
+
           initialMessages: <ChatMessage>[
             ChatMessage(
               id: 'normal-width',
@@ -204,7 +342,7 @@ void main() {
               translatedLanguage: 'ko',
             ),
           ],
-          currentUserPreferredLanguage: 'ko',
+
           onTranslateMessage: (ChatMessage message) async {
             return 'translated';
           },
@@ -240,8 +378,13 @@ void main() {
     });
 
     await tester.pumpWidget(
-      MaterialApp(
+      LocalizedTestApp(
+        language: 'ko',
+
         home: ChatConversationView(
+          currentUserName: 'Me',
+          otherParticipantName: 'Lia',
+
           initialMessages: <ChatMessage>[
             ChatMessage(
               id: 'short-normal-width',
@@ -264,7 +407,7 @@ void main() {
               translatedLanguage: 'ko',
             ),
           ],
-          currentUserPreferredLanguage: 'ko',
+
           onTranslateMessage: (ChatMessage message) async {
             return 'translated';
           },
@@ -302,7 +445,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const NaruPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp(language: 'ko'));
 
     await tester.pumpAndSettle();
 
@@ -350,7 +493,7 @@ void main() {
         await tester.binding.setSurfaceSize(null);
       });
 
-      await tester.pumpWidget(const NaruPreviewApp());
+      await tester.pumpWidget(const NaruPreviewApp(language: 'ko'));
 
       await tester.pumpAndSettle();
 
@@ -390,8 +533,13 @@ void main() {
     final Completer<ChatMessage> retryCompleter = Completer<ChatMessage>();
 
     await tester.pumpWidget(
-      MaterialApp(
+      LocalizedTestApp(
+        language: 'ko',
+
         home: ChatConversationView(
+          currentUserName: 'Me',
+          otherParticipantName: 'Lia',
+
           initialMessages: <ChatMessage>[
             ChatMessage(
               id: 'server-retry',
@@ -405,7 +553,7 @@ void main() {
               translatedLanguage: 'ko',
             ),
           ],
-          currentUserPreferredLanguage: 'ko',
+
           onTranslateMessage: (ChatMessage message) async {
             localTranslationRequests++;
             return 'local translation';
@@ -463,8 +611,13 @@ void main() {
     final DateTime baseTime = DateTime(2026, 7, 10, 19);
 
     await tester.pumpWidget(
-      MaterialApp(
+      LocalizedTestApp(
+        language: 'ko',
+
         home: ChatConversationView(
+          currentUserName: 'Me',
+          otherParticipantName: 'Lia',
+
           initialMessages: <ChatMessage>[
             for (int index = 0; index < 10; index++)
               ChatMessage(
@@ -493,7 +646,7 @@ void main() {
               createdAt: baseTime.add(const Duration(minutes: 11)),
             ),
           ],
-          currentUserPreferredLanguage: 'ko',
+
           onRetryTranslation: ({required String messageId}) {
             expect(messageId, 'retry-bottom-anchor');
             return retryCompleter.future;
@@ -542,8 +695,13 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MaterialApp(
+        LocalizedTestApp(
+          language: 'ko',
+
           home: ChatConversationView(
+            currentUserName: 'Me',
+            otherParticipantName: 'Lia',
+
             initialMessages: <ChatMessage>[
               for (int index = 0; index < 10; index++)
                 ChatMessage(
@@ -594,7 +752,7 @@ void main() {
                 readAt: readAt,
               ),
             ],
-            currentUserPreferredLanguage: 'ko',
+
             initialClock: readAt.add(const Duration(seconds: 10)),
           ),
         ),
@@ -608,7 +766,7 @@ void main() {
       final Finder composerFinder = find.byKey(
         const ValueKey<String>('message-composer-default'),
       );
-      final Finder readReceiptFinder = find.text('Seen just now');
+      final Finder readReceiptFinder = find.text('방금 읽음');
 
       double readReceiptBottomGap() {
         return tester.getRect(composerFinder).top -
@@ -617,6 +775,9 @@ void main() {
 
       expect(bubbleFinder, findsOneWidget);
       expect(readReceiptFinder, findsOneWidget);
+
+      await tester.tap(find.text('나는 그 차이가 무엇인지 아직도 전혀 모르겠어 정말 하나도 모르겠어'));
+      await tester.pumpAndSettle();
 
       final double originalHeight = tester.getSize(bubbleFinder).height;
       final double originalBottomGap = readReceiptBottomGap();
@@ -668,7 +829,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const NaruPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp(language: 'ko'));
 
     await tester.pumpAndSettle();
 
@@ -677,10 +838,6 @@ void main() {
     final Finder bubbleFinder = find.byKey(
       const ValueKey<String>('incoming-bubble-2'),
     );
-
-    await tester.tap(find.text('我等你继续说呢'));
-
-    await tester.pumpAndSettle();
 
     final Finder translatedTextFinder = find.text('네가 계속 말해주길 기다리고 있어.');
 
@@ -708,7 +865,7 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     });
 
-    await tester.pumpWidget(const NaruPreviewApp());
+    await tester.pumpWidget(const NaruPreviewApp(language: 'ko'));
 
     await tester.pumpAndSettle();
 
@@ -717,6 +874,9 @@ void main() {
     final Finder bubbleFinder = find.byKey(
       const ValueKey<String>('incoming-bubble-2'),
     );
+
+    await tester.tap(find.text('네가 계속 말해주길 기다리고 있어.'));
+    await tester.pumpAndSettle();
 
     final Size originalSize = tester.getSize(bubbleFinder);
 

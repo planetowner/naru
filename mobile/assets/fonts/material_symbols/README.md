@@ -12,9 +12,9 @@ Google Material Symbols Rounded를 승인한 굵기 400·광학 크기 24·GRAD 
 ## MaterialSymbolsRounded.ttf
 
 - FILL: 0
-- SHA-256: `c9def66fcfacb3af6d6b045e63a42e7166405792804aa33fa9f1e4e6392ae35a`
+- SHA-256: `0ee413f5ed353ee273a3a0b4f0f514c261023d80b706a7fdaf3847a5c1fa7552`
 
-[Google Fonts 원본 요청](https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded%3Aopsz%2Cwght%2CFILL%2CGRAD%4024%2C400%2C0%2C0&icon_names=add%2Carrow_back_ios_new%2Carrow_drop_down%2Carrow_drop_up%2Carrow_upward%2Ccalendar_today%2Ccall%2Ccall_end%2Ccheck%2Ccheck_circle%2Cchevron_left%2Cchevron_right%2Cclose%2Ccontent_copy%2Cdelete_outline%2Cdownload%2Cdraft%2Cedit%2Cgraphic_eq%2Cheadphones%2Cimage%2Cios_share%2Ckeyboard_arrow_down%2Ckeyboard_arrow_up%2Cmic%2Cmic_off%2Cperson%2Cphone_disabled%2Cphone_in_talk%2Cphone_missed%2Cphoto_camera%2Cphoto_library%2Cpicture_in_picture_alt%2Crefresh%2Creplay%2Creply%2Csearch%2Cvideocam%2Cvisibility%2Cvisibility_off%2Cvolume_up&display=block)
+[Google Fonts 원본 요청](https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded%3Aopsz%2Cwght%2CFILL%2CGRAD%4024%2C400%2C0%2C0&icon_names=add%2Carrow_back_ios_new%2Carrow_drop_down%2Carrow_drop_up%2Carrow_upward%2Ccalendar_today%2Ccall%2Ccall_end%2Ccheck%2Ccheck_circle%2Cchevron_left%2Cchevron_right%2Cclose%2Ccontent_copy%2Cdelete_outline%2Cdownload%2Cdraft%2Cedit%2Cgraphic_eq%2Cheadphones%2Cimage%2Cios_share%2Ckeyboard_arrow_down%2Ckeyboard_arrow_up%2Cmic%2Cmic_off%2Cperson%2Cperson_add%2Cphone_disabled%2Cphone_in_talk%2Cphone_missed%2Cphoto_camera%2Cphoto_library%2Cpicture_in_picture_alt%2Crefresh%2Creplay%2Creply%2Csearch%2Csettings%2Cvideocam%2Cvisibility%2Cvisibility_off%2Cvolume_up&display=block)
 
 | Google 이름 | 코드 |
 | --- | --- |
@@ -45,6 +45,7 @@ Google Material Symbols Rounded를 승인한 굵기 400·광학 크기 24·GRAD 
 | `mic` | `AppIcons.mic` |
 | `mic_off` | `AppIcons.micOff` |
 | `person` | `AppIcons.person` |
+| `person_add` | `AppIcons.personAdd` |
 | `phone_disabled` | `AppIcons.phoneDisabled` |
 | `phone_in_talk` | `AppIcons.phoneInTalk` |
 | `phone_missed` | `AppIcons.phoneMissed` |
@@ -55,6 +56,7 @@ Google Material Symbols Rounded를 승인한 굵기 400·광학 크기 24·GRAD 
 | `replay` | `AppIcons.replay` |
 | `reply` | `AppIcons.reply` |
 | `search` | `AppIcons.search` |
+| `settings` | `AppIcons.settings` |
 | `videocam` | `AppIcons.videocam` |
 | `visibility` | `AppIcons.visibility` |
 | `visibility_off` | `AppIcons.visibilityOff` |

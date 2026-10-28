@@ -44,6 +44,7 @@ void main() {
       client: client,
       baseUri: Uri.parse('https://api.example.com'),
       accessToken: 'test-token',
+      preferredLanguage: 'en',
     );
 
     final Uri accessUrl = await chatApi.createMediaAssetThumbnailAccessUrl(
@@ -154,6 +155,7 @@ void main() {
         client: client,
         baseUri: Uri.parse('https://api.example.com'),
         accessToken: 'test-token',
+        preferredLanguage: 'en',
       );
 
       await chatApi.sendPhotoMessage(
@@ -324,6 +326,7 @@ void main() {
         client: client,
         baseUri: Uri.parse('https://api.example.com'),
         accessToken: 'test-token',
+        preferredLanguage: 'en',
       );
 
       final ChatMessage message = await chatApi.sendVideoMessage(
@@ -468,6 +471,7 @@ void main() {
         client: client,
         baseUri: Uri.parse('https://api.example.com'),
         accessToken: 'test-token',
+        preferredLanguage: 'en',
       );
       final Future<ChatMessage> sendFuture = chatApi.sendPhotoMessage(
         recipientId: 'other-user',

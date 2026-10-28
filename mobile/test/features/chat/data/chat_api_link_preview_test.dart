@@ -1,9 +1,12 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:naru/features/chat/data/chat_api.dart';
+import 'package:naru/features/chat/data/chat_message_cache.dart';
+import 'package:naru/features/chat/data/device_link_preview_fetcher.dart';
 import 'package:naru/features/chat/domain/chat_message.dart';
 
 const String _fmkoreaUrl = 'https://m.fmkorea.com/10166678809';
@@ -21,7 +24,10 @@ http.Response _createdMessageResponse(
       'recipient_id': requestBody['recipient_id'],
       'content': requestBody['content'],
       'message_type': requestBody['message_type'],
-      'metadata': requestBody['metadata'],
+      'metadata': {
+        ...?(requestBody['metadata'] as Map<String, dynamic>?),
+        'language': 'en',
+      },
       'created_at': '2026-08-03T10:00:00Z',
       'edited_at': null,
       'read_at': null,
@@ -37,7 +43,297 @@ http.Response _createdMessageResponse(
   );
 }
 
+Map<String, dynamic> _receivedLink({
+  String? language,
+  String title = '한국어 제목',
+}) => {
+  'id': '33333333-3333-4333-8333-333333333333',
+  'sender_id': '11111111-1111-4111-8111-111111111111',
+  'recipient_id': '22222222-2222-4222-8222-222222222222',
+  'content': 'https://example.com/article',
+  'message_type': 'link',
+  'metadata': <String, dynamic>{
+    'url': 'https://example.com/article',
+    'language': language,
+    'title': title,
+  },
+  'created_at': '2026-10-28T10:00:00Z',
+  'translation_status': 'none',
+};
+
+ChatApi _api(http.Client client, String language) => ChatApi(
+  client: client,
+  baseUri: Uri.parse('https://api.example.com'),
+  accessToken: 'test-token',
+  preferredLanguage: language,
+);
+
 void main() {
+  for (final language in ['ko', 'ja', 'zh-CN', 'en', 'es', 'fr', 'de', 'it']) {
+    test(
+      'receives and caches the viewer card in $language without mixing languages',
+      () async {
+        var requests = 0;
+        final api = _api(
+          MockClient((request) async {
+            requests++;
+            expect(
+              request.url.path,
+              '/messages/33333333-3333-4333-8333-333333333333/link-preview',
+            );
+            expect(request.headers['Authorization'], 'Bearer test-token');
+            return http.Response(
+              jsonEncode({
+                'url': 'https://example.com/article',
+                'title': 'Title $language',
+                'language': language,
+              }),
+              200,
+            );
+          }),
+          language,
+        );
+        final incoming = api.messageFromJson(
+          _receivedLink(language: language == 'ko' ? 'es' : 'ko'),
+        );
+        expect(incoming.linkPreview?.title, isNull);
+        final results = await api.resolveLinkPreviews([incoming, incoming]);
+        expect(requests, 1);
+        expect(results.first.linkPreview?.title, 'Title $language');
+        expect(results.first.linkPreview?.language, language);
+        final cached = api.messageFromJson(
+          api.messageToCacheJson(results.first),
+        );
+        expect(cached.linkPreview?.title, 'Title $language');
+        await api.resolveLinkPreview(cached);
+        expect(requests, 1);
+      },
+    );
+
+    test(
+      'device requests $language using the same language code as the server',
+      () async {
+        final fetcher = DeviceLinkPreviewFetcher(
+          client: MockClient((request) async {
+            expect(request.headers['Accept-Language'], language);
+            return http.Response(
+              '<head><title>Title $language</title></head>',
+              200,
+              headers: {'content-type': 'text/html'},
+              request: request,
+            );
+          }),
+        );
+        final result = await fetcher.fetch(
+          Uri.parse(_fmkoreaUrl),
+          language: language,
+        );
+        expect(result?['language'], language);
+        expect(result?['title'], 'Title $language');
+      },
+    );
+  }
+
+  test(
+    'uses an existing viewer variant without refetching the sender card',
+    () async {
+      final api = _api(
+        MockClient((_) async => throw StateError('No request expected')),
+        'es',
+      );
+      final json = _receivedLink(language: 'ko');
+      (json['metadata'] as Map)['previews_by_language'] = {
+        'es': {'language': 'es', 'url': json['content'], 'title': 'Hola'},
+        'fr': {'language': 'fr', 'url': json['content'], 'title': 'Bonjour'},
+      };
+      final message = await api.resolveLinkPreview(api.messageFromJson(json));
+      expect(message.linkPreview?.title, 'Hola');
+    },
+  );
+
+  test('old disk cards are fetched in the current account language', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'naru-link-locale-',
+    );
+    addTearDown(() => directory.delete(recursive: true));
+    var requests = 0;
+    final api = _api(
+      MockClient((_) async {
+        requests++;
+        return http.Response(
+          jsonEncode({
+            'language': 'es',
+            'url': 'https://example.com/article',
+            'title': 'Hola',
+          }),
+          200,
+        );
+      }),
+      'es',
+    );
+    ChatMessageCache cache() => ChatMessageCache(
+      chatApi: api,
+      currentUserId: '22222222-2222-4222-8222-222222222222',
+      directoryLoader: () async => directory,
+    );
+    final senderApi = _api(
+      MockClient((_) async => throw StateError('No request expected')),
+      'ko',
+    );
+    final oldMessage = senderApi.messageFromJson(_receivedLink(language: 'ko'));
+    await cache().mergeLatestConversation(
+      otherUserId: oldMessage.senderId,
+      messages: [oldMessage],
+      hasMoreOlder: false,
+    );
+    final result = await cache().readConversation(oldMessage.senderId);
+    expect(result.messages.single.linkPreview?.title, 'Hola');
+    expect(requests, 1);
+  });
+
+  test(
+    'failed lookup keeps the original link without showing the sender language',
+    () async {
+      final api = _api(
+        MockClient((_) async => throw http.ClientException('offline')),
+        'es',
+      );
+      final message = await api.resolveLinkPreview(
+        api.messageFromJson(_receivedLink(language: 'ko')),
+      );
+      expect(message.content, 'https://example.com/article');
+      expect(message.linkPreview?.url, message.content);
+      expect(message.linkPreview?.title, isNull);
+    },
+  );
+
+  test(
+    'recipient device fallback and message editing both use the account language',
+    () async {
+      final requests = <String>[];
+      final api = _api(
+        MockClient((request) async {
+          requests.add('${request.method} ${request.url.host}');
+          if (request.url.host == 'm.fmkorea.com') {
+            expect(request.headers['Accept-Language'], 'es');
+            return http.Response(
+              '<head><title>Hola</title></head>',
+              200,
+              headers: {'content-type': 'text/html'},
+              request: request,
+            );
+          }
+          if (request.method == 'PATCH') {
+            final body = jsonDecode(request.body) as Map<String, dynamic>;
+            expect(body['metadata']['language'], 'es');
+            expect(body['metadata']['title'], 'Hola');
+            return http.Response(
+              jsonEncode({
+                ..._receivedLink(),
+                'content': _fmkoreaUrl,
+                'metadata': body['metadata'],
+              }),
+              200,
+            );
+          }
+          return http.Response(
+            jsonEncode({'url': _fmkoreaUrl, 'language': 'es'}),
+            200,
+          );
+        }),
+        'es',
+      );
+      final incoming = {
+        ..._receivedLink(language: 'ko'),
+        'content': _fmkoreaUrl,
+      };
+      final received = await api.resolveLinkPreview(
+        api.messageFromJson(incoming),
+      );
+      expect(received.linkPreview?.title, 'Hola');
+      final edited = await api.editTextMessage(
+        messageId: received.id,
+        content: _fmkoreaUrl,
+      );
+      expect(edited.linkPreview?.title, 'Hola');
+      expect(requests, [
+        'GET api.example.com',
+        'GET m.fmkorea.com',
+        'PATCH api.example.com',
+      ]);
+    },
+  );
+
+  test('an empty cached server card still uses the device fallback', () async {
+    var requests = 0;
+    final api = _api(
+      MockClient((request) async {
+        requests++;
+        expect(request.url.host, 'm.fmkorea.com');
+        expect(request.headers['Accept-Language'], 'es');
+        return http.Response(
+          '<head><title>Hola</title></head>',
+          200,
+          headers: {'content-type': 'text/html'},
+          request: request,
+        );
+      }),
+      'es',
+    );
+    final json = {
+      ..._receivedLink(),
+      'content': _fmkoreaUrl,
+      'metadata': {'url': _fmkoreaUrl, 'language': 'es'},
+    };
+    final card = await api.resolveLinkPreview(api.messageFromJson(json));
+    expect(card.linkPreview?.title, 'Hola');
+    expect(requests, 1);
+  });
+
+  test(
+    'conversation and reply-context loading use the same viewer card',
+    () async {
+      var previewRequests = 0;
+      final api = _api(
+        MockClient((request) async {
+          if (request.url.path.endsWith('/link-preview')) {
+            previewRequests++;
+            return http.Response(
+              jsonEncode({
+                'language': 'es',
+                'url': 'https://example.com/article',
+                'title': 'Hola',
+              }),
+              200,
+            );
+          }
+          return http.Response(
+            jsonEncode(
+              request.url.path.contains('/around/')
+                  ? {
+                      'messages': [_receivedLink(language: 'ko')],
+                      'has_more_older': false,
+                      'has_more_newer': false,
+                    }
+                  : [_receivedLink(language: 'ko')],
+            ),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+        'es',
+      );
+      final page = await api.listConversation(otherUserId: 'other');
+      final context = await api.getConversationMessageContext(
+        otherUserId: 'other',
+        messageId: page.messages.single.id,
+      );
+      expect(page.messages.single.linkPreview?.title, 'Hola');
+      expect(context.messages.single.linkPreview?.title, 'Hola');
+      expect(previewRequests, 1);
+    },
+  );
+
   test(
     'sends device-fetched FMKorea Open Graph metadata to the server',
     () async {
@@ -55,7 +351,7 @@ void main() {
             'Safari/605.1.15',
           );
           expect(request.headers['Accept'], 'text/html,application/xhtml+xml');
-          expect(request.headers['Accept-Language'], 'ko-KR,ko;q=0.9');
+          expect(request.headers['Accept-Language'], 'en');
 
           return http.Response(
             '<html><head>'
@@ -86,6 +382,7 @@ void main() {
         client: client,
         baseUri: Uri.parse('https://api.example.com'),
         accessToken: 'test-token',
+        preferredLanguage: 'en',
       );
 
       final ChatMessage message = await chatApi.sendTextMessage(
@@ -95,6 +392,7 @@ void main() {
 
       expect(requestCount, 2);
       expect(sentMetadata, <String, dynamic>{
+        'language': 'en',
         'url': _fmkoreaUrl,
         'canonical_url': _fmkoreaCanonicalUrl,
         'domain': 'm.fmkorea.com',
@@ -128,6 +426,7 @@ void main() {
         client: client,
         baseUri: Uri.parse('https://api.example.com'),
         accessToken: 'test-token',
+        preferredLanguage: 'en',
       );
 
       final ChatMessage message = await chatApi.sendTextMessage(
@@ -155,6 +454,7 @@ void main() {
       client: client,
       baseUri: Uri.parse('https://api.example.com'),
       accessToken: 'test-token',
+      preferredLanguage: 'en',
     );
 
     await chatApi.sendTextMessage(

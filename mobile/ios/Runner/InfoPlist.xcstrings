@@ -1,0 +1,271 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "NSPhotoLibraryUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "naru needs access to your photo library so you can choose and send photos in chats."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "채팅에 보낼 사진을 선택하려면 사진 보관함 접근이 필요해요."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "チャットで送る写真を選ぶため、写真ライブラリへのアクセスが必要です。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要访问照片图库，以便选择照片并在聊天中发送。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "naru necesita acceso a tu fototeca para que puedas elegir y enviar fotos en los chats."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "naru a besoin d’accéder à votre photothèque pour vous permettre de choisir et d’envoyer des photos dans les discussions."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "naru benötigt Zugriff auf deine Fotomediathek, damit du Fotos auswählen und in Chats senden kannst."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "naru deve accedere alla tua libreria foto per consentirti di scegliere e inviare foto nelle chat."
+          }
+        }
+      }
+    },
+    "NSLocationWhenInUseUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "naru accesses location information embedded in photos you choose only to send those photos in chats."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "선택한 사진에 포함된 위치 정보는 채팅에 사진을 보내는 데만 사용해요."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選択した写真に含まれる位置情報は、その写真をチャットで送信するためにのみ使用します。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选照片中包含的位置信息仅用于在聊天中发送这些照片。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "naru solo usa la ubicación incluida en las fotos que eliges para enviarlas en los chats."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "naru utilise les données de localisation des photos sélectionnées uniquement pour envoyer ces photos dans les discussions."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "naru verwendet die Standortdaten in deinen ausgewählten Fotos nur, um diese Fotos in Chats zu senden."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "naru usa la posizione inclusa nelle foto che scegli solo per inviare quelle foto nelle chat."
+          }
+        }
+      }
+    },
+    "NSPhotoLibraryAddUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "naru needs permission to save chat photos to your photo library."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "채팅의 사진을 사진 보관함에 저장하려면 권한이 필요해요."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "チャットの写真を写真ライブラリに保存するため、許可が必要です。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要获得权限，才能将聊天中的照片保存到照片图库。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "naru necesita permiso para guardar las fotos de los chats en tu fototeca."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "naru a besoin de votre autorisation pour enregistrer les photos des discussions dans votre photothèque."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "naru benötigt deine Erlaubnis, um Fotos aus Chats in deiner Fotomediathek zu speichern."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "naru richiede il permesso di salvare le foto delle chat nella tua libreria foto."
+          }
+        }
+      }
+    },
+    "NSCameraUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "naru needs access to your camera so you can take and send photos in chats."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "사진을 찍어 채팅에 보내려면 카메라 접근이 필요해요."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "写真を撮影してチャットで送るため、カメラへのアクセスが必要です。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要访问相机，以便拍摄照片并在聊天中发送。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "naru necesita acceso a la cámara para que puedas hacer y enviar fotos en los chats."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "naru a besoin d’accéder à votre appareil photo pour vous permettre de prendre et d’envoyer des photos dans les discussions."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "naru benötigt Zugriff auf deine Kamera, damit du Fotos aufnehmen und in Chats senden kannst."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "naru deve accedere alla fotocamera per consentirti di scattare e inviare foto nelle chat."
+          }
+        }
+      }
+    },
+    "NSMicrophoneUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "naru needs access to your microphone so you can record voice messages and make calls."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "음성메시지를 녹음하고 통화하려면 마이크 접근이 필요해요."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ボイスメモの録音と通話のため、マイクへのアクセスが必要です。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要访问麦克风，以便录制语音消息和进行通话。"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "naru necesita acceso al micrófono para que puedas grabar mensajes de voz y hacer llamadas."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "naru a besoin d’accéder à votre microphone pour vous permettre d’enregistrer des messages vocaux et de passer des appels."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "naru benötigt Zugriff auf dein Mikrofon, damit du Sprachnachrichten aufnehmen und Anrufe tätigen kannst."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "naru deve accedere al microfono per consentirti di registrare messaggi vocali ed effettuare chiamate."
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

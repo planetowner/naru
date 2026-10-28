@@ -1,5 +1,42 @@
 part of 'chat_conversation_view.dart';
 
+extension on ChatSearchEntry {
+  String displayTitle(BuildContext context) => title.isNotEmpty
+      ? title
+      : video != null
+      ? context.l10n.video
+      : file != null
+      ? context.l10n.file
+      : context.l10n.photo;
+}
+
+extension on ChatSearchCategory {
+  String label(BuildContext context) => switch (this) {
+    ChatSearchCategory.messages => context.l10n.messages,
+    ChatSearchCategory.media => context.l10n.media,
+    ChatSearchCategory.links => context.l10n.links,
+    ChatSearchCategory.files => context.l10n.files,
+  };
+  String hint(BuildContext context) => switch (this) {
+    ChatSearchCategory.messages => context.l10n.searchMessages,
+    ChatSearchCategory.links => context.l10n.searchLinks,
+    ChatSearchCategory.media ||
+    ChatSearchCategory.files => context.l10n.searchFilenames,
+  };
+  String emptyTitle(BuildContext context) => switch (this) {
+    ChatSearchCategory.media => context.l10n.noMedia,
+    ChatSearchCategory.links => context.l10n.noLinks,
+    ChatSearchCategory.files => context.l10n.noFiles,
+    ChatSearchCategory.messages => context.l10n.noResults,
+  };
+  String emptyDescription(BuildContext context) => switch (this) {
+    ChatSearchCategory.media => context.l10n.sharedMediaEmpty,
+    ChatSearchCategory.links => context.l10n.sharedLinksEmpty,
+    ChatSearchCategory.files => context.l10n.sharedFilesEmpty,
+    ChatSearchCategory.messages => context.l10n.tryDifferentSearch,
+  };
+}
+
 // 채팅의 썸네일·영상 다운로드·링크 열기를 그대로 공유하기 위해 같은 라이브러리에 둬요.
 
 final class _ChatSearchTopBar extends StatelessWidget {
@@ -83,8 +120,8 @@ final class _ChatSearchTopBar extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 AppNavigationBar(
-                  title: 'Search chat',
-                  backTooltip: 'Close search',
+                  title: context.l10n.search,
+                  backTooltip: context.l10n.closeSearch,
                   onBack: onCancel,
                 ),
                 Padding(
@@ -93,7 +130,7 @@ final class _ChatSearchTopBar extends StatelessWidget {
                     inputKey: const ValueKey('chat-search-input'),
                     controller: controller,
                     focusNode: focusNode,
-                    hintText: category.hint,
+                    hintText: category.hint(context),
                     textInputAction: TextInputAction.search,
                     autocorrect: false,
                     enableSuggestions: false,
@@ -105,7 +142,7 @@ final class _ChatSearchTopBar extends StatelessWidget {
                     ),
                     suffixIcon: hasText
                         ? IconButton(
-                            tooltip: 'Clear search',
+                            tooltip: context.l10n.clearSearch,
                             onPressed: onClear,
                             icon: const Icon(
                               AppIcons.close,
@@ -151,7 +188,7 @@ final class _ChatSearchTopBar extends StatelessWidget {
                                 ),
                               ),
                               child: Text(
-                                tab.label,
+                                tab.label(context),
                                 style: AppTypography.body.copyWith(
                                   color: (category == tab)
                                       ? AppColors.primary
@@ -186,22 +223,22 @@ final class _ChatSearchTopBar extends StatelessWidget {
                             child: CircularProgressIndicator(strokeWidth: 2.0),
                           ),
                           const SizedBox(width: AppSpacing.space8),
-                          const Expanded(
+                          Expanded(
                             child: Text(
-                              'Searching chat history…',
+                              context.l10n.searchingHistory,
                               style: AppTypography.caption,
                             ),
                           ),
                         ] else if (failed) ...[
-                          const Expanded(
+                          Expanded(
                             child: Text(
-                              'Couldn’t load all messages',
+                              context.l10n.historyLoadFailed,
                               style: AppTypography.caption,
                             ),
                           ),
                           TextButton(
                             onPressed: onRetry,
-                            child: const Text('Retry'),
+                            child: Text(context.l10n.retry),
                           ),
                         ],
                       ],
@@ -290,9 +327,12 @@ final class _ChatSearchAttachments extends StatelessWidget {
                                     in ChatSearchMediaFilter.values) ...[
                                   _SearchFilterChip(
                                     label: switch (filter) {
-                                      ChatSearchMediaFilter.all => 'All',
-                                      ChatSearchMediaFilter.photos => 'Photos',
-                                      ChatSearchMediaFilter.videos => 'Videos',
+                                      ChatSearchMediaFilter.all =>
+                                        context.l10n.all,
+                                      ChatSearchMediaFilter.photos =>
+                                        context.l10n.photos,
+                                      ChatSearchMediaFilter.videos =>
+                                        context.l10n.videos,
                                     },
                                     selected: mediaFilter == filter,
                                     onPressed: () =>
@@ -304,7 +344,7 @@ final class _ChatSearchAttachments extends StatelessWidget {
                             ),
                           )
                         : Text(
-                            'Newest first',
+                            context.l10n.newestFirst,
                             style: AppTypography.caption.copyWith(
                               color: AppColors.textTertiary,
                             ),
@@ -313,7 +353,7 @@ final class _ChatSearchAttachments extends StatelessWidget {
                   const SizedBox(width: AppSpacing.space8),
                   AppIconButton(
                     icon: AppIcons.calendar,
-                    tooltip: 'Filter by date',
+                    tooltip: context.l10n.filterByDate,
                     onPressed: onDatePressed,
                   ),
                 ],
@@ -335,7 +375,7 @@ final class _ChatSearchAttachments extends StatelessWidget {
                   selected: true,
                   onPressed: onClearDate,
                   trailingIcon: AppIcons.close,
-                  tooltip: 'Clear date filter',
+                  tooltip: context.l10n.clearDate,
                 ),
               ),
             ),
@@ -361,7 +401,7 @@ final class _ChatSearchAttachments extends StatelessWidget {
                         for (final group in groups.entries) ...[
                           _heading(
                             _shortDate(context, group.key),
-                            '${group.value.length} items',
+                            context.l10n.itemCount(group.value.length),
                           ),
                           SliverPadding(
                             padding: EdgeInsets.fromLTRB(
@@ -388,11 +428,13 @@ final class _ChatSearchAttachments extends StatelessWidget {
                       else ...[
                         _heading(
                           hasQuery
-                              ? '${entries.length} results'
+                              ? context.l10n.resultCount(entries.length)
                               : category == ChatSearchCategory.links
-                              ? 'Shared links'
-                              : 'Shared files',
-                          hasQuery ? '' : '${entries.length} ${category.name}',
+                              ? context.l10n.sharedLinks
+                              : context.l10n.sharedFiles,
+                          hasQuery
+                              ? ''
+                              : context.l10n.itemCount(entries.length),
                         ),
                         SliverPadding(
                           padding: EdgeInsets.fromLTRB(
@@ -468,7 +510,7 @@ final class _ChatSearchAttachments extends StatelessWidget {
       }
       return Semantics(
         button: true,
-        label: entry.title,
+        label: entry.displayTitle(context),
         child: InkWell(
           key: ValueKey('search-media-${entry.id}'),
           onTap: () {
@@ -496,17 +538,17 @@ final class _ChatSearchAttachments extends StatelessWidget {
     final ChatLinkPreview? link = entry.link;
     final ChatFileAttachment? file = entry.file;
     final String extension = file == null || !file.name.contains('.')
-        ? 'FILE'
+        ? context.l10n.file
         : file.name.split('.').last.toUpperCase();
     final String meta =
         link?.domain ?? '$extension · ${_formatFileSize(file!.sizeBytes)}';
     return _SearchResultCard(
       key: ValueKey('search-card-${entry.id}'),
-      title: entry.title,
+      title: entry.displayTitle(context),
       meta: meta,
       isLink: link != null,
       sender:
-          '${entry.message.senderId == currentUserId ? 'You' : otherParticipantName} · ${_shortDate(context, entry.message.createdAt)}',
+          '${entry.message.senderId == currentUserId ? context.l10n.you : otherParticipantName} · ${_shortDate(context, entry.message.createdAt)}',
       preview: link != null
           ? LayoutBuilder(
               builder: (context, constraints) => _LinkPreviewImage(
@@ -704,9 +746,6 @@ final class _SearchEmptyState extends StatelessWidget {
   final VoidCallback onClear;
   @override
   Widget build(BuildContext context) {
-    final String name = category == ChatSearchCategory.media
-        ? 'photos or videos'
-        : category.name;
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpacing.space16),
@@ -729,22 +768,22 @@ final class _SearchEmptyState extends StatelessWidget {
             const SizedBox(height: AppSpacing.space12),
             Text(
               loading
-                  ? 'Searching chat history…'
+                  ? context.l10n.searchingHistory
                   : failed
-                  ? 'Search is incomplete'
-                  : 'No $name found',
+                  ? context.l10n.searchIncomplete
+                  : category.emptyTitle(context),
               textAlign: TextAlign.center,
               style: AppTypography.screenTitle,
             ),
             const SizedBox(height: AppSpacing.space8),
             Text(
               loading
-                  ? 'Results will appear as messages load.'
+                  ? context.l10n.loadingResults
                   : failed
-                  ? 'Retry to include the rest of this chat.'
+                  ? context.l10n.retryHistory
                   : hasQuery || hasDate
-                  ? 'Try a different search or date.'
-                  : 'Shared $name will appear here.',
+                  ? context.l10n.tryDifferentSearch
+                  : category.emptyDescription(context),
               textAlign: TextAlign.center,
               style: AppTypography.body.copyWith(
                 color: AppColors.textSecondary,
@@ -753,7 +792,7 @@ final class _SearchEmptyState extends StatelessWidget {
             if (hasQuery || hasDate) ...[
               const SizedBox(height: AppSpacing.space12),
               AppButton(
-                label: 'Clear search',
+                label: context.l10n.clearSearch,
                 onPressed: onClear,
                 secondary: true,
                 expand: false,

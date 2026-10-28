@@ -23,6 +23,8 @@ private struct NotificationCredentials: Codable {
   let accessToken: String
   let userID: String
   let preferredLanguage: String
+  let replyActionTitle: String?
+  let sendActionTitle: String?
 }
 
 private enum KeychainStore {
@@ -158,7 +160,9 @@ final class NotificationBridge: NSObject, FlutterPlugin, FlutterStreamHandler {
       let apiBaseURL = values["apiBaseUrl"] as? String,
       let accessToken = values["accessToken"] as? String,
       let userID = values["userId"] as? String,
-      let preferredLanguage = values["preferredLanguage"] as? String
+      let preferredLanguage = values["preferredLanguage"] as? String,
+      let replyActionTitle = values["replyActionTitle"] as? String,
+      let sendActionTitle = values["sendActionTitle"] as? String
     else {
       result(FlutterError(
         code: "invalid-arguments",
@@ -172,7 +176,9 @@ final class NotificationBridge: NSObject, FlutterPlugin, FlutterStreamHandler {
       apiBaseURL: apiBaseURL,
       accessToken: accessToken,
       userID: userID,
-      preferredLanguage: preferredLanguage
+      preferredLanguage: preferredLanguage,
+      replyActionTitle: replyActionTitle,
+      sendActionTitle: sendActionTitle
     )
     guard let data = try? JSONEncoder().encode(credentials) else {
       result(FlutterError(
@@ -243,13 +249,16 @@ final class NotificationBridge: NSObject, FlutterPlugin, FlutterStreamHandler {
   }
 
   private func registerNotificationCategories() {
-    let language = Locale.preferredLanguages.first?.lowercased() ?? "ko"
-    let isChinese = language.hasPrefix("zh")
+    // Flutter가 같은 번역 원본에서 전달한 문구를 재실행 후에도 사용해요.
+    // 구버전 저장값은 다음 configure에서 갱신될 때까지 기존 알림 카테고리를 유지해요.
+    guard let stored = credentials(),
+          let replyTitle = stored.replyActionTitle,
+          let sendTitle = stored.sendActionTitle else { return }
     let action = UNTextInputNotificationAction(
       identifier: NotificationConstants.replyAction,
-      title: isChinese ? "答复" : "답장",
+      title: replyTitle,
       options: [],
-      textInputButtonTitle: isChinese ? "发送" : "전송",
+      textInputButtonTitle: sendTitle,
       textInputPlaceholder: ""
     )
     let replyCategory = UNNotificationCategory(

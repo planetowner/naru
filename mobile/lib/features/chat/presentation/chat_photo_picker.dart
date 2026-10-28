@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/l10n/app_strings.dart';
 import '../../../design_system/app_colors.dart';
 import '../../../design_system/app_icons.dart';
 import '../../../design_system/app_radius.dart';
@@ -334,8 +335,8 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
           _selectedAlbum = null;
           _selectedAssets.clear();
           _errorMessage = _accessState == ChatPhotoAccessState.limited
-              ? 'No photos are currently shared with naru.'
-              : 'No photos are available on this device.';
+              ? context.l10n.noSharedPhotos
+              : context.l10n.noDevicePhotos;
           _nextPage = 0;
           _hasMoreAssets = false;
         });
@@ -582,8 +583,8 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
           _accessState = accessState;
           _initializing = false;
           _errorMessage = accessState == ChatPhotoAccessState.limited
-              ? 'No photos are currently shared with naru.'
-              : 'No photos are available on this device.';
+              ? context.l10n.noSharedPhotos
+              : context.l10n.noDevicePhotos;
         });
 
         return;
@@ -610,7 +611,7 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
 
       setState(() {
         _initializing = false;
-        _errorMessage = 'Photos could not be loaded.';
+        _errorMessage = context.l10n.photosLoadFailed;
       });
     } finally {
       _schedulePendingLibraryRefresh();
@@ -656,7 +657,7 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
 
       setState(() {
         _initializing = false;
-        _errorMessage = 'This album could not be loaded.';
+        _errorMessage = context.l10n.albumLoadFailed;
       });
     } finally {
       _schedulePendingLibraryRefresh();
@@ -758,9 +759,7 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
     if (_selectedAssets.length >= _maximumSelectionCount) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(content: Text('You can select up to 10 items.')),
-        );
+        ..showSnackBar(SnackBar(content: Text(context.l10n.selectionLimit)));
 
       return;
     }
@@ -839,11 +838,7 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
 
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text('The selected media could not be edited.'),
-          ),
-        );
+        ..showSnackBar(SnackBar(content: Text(context.l10n.mediaEditFailed)));
     } finally {
       if (mounted) {
         setState(() {
@@ -858,7 +853,7 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
     final ChatPhotoAlbum? album = _selectedAlbum;
 
     if (album == null || album.isAll) {
-      return 'Recents';
+      return context.l10n.recents;
     }
 
     return album.name;
@@ -1165,7 +1160,7 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
 
     final Widget sendLabel = selectedCount == 0
         ? Text(
-            'Send',
+            context.l10n.send,
             maxLines: 1,
             softWrap: false,
             textAlign: TextAlign.center,
@@ -1178,7 +1173,7 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
                   text: '$selectedCount',
                   style: const TextStyle(fontWeight: AppTypography.bold),
                 ),
-                const TextSpan(text: ' Send'),
+                TextSpan(text: ' ${context.l10n.send}'),
               ],
             ),
             maxLines: 1,
@@ -1231,7 +1226,7 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
       );
     } else {
       title = Text(
-        'Photo',
+        context.l10n.photo,
         key: const ValueKey<String>('photo-picker-title'),
         style: AppTypography.typography6.copyWith(
           color: AppColors.textPrimary,
@@ -1256,7 +1251,7 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
             child: Center(
               child: IconButton(
                 key: const ValueKey<String>('photo-picker-close'),
-                tooltip: 'Close photo picker',
+                tooltip: context.l10n.closePhotoPicker,
                 onPressed: widget.onClose,
                 icon: const Icon(
                   AppIcons.close,
@@ -1323,7 +1318,7 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
               ),
               const SizedBox(height: AppSpacing.space12),
               Text(
-                'Photo access is required.',
+                context.l10n.photoAccessRequired,
                 textAlign: TextAlign.center,
                 style: AppTypography.subTypography10.copyWith(
                   color: AppColors.textPrimary,
@@ -1332,7 +1327,7 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
               ),
               const SizedBox(height: AppSpacing.space4),
               Text(
-                'Allow photo access in settings to choose photos.',
+                context.l10n.photoAccessDescription,
                 textAlign: TextAlign.center,
                 style: AppTypography.subTypography11.copyWith(
                   color: AppColors.textSecondary,
@@ -1343,7 +1338,7 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
                 onPressed: () {
                   unawaited(widget.photoLibrary.openSettings());
                 },
-                child: const Text('Open Settings'),
+                child: Text(context.l10n.openSettings),
               ),
             ],
           ),
@@ -1430,7 +1425,9 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
       itemBuilder: (BuildContext context, int index) {
         final ChatPhotoAlbum album = _albums[index];
 
-        final String albumName = album.isAll ? 'Recents' : album.name;
+        final String albumName = album.isAll
+            ? context.l10n.recents
+            : album.name;
 
         return InkWell(
           key: ValueKey<String>('photo-album-row-${album.id}'),
@@ -1563,7 +1560,7 @@ final class _ChatPhotoPickerState extends State<ChatPhotoPicker>
                             ),
                             const SizedBox(width: 7.0),
                             Text(
-                              'Collage Photos',
+                              context.l10n.collagePhotos,
                               style: AppTypography.typography6.copyWith(
                                 color: AppColors.textPrimary,
                                 fontWeight: AppTypography.regular,

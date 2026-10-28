@@ -30,6 +30,9 @@ void main() {
         await tester.pumpWidget(
           MaterialApp(
             home: ChatConversationView(
+              currentUserName: 'Me',
+              otherParticipantName: 'Lia',
+
               initialMessages: [
                 for (final outcome in [
                   ChatCallOutcome.started,
@@ -67,7 +70,13 @@ void main() {
       'local call keeps start and ${timeout ? 'timeout' : 'cancel'} records',
       (tester) async {
         await tester.pumpWidget(
-          const MaterialApp(home: ChatConversationView(initialMessages: [])),
+          const MaterialApp(
+            home: ChatConversationView(
+              currentUserName: 'Me',
+              otherParticipantName: 'Lia',
+              initialMessages: [],
+            ),
+          ),
         );
         await tester.pumpAndSettle();
         await _startCall(tester);
@@ -102,6 +111,9 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: ChatConversationView(
+            currentUserName: 'Me',
+            otherParticipantName: 'Lia',
+
             initialMessages: const [],
             onSendCallMessage: ({required call}) => pendingStart.future,
             onUpdateCallOutcome:

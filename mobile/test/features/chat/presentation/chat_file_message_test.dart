@@ -69,7 +69,11 @@ ChatMessage _sentFileMessage(ChatFileAttachment file, int index) {
 
 Widget _buildFileMessageScreen(ChatMessage message) {
   return MaterialApp(
-    home: ChatConversationView(initialMessages: <ChatMessage>[message]),
+    home: ChatConversationView(
+      currentUserName: 'Me',
+      otherParticipantName: 'Lia',
+      initialMessages: <ChatMessage>[message],
+    ),
   );
 }
 
@@ -102,6 +106,9 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: ChatConversationView(
+          currentUserName: 'Me',
+          otherParticipantName: 'Lia',
+
           initialMessages: const <ChatMessage>[],
           onSendFileMessage: ({required file, replyTo}) {
             sentFiles.add(file);
@@ -145,6 +152,9 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: ChatConversationView(
+          currentUserName: 'Me',
+          otherParticipantName: 'Lia',
+
           initialMessages: const <ChatMessage>[],
           onSendFileMessage: ({required file, replyTo}) async {
             return _sentFileMessage(file, ++sendCount);
@@ -168,6 +178,9 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: ChatConversationView(
+          currentUserName: 'Me',
+          otherParticipantName: 'Lia',
+
           initialMessages: const <ChatMessage>[],
           onSendFileMessage: ({required file, replyTo}) async {
             if (++sendCount == 2) {
@@ -238,6 +251,9 @@ void main() {
         await tester.pumpWidget(
           MaterialApp(
             home: ChatConversationView(
+              currentUserName: 'Me',
+              otherParticipantName: 'Lia',
+
               initialMessages: [_sentFileMessage(attachment, 1)],
               onCreateMediaAssetAccessUrl: ({required mediaAssetId}) async {
                 expect(mediaAssetId, 'file-asset');

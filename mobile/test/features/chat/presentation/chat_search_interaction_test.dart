@@ -1,3 +1,4 @@
+import '../../../support/localized_test_app.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -104,8 +105,12 @@ void main() {
     });
 
     await tester.pumpWidget(
-      MaterialApp(
+      LocalizedTestApp(
+        language: 'en',
+
         home: ChatConversationView(
+          currentUserName: 'Me',
+          otherParticipantName: 'Lia',
           initialMessages: <ChatMessage>[
             ChatMessage(
               id: 'oldest',
@@ -141,7 +146,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Search'));
+    await tester.tap(find.byKey(const ValueKey<String>('chat-search-button')));
     await tester.pump(const Duration(milliseconds: 250));
     await tester.enterText(
       find.byKey(const ValueKey<String>('chat-search-input')),
@@ -195,8 +200,13 @@ void main() {
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
-      MaterialApp(
+      LocalizedTestApp(
+        language: 'en',
+
         home: ChatConversationView(
+          currentUserName: 'Me',
+          otherParticipantName: 'Lia',
+
           initialMessages: <ChatMessage>[
             ChatMessage(
               id: 'incoming-match',
@@ -218,7 +228,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Search'));
+    await tester.tap(find.byKey(const ValueKey<String>('chat-search-button')));
     await tester.pump(const Duration(milliseconds: 250));
     await tester.enterText(
       find.byKey(const ValueKey<String>('chat-search-input')),
@@ -270,7 +280,14 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MaterialApp(home: ChatConversationView(initialMessages: messages)),
+      LocalizedTestApp(
+        language: 'en',
+        home: ChatConversationView(
+          currentUserName: 'Me',
+          otherParticipantName: 'Lia',
+          initialMessages: messages,
+        ),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -285,7 +302,9 @@ void main() {
         tester.getTopLeft(composer).dy - tester.getBottomLeft(anchorBubble).dy;
 
     for (int cycle = 0; cycle < 3; cycle++) {
-      await tester.tap(find.byTooltip('Search'));
+      await tester.tap(
+        find.byKey(const ValueKey<String>('chat-search-button')),
+      );
       await tester.pump(const Duration(milliseconds: 100));
 
       final Finder searchToolbar = find.byKey(
@@ -342,8 +361,13 @@ void main() {
     final messages = _messagesWithPhotoBeforeMatches(1);
     final history = Completer<ChatConversationPage>();
     await tester.pumpWidget(
-      MaterialApp(
+      LocalizedTestApp(
+        language: 'en',
+
         home: ChatConversationView(
+          currentUserName: 'Me',
+          otherParticipantName: 'Lia',
+
           initialMessages: messages,
           onLoadSearchPage: ({beforeMessageId}) => history.future,
         ),
@@ -357,7 +381,7 @@ void main() {
         .dy;
     expect(composerTop - initialBottom, greaterThan(12));
 
-    await tester.tap(find.byTooltip('Search'));
+    await tester.tap(find.byKey(const ValueKey<String>('chat-search-button')));
     for (int frame = 0; frame < 4; frame++) {
       await tester.pump(const Duration(milliseconds: 16));
       expect(
@@ -389,10 +413,19 @@ void main() {
 
       final messages = _messagesWithPhotoBeforeMatches(20);
       await tester.pumpWidget(
-        MaterialApp(home: ChatConversationView(initialMessages: messages)),
+        LocalizedTestApp(
+          language: 'en',
+          home: ChatConversationView(
+            currentUserName: 'Me',
+            otherParticipantName: 'Lia',
+            initialMessages: messages,
+          ),
+        ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Search'));
+      await tester.tap(
+        find.byKey(const ValueKey<String>('chat-search-button')),
+      );
       await tester.pumpAndSettle();
 
       void expectMessageVisible(String bubbleKey) {
@@ -502,9 +535,13 @@ void main() {
     'search results stay hidden until the edited query is submitted',
     (WidgetTester tester) async {
       await tester.pumpWidget(
-        MaterialApp(
+        LocalizedTestApp(
+          language: 'ko',
+
           home: ChatConversationView(
-            currentUserPreferredLanguage: 'ko',
+            currentUserName: 'Me',
+            otherParticipantName: 'Lia',
+
             initialMessages: <ChatMessage>[
               ChatMessage(
                 id: 'match',
@@ -519,7 +556,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byTooltip('Search'));
+      await tester.tap(
+        find.byKey(const ValueKey<String>('chat-search-button')),
+      );
       await tester.pump(const Duration(milliseconds: 250));
 
       final Finder searchInput = find.byKey(
@@ -558,13 +597,17 @@ void main() {
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
-      const MaterialApp(
-        home: ChatConversationView(currentUserPreferredLanguage: 'zh-CN'),
+      const LocalizedTestApp(
+        language: 'zh-CN',
+        home: ChatConversationView(
+          currentUserName: 'Me',
+          otherParticipantName: 'Lia',
+        ),
       ),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Search'));
+    await tester.tap(find.byKey(const ValueKey<String>('chat-search-button')));
     await tester.pump(const Duration(milliseconds: 250));
     await tester.enterText(
       find.byKey(const ValueKey<String>('chat-search-input')),

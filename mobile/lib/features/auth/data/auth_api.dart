@@ -24,12 +24,16 @@ final class AuthApi {
 
   Future<AuthSession> register({
     required String username,
+    required String displayName,
     required String password,
     required String passwordConfirmation,
+    required String preferredLanguage,
   }) => _authenticate('/auth/register', {
     'username': username,
+    'display_name': displayName,
     'password': password,
     'password_confirmation': passwordConfirmation,
+    'preferred_language': preferredLanguage,
   }, successStatus: 201);
 
   Future<AuthSession> _authenticate(

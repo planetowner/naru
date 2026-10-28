@@ -43,7 +43,9 @@ void main() {
               ({
                 required username,
                 required password,
+                displayName,
                 passwordConfirmation,
+                preferredLanguage,
               }) async {},
         ),
       ),
@@ -65,13 +67,24 @@ void main() {
   Future<void> fill(
     WidgetTester tester, {
     String confirmation = ' secret ',
+    String displayName = '  June 🌿  ',
   }) async {
     await tester.enterText(input('Username'), '  june  ');
+    if (input('Name').evaluate().isNotEmpty) {
+      await tester.enterText(input('Name'), displayName);
+    }
     await tester.enterText(input('Password'), ' secret ');
     if (input('Confirm password').evaluate().isNotEmpty) {
       await tester.enterText(input('Confirm password'), confirmation);
     }
     await tester.pump();
+  }
+
+  Future<void> finishLanguage(WidgetTester tester) async {
+    await tester.tap(find.text('Español'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(AppButton, 'Start chatting'));
+    await tester.pumpAndSettle();
   }
 
   testWidgets(
@@ -84,10 +97,13 @@ void main() {
             ({
               required username,
               required password,
+              displayName,
               passwordConfirmation,
+              preferredLanguage,
             }) async {
               submitted = {
                 'username': username,
+                'name': displayName,
                 'password': password,
                 'confirmation': passwordConfirmation,
               };
@@ -103,6 +119,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(submitted, {
         'username': 'june',
+        'name': null,
         'password': ' secret ',
         'confirmation': null,
       });
@@ -119,15 +136,17 @@ void main() {
             ({
               required username,
               required password,
+              displayName,
               passwordConfirmation,
+              preferredLanguage,
             }) async {
               calls++;
             },
       );
       await openSignUp(tester);
-      expect(find.byType(AppTextField), findsNWidgets(3));
+      expect(find.byType(AppTextField), findsNWidgets(4));
       await fill(tester, confirmation: 'secret');
-      await tester.tap(find.widgetWithText(AppButton, 'Sign up'));
+      await tester.tap(find.widgetWithText(AppButton, 'Continue'));
       await tester.pumpAndSettle();
       expect(calls, 0);
       expect(find.text('Passwords do not match.'), findsOneWidget);
@@ -140,8 +159,10 @@ void main() {
       await tester.enterText(input('Confirm password'), 'changed');
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
+      expect(calls, 0);
+      await finishLanguage(tester);
       expect(calls, 1);
-      expect(find.widgetWithText(AppButton, 'Sign in'), findsOneWidget);
+      expect(find.widgetWithText(AppButton, 'Log in'), findsOneWidget);
     },
   );
 
@@ -152,25 +173,73 @@ void main() {
     await pumpAuth(
       tester,
       onSubmit:
-          ({required username, required password, passwordConfirmation}) async {
+          ({
+            required username,
+            required password,
+            displayName,
+            passwordConfirmation,
+            preferredLanguage,
+          }) async {
             submitted = {
               'username': username,
+              'name': displayName,
               'password': password,
               'confirmation': passwordConfirmation,
+              'language': preferredLanguage,
             };
           },
     );
     await openSignUp(tester);
     await fill(tester);
-    await tester.tap(find.widgetWithText(AppButton, 'Sign up'));
+    await tester.tap(find.widgetWithText(AppButton, 'Continue'));
     await tester.pumpAndSettle();
+    expect(submitted, isNull);
+    await finishLanguage(tester);
     expect(submitted, {
       'username': 'june',
+      'name': 'June 🌿',
       'password': ' secret ',
       'confirmation': ' secret ',
+      'language': 'es',
     });
-    expect(find.widgetWithText(AppButton, 'Sign in'), findsOneWidget);
+    expect(find.widgetWithText(AppButton, 'Log in'), findsOneWidget);
   });
+
+  testWidgets(
+    'signup requires a name and counts Unicode characters consistently',
+    (tester) async {
+      await pumpAuth(tester);
+      await openSignUp(tester);
+      await fill(tester, displayName: '   ');
+      expect(find.byType(AppTextField), findsNWidgets(4));
+      expect(
+        tester.widget<AppButton>(find.byType(AppButton)).onPressed,
+        isNull,
+      );
+
+      await tester.enterText(input('Name'), '🌿' * 101);
+      await tester.pump();
+      await tester.tap(find.widgetWithText(AppButton, 'Continue'));
+      await tester.pumpAndSettle();
+      expect(find.text('Use 100 characters or fewer.'), findsOneWidget);
+      expect(find.byType(AppSelectionTile), findsNothing);
+
+      await tester.enterText(input('Name'), '   ');
+      await tester.pump();
+      expect(find.text('Enter your name.'), findsOneWidget);
+      await tester.enterText(input('Name'), '🌿' * 100);
+      await tester.pump();
+      await tester.tap(find.widgetWithText(AppButton, 'Continue'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AppSelectionTile), findsNWidgets(8));
+      await tester.tap(find.byTooltip('Back'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TextFormField>(input('Name')).controller!.text,
+        '🌿' * 100,
+      );
+    },
+  );
 
   testWidgets(
     'submission disables inputs and duplicate requests then allows retry',
@@ -180,15 +249,24 @@ void main() {
       await pumpAuth(
         tester,
         onSubmit:
-            ({required username, required password, passwordConfirmation}) {
+            ({
+              required username,
+              required password,
+              displayName,
+              passwordConfirmation,
+              preferredLanguage,
+            }) {
               calls++;
               return pending.future;
             },
       );
       await openSignUp(tester);
       await fill(tester);
-      final submit = find.widgetWithText(AppButton, 'Sign up');
-      await tester.tap(submit);
+      await tester.tap(find.widgetWithText(AppButton, 'Continue'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Español'));
+      await tester.pump();
+      await tester.tap(find.widgetWithText(AppButton, 'Start chatting'));
       await tester.pump();
       final button = tester.widget<AppButton>(find.byType(AppButton));
       expect(button.isLoading, isTrue);
@@ -210,6 +288,16 @@ void main() {
         tester.widget<AppButton>(find.byType(AppButton)).onPressed,
         isNotNull,
       );
+      expect(
+        tester
+            .widget<AppSelectionTile>(
+              find.widgetWithText(AppSelectionTile, 'Español'),
+            )
+            .onTap,
+        isNotNull,
+      );
+      await tester.tap(find.byTooltip('Back'));
+      await tester.pumpAndSettle();
       await tester.enterText(input('Username'), 'another-user');
       await tester.pump();
       expect(find.text('This username is already taken'), findsNothing);
@@ -247,7 +335,13 @@ void main() {
     await pumpAuth(
       tester,
       onSubmit:
-          ({required username, required password, passwordConfirmation}) async {
+          ({
+            required username,
+            required password,
+            displayName,
+            passwordConfirmation,
+            preferredLanguage,
+          }) async {
             calls++;
           },
     );
@@ -255,7 +349,7 @@ void main() {
     await openSignUp(tester);
     await fill(tester);
     await tester.enterText(input('Username'), 'x' * 51);
-    await tester.tap(find.widgetWithText(AppButton, 'Sign up'));
+    await tester.tap(find.widgetWithText(AppButton, 'Continue'));
     await tester.pumpAndSettle();
     expect(find.text('Use 50 characters or fewer.'), findsOneWidget);
     expect(calls, 0);
@@ -277,18 +371,27 @@ void main() {
     await pumpAuth(
       tester,
       onSubmit:
-          ({required username, required password, passwordConfirmation}) async {
+          ({
+            required username,
+            required password,
+            displayName,
+            passwordConfirmation,
+            preferredLanguage,
+          }) async {
             throw Exception('connection failed');
           },
     );
     await openSignUp(tester);
     await fill(tester);
-    await tester.tap(find.widgetWithText(AppButton, 'Sign up'));
+    await tester.tap(find.widgetWithText(AppButton, 'Continue'));
     await tester.pumpAndSettle();
+    await finishLanguage(tester);
     expect(
       find.text('Could not complete the request. Please try again.'),
       findsOneWidget,
     );
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
     expect(input('Confirm password'), findsOneWidget);
     expect(tester.widget<AppButton>(find.byType(AppButton)).isLoading, isFalse);
   });
@@ -325,7 +428,54 @@ void main() {
     expect(find.byType(AppButton).hitTestable(), findsOneWidget);
   });
 
-  testWidgets('simple auth screens match Figma layout', (tester) async {
+  testWidgets(
+    'eight languages remain selectable on a small screen with large text',
+    (tester) async {
+      await pumpAuth(tester, textScale: 1.6);
+      await tester.binding.setSurfaceSize(const Size(320, 560));
+      await tester.ensureVisible(find.widgetWithText(TextButton, 'Sign up'));
+      await openSignUp(tester);
+      await fill(tester);
+      await tester.ensureVisible(find.widgetWithText(AppButton, 'Continue'));
+      await tester.tap(find.widgetWithText(AppButton, 'Continue'));
+      await tester.pumpAndSettle();
+      for (final label in [
+        '한국어',
+        '日本語',
+        '中文（简体）',
+        'English',
+        'Español',
+        'Français',
+        'Deutsch',
+        'Italiano',
+      ]) {
+        final tile = find.widgetWithText(AppSelectionTile, label);
+        await tester.ensureVisible(tile);
+        await tester.tap(tile);
+        await tester.pumpAndSettle();
+        expect(tester.widget<AppSelectionTile>(tile).selected, isTrue);
+        expect(
+          tester
+              .widgetList<AppSelectionTile>(find.byType(AppSelectionTile))
+              .where((tile) => tile.selected)
+              .length,
+          1,
+        );
+        expect(tester.takeException(), isNull);
+      }
+      await tester.ensureVisible(
+        find.widgetWithText(AppButton, 'Start chatting'),
+      );
+      expect(
+        find.widgetWithText(AppButton, 'Start chatting').hitTestable(),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets('auth screens keep the shared layout with signup name input', (
+    tester,
+  ) async {
     await pumpAuth(tester);
     final firstField = find.byType(AppTextField).first;
     expect(tester.getTopLeft(firstField).dy, closeTo(523, 4));
@@ -334,7 +484,7 @@ void main() {
       matchesGoldenFile('../../../design_system/goldens/login.png'),
     );
     await openSignUp(tester);
-    await fill(tester);
+    await fill(tester, displayName: 'June');
     FocusManager.instance.primaryFocus?.unfocus();
     await tester.pumpAndSettle();
     expect(
@@ -345,6 +495,32 @@ void main() {
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('../../../design_system/goldens/auth-signup.png'),
+    );
+    await tester.tap(find.widgetWithText(AppButton, 'Continue'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AppSelectionTile), findsNWidgets(8));
+    expect(tester.widget<AppButton>(find.byType(AppButton)).onPressed, isNull);
+    await tester.tap(find.text('Español'));
+    await tester.pumpAndSettle();
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('../../../design_system/goldens/auth-language.png'),
+    );
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<TextFormField>(input('Password')).controller!.text,
+      ' secret ',
+    );
+    await tester.tap(find.widgetWithText(AppButton, 'Continue'));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<AppSelectionTile>(
+            find.widgetWithText(AppSelectionTile, 'Español'),
+          )
+          .selected,
+      isTrue,
     );
   });
 }

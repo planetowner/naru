@@ -101,37 +101,70 @@ class VoiceTranscriptionFlowTests(unittest.IsolatedAsyncioTestCase):
         ))))
         self.send = self.enterContext(patch.object(routes, "send_to_direct_participants", AsyncMock()))
 
-    async def test_transcript_is_published_before_shared_translation(self):
-        stored_translations = []
-        def add(record):
-            if isinstance(record, MessageTranslation):
-                stored_translations.append(record)
-        async def scalar(statement):
-            table = statement.column_descriptions[0]["entity"]
-            if table is MediaAsset:
-                return self.asset
-            if table is DirectConversation:
-                return self.direct
-            return stored_translations[0] if stored_translations else None
-        async def scalars(statement):
-            table = statement.column_descriptions[0]["entity"]
-            return stored_translations if table is MessageTranslation else []
-        self.session.add.side_effect = add
-        self.session.scalar.side_effect = scalar
-        self.session.scalars.side_effect = scalars
+    async def test_transcript_preserves_sender_language_before_shared_translation(self):
+        cases = (
+            ("ko", "你好"),
+            ("ja", "今日は晴れです"),
+            ("zh-CN", "안녕하세요"),
+            ("en", "안녕하세요"),
+            ("es", "你好"),
+            ("fr", "안녕하세요"),
+            ("de", "你好"),
+            ("it", "안녕하세요"),
+        )
+        for source_language, transcript in cases:
+            with self.subTest(source_language=source_language, transcript=transcript):
+                self.sender.preferred_language = source_language
+                self.recipient.preferred_language = "es"
+                self.message.source_language = source_language
+                self.message.metadata_json = {
+                    "transcription_status": "pending", "waveform_samples": [0.2, 0.8],
+                }
+                self.transcribe.return_value = transcript
+                self.translate.reset_mock()
+                self.translate.return_value = TranslationResult(
+                    translated_text="Hola", source_language=source_language,
+                    target_language="es", provider="openai", model="test-model",
+                )
+                self.send.reset_mock()
+                stored_translations = []
+                def add(record):
+                    if isinstance(record, MessageTranslation):
+                        stored_translations.append(record)
+                async def scalar(statement):
+                    table = statement.column_descriptions[0]["entity"]
+                    if table is MediaAsset:
+                        return self.asset
+                    if table is DirectConversation:
+                        return self.direct
+                    return stored_translations[0] if stored_translations else None
+                async def scalars(statement):
+                    table = statement.column_descriptions[0]["entity"]
+                    return stored_translations if table is MessageTranslation else []
+                self.session.add.side_effect = add
+                self.session.scalar.side_effect = scalar
+                self.session.scalars.side_effect = scalars
 
-        await routes.transcribe_and_publish_message(self.message.id)
+                await routes.transcribe_and_publish_message(self.message.id)
 
-        self.assertEqual(self.message.body, "你好")
-        self.assertEqual(self.message.metadata_json["waveform_samples"], [0.2, 0.8])
-        events = [call.args[1] for call in self.send.await_args_list]
-        self.assertEqual([event["type"] for event in events], ["message.updated", "message.translation.updated"])
-        self.assertEqual(events[0]["message"]["transcription_status"], "completed")
-        self.assertEqual(events[0]["message"]["translation_status"], "pending")
-        self.assertEqual(events[1]["message"]["translated_content"], "안녕하세요")
-        self.assertEqual(events[1]["message"]["translation_status"], "completed")
-        self.translate.assert_awaited_once()
-        self.session.get.assert_any_await(Message, self.message.id, with_for_update=True)
+                self.assertEqual(self.message.body, transcript)
+                self.assertEqual(self.message.source_language, source_language)
+                self.assertEqual(self.message.metadata_json["waveform_samples"], [0.2, 0.8])
+                self.assertEqual(stored_translations[0].source_language, source_language)
+                self.assertEqual(stored_translations[0].target_language, "es")
+                events = [call.args[1] for call in self.send.await_args_list]
+                self.assertEqual([event["type"] for event in events], ["message.updated", "message.translation.updated"])
+                self.assertEqual(events[0]["message"]["transcription_status"], "completed")
+                self.assertEqual(events[0]["message"]["translation_status"], "none")
+                self.assertEqual(events[1]["message"]["translated_content"], "Hola")
+                self.assertEqual(events[1]["message"]["translation_status"], "completed")
+                for event in events:
+                    self.assertEqual(event["message"]["source_language"], source_language)
+                self.translate.assert_awaited_once_with(
+                    text=transcript, source_language=source_language,
+                    target_language="es", context_messages=[],
+                )
+                self.session.get.assert_any_await(Message, self.message.id, with_for_update=True)
 
     async def test_transcription_failure_keeps_recording_and_does_not_translate(self):
         self.transcribe.side_effect = RuntimeError("provider unavailable")
@@ -181,7 +214,7 @@ class VoiceTranscriptionFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.transcription_status, "completed")
         self.transcribe.assert_not_awaited()
 
-    async def test_read_exposes_voice_translation_but_same_language_skips_it(self):
+    async def test_read_exposes_voice_translation_and_preserves_same_language_result(self):
         self.message.body = "你好"
         self.message.metadata_json["transcription_status"] = "completed"
         stored = MessageTranslation(message_id=self.message.id, source_language="zh-CN", target_language="ko", status=TranslationStatus.COMPLETED, translated_body="안녕하세요")
@@ -191,10 +224,11 @@ class VoiceTranscriptionFlowTests(unittest.IsolatedAsyncioTestCase):
         self.message.body = "안녕하세요"
         self.session.scalars.side_effect = [[], [stored], []]
         result = await routes.build_single_message_read(self.session, self.message, direct_conversation=self.direct)
-        self.assertIsNone(result.translated_content)
+        self.assertEqual(result.translated_content, "안녕하세요")
         self.assertEqual(result.translation_status, "completed")
 
     async def test_new_voice_schedules_transcription_and_ignores_client_transcript(self):
+        self.sender.preferred_language = "ja"
         created = []
         def add(record):
             if isinstance(record, Message):
@@ -214,6 +248,8 @@ class VoiceTranscriptionFlowTests(unittest.IsolatedAsyncioTestCase):
                 tasks, self.sender, self.session,
             )
         self.assertEqual(result.content, "")
+        self.assertEqual(created[0].source_language, self.sender.preferred_language)
+        self.assertEqual(result.source_language, self.sender.preferred_language)
         self.assertEqual(result.transcription_status, "pending")
         created_event = send_created.await_args.kwargs["data"]
         self.assertEqual(created_event["type"], "message.created")

@@ -1,16 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:naru/core/l10n/app_strings.dart';
+import 'package:naru/features/auth/domain/app_language.dart';
 import 'package:naru/design_system/components/app_media_viewer_chrome.dart';
 import 'package:naru/features/chat/presentation/chat_photo_editor_screen.dart';
+import '../../../support/localized_test_app.dart';
 
 Widget _buildTopBar({
   required int currentIndex,
   int photoCount = 3,
   bool visible = true,
+  String language = 'en',
 }) {
   const double topPadding = 59;
 
-  return MaterialApp(
+  return LocalizedTestApp(
+    language: language,
     home: Scaffold(
       body: Stack(
         children: [
@@ -31,6 +36,24 @@ Widget _buildTopBar({
 }
 
 void main() {
+  testWidgets('editor send label follows all eight app languages', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(393, 852));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    for (final language in AppLanguage.values) {
+      await tester.pumpWidget(
+        _buildTopBar(currentIndex: 0, language: language.code),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text('3 ${stringsForLanguage(language.code).send}'),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    }
+  });
+
   testWidgets(
     'editor top bar matches the viewer chrome and reference spacing',
     (WidgetTester tester) async {
