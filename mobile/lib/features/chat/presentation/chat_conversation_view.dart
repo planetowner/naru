@@ -6753,7 +6753,7 @@ final class _MessageListState extends State<_MessageList>
     milliseconds: 400,
   );
   static const Duration _scrollDateRefreshInterval = Duration(milliseconds: 50);
-  final Set<String> _showOriginalMessageIds = <String>{};
+  final Set<String> _showTranslatedMessageIds = <String>{};
   final Set<String> _historyPageBoundaryMessageIds = <String>{};
   final Map<String, GlobalKey> _messageBubbleKeys = <String, GlobalKey>{};
   final Map<String, double> _rememberedMessageScrollOffsets =
@@ -9547,10 +9547,10 @@ final class _MessageListState extends State<_MessageList>
         _preserveBottomDuringNextContentResize();
 
         setState(() {
-          if (_showOriginalMessageIds.contains(messageId)) {
-            _showOriginalMessageIds.remove(messageId);
+          if (_showTranslatedMessageIds.contains(messageId)) {
+            _showTranslatedMessageIds.remove(messageId);
           } else {
-            _showOriginalMessageIds.add(messageId);
+            _showTranslatedMessageIds.add(messageId);
           }
         });
 
@@ -9670,7 +9670,7 @@ final class _MessageListState extends State<_MessageList>
     _preserveBottomDuringNextContentResize();
 
     setState(() {
-      _showOriginalMessageIds.remove(messageId);
+      _showTranslatedMessageIds.remove(messageId);
       _messages[messageIndex] = currentMessage.copyWith(
         transcriptionStatus: transcribe
             ? ChatTranscriptionStatus.transcribing
@@ -9737,19 +9737,25 @@ final class _MessageListState extends State<_MessageList>
 
       _messages.sort(compareChatMessages);
 
-      _showOriginalMessageIds.remove(messageId);
+      if (retriedMessage.translationStatus ==
+              ChatTranslationStatus.translated &&
+          retriedMessage.translatedContent != null) {
+        _showTranslatedMessageIds.add(messageId);
+      } else {
+        _showTranslatedMessageIds.remove(messageId);
+      }
     });
     if (retriedMessageWasAdded) {
       _scrollbarRangeTracker.reset();
     }
   }
 
-  // 받은 번역은 기본으로 표시하고, 사용자가 원문을 고른 경우만 기억해요.
+  // 번역이 미리 완료돼도 원문을 먼저 보여주고, 사용자가 선택한 번역만 표시해요.
   bool _showsTranslation(ChatMessage message) =>
       message.senderId != widget.currentUserId &&
       message.translationStatus == ChatTranslationStatus.translated &&
       message.translatedContent != null &&
-      !_showOriginalMessageIds.contains(message.id);
+      _showTranslatedMessageIds.contains(message.id);
 
   String _displayedContentFor(ChatMessage message) {
     if (message.isPhotoMessage ||
@@ -9919,7 +9925,7 @@ final class _MessageListState extends State<_MessageList>
     setState(() {
       _messages.removeWhere((ChatMessage message) => message.id == messageId);
 
-      _showOriginalMessageIds.remove(messageId);
+      _showTranslatedMessageIds.remove(messageId);
       _messageBubbleKeys.remove(_messagePresentationId(message));
 
       if (_highlightedMessageId == messageId) {
@@ -9962,7 +9968,7 @@ final class _MessageListState extends State<_MessageList>
     _preserveBottomDuringNextContentResize();
 
     setState(() {
-      _showOriginalMessageIds.remove(messageId);
+      _showTranslatedMessageIds.remove(messageId);
 
       _messages[messageIndex] = currentMessage.copyWith(
         translationStatus: ChatTranslationStatus.translating,
@@ -10010,7 +10016,7 @@ final class _MessageListState extends State<_MessageList>
         clearTranslationFailureReason: true,
       );
 
-      _showOriginalMessageIds.remove(messageId);
+      _showTranslatedMessageIds.add(messageId);
     });
   }
 

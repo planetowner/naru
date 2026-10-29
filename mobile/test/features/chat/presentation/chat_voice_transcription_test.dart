@@ -71,8 +71,9 @@ void main() {
       await tester.pumpWidget(screen(voice()));
       await tester.pumpAndSettle();
       final Finder player = find.byIcon(AppIcons.play);
-      final Finder original = find.text('오늘 하루 어땠어? 많이 보고 싶어.');
+      final Finder original = find.text('今天过得怎么样？我很想你。');
       expect(original, findsOneWidget);
+      expect(find.text('오늘 하루 어땠어? 많이 보고 싶어.'), findsNothing);
       expect(
         tester.getTopLeft(original).dy,
         greaterThan(tester.getBottomLeft(player).dy),
@@ -80,10 +81,10 @@ void main() {
       final double playerY = tester.getTopLeft(player).dy;
       await tester.tap(original);
       await tester.pumpAndSettle();
-      expect(find.text('今天过得怎么样？我很想你。'), findsOneWidget);
+      expect(find.text('오늘 하루 어땠어? 많이 보고 싶어.'), findsOneWidget);
       expect(player, findsOneWidget);
       expect(tester.getTopLeft(player).dy, closeTo(playerY, 24));
-      await tester.tap(find.text('今天过得怎么样？我很想你。'));
+      await tester.tap(find.text('오늘 하루 어땠어? 많이 보고 싶어.'));
       await tester.pumpAndSettle();
       expect(original, findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -110,6 +111,10 @@ void main() {
       await tester.pumpWidget(screen(voice()));
       await tester.pumpAndSettle();
       expect(find.text('번역 중...'), findsNothing);
+      expect(find.text('今天过得怎么样？我很想你。'), findsOneWidget);
+      expect(find.text('오늘 하루 어땠어? 많이 보고 싶어.'), findsNothing);
+      await tester.tap(find.text('今天过得怎么样？我很想你。'));
+      await tester.pumpAndSettle();
       expect(find.text('오늘 하루 어땠어? 많이 보고 싶어.'), findsOneWidget);
     },
   );
@@ -252,7 +257,7 @@ void main() {
       final Rect bubble = tester.getRect(
         find.byKey(const ValueKey('incoming-bubble-voice')),
       );
-      final Rect text = tester.getRect(find.text('오늘 하루 어땠어? 많이 보고 싶어.'));
+      final Rect text = tester.getRect(find.text('今天过得怎么样？我很想你。'));
       expect(text.left, greaterThan(bubble.left));
       expect(text.right, lessThan(bubble.right));
       expect(tester.takeException(), isNull);

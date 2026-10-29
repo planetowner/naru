@@ -81,8 +81,9 @@ void main() {
   }
 
   testWidgets(
-    'received Spanish translations appear first and original choice survives updates',
+    'received translations keep originals until tapped and preserve the selected text',
     (tester) async {
+      int translationRequests = 0;
       final korean = ChatMessage(
         id: 'ko-to-es',
         senderId: '2',
@@ -112,21 +113,32 @@ void main() {
           otherParticipantName: 'Lia',
 
           initialMessages: messages,
+          onRetryTranslation: ({required messageId}) async {
+            translationRequests++;
+            throw StateError(
+              'Completed translations must not be requested again',
+            );
+          },
         ),
       );
       await tester.pumpWidget(conversation([korean, chinese]));
       await tester.pump(const Duration(milliseconds: 300));
-      expect(find.text('Gracias'), findsOneWidget);
+      expect(find.text('안녕하세요'), findsOneWidget);
+      expect(find.text('谢谢'), findsOneWidget);
+      expect(find.text('Gracias'), findsNothing);
       final completed = korean.copyWith(
         translatedContent: 'Hola',
         translationStatus: ChatTranslationStatus.translated,
       );
       await tester.pumpWidget(conversation([completed, chinese]));
       await tester.pumpAndSettle();
-      expect(find.text('Hola'), findsOneWidget);
-      await tester.tap(find.text('Hola'));
-      await tester.pumpAndSettle();
       expect(find.text('안녕하세요'), findsOneWidget);
+      expect(find.text('Hola'), findsNothing);
+      expect(find.text('谢谢'), findsOneWidget);
+      await tester.tap(find.text('안녕하세요'));
+      await tester.pumpAndSettle();
+      expect(find.text('Hola'), findsOneWidget);
+      expect(find.text('안녕하세요'), findsNothing);
       await tester.pumpWidget(
         conversation([
           completed.copyWith(readAt: DateTime(2026, 10, 28, 12, 2)),
@@ -134,10 +146,27 @@ void main() {
         ]),
       );
       await tester.pumpAndSettle();
-      expect(find.text('안녕하세요'), findsOneWidget);
-      await tester.tap(find.text('안녕하세요'));
-      await tester.pumpAndSettle();
       expect(find.text('Hola'), findsOneWidget);
+      await tester.tap(find.text('Hola'));
+      await tester.pumpAndSettle();
+      expect(find.text('안녕하세요'), findsOneWidget);
+      await tester.pumpWidget(
+        conversation([
+          completed.copyWith(readAt: DateTime(2026, 10, 28, 12, 3)),
+          chinese,
+        ]),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('안녕하세요'), findsOneWidget);
+      expect(find.text('Hola'), findsNothing);
+      await tester.tap(find.text('谢谢'));
+      await tester.pumpAndSettle();
+      expect(find.text('Gracias'), findsOneWidget);
+      expect(find.text('안녕하세요'), findsOneWidget);
+      await tester.tap(find.text('Gracias'));
+      await tester.pumpAndSettle();
+      expect(find.text('谢谢'), findsOneWidget);
+      expect(translationRequests, 0);
     },
   );
 
@@ -171,6 +200,10 @@ void main() {
           onTranslateMessage: (ChatMessage message) async {
             translationRequests++;
             return 'translated';
+          },
+          onRetryTranslation: ({required messageId}) async {
+            translationRequests++;
+            throw StateError('Identical content must not request translation');
           },
         ),
       ),
@@ -776,9 +809,6 @@ void main() {
       expect(bubbleFinder, findsOneWidget);
       expect(readReceiptFinder, findsOneWidget);
 
-      await tester.tap(find.text('나는 그 차이가 무엇인지 아직도 전혀 모르겠어 정말 하나도 모르겠어'));
-      await tester.pumpAndSettle();
-
       final double originalHeight = tester.getSize(bubbleFinder).height;
       final double originalBottomGap = readReceiptBottomGap();
 
@@ -839,6 +869,9 @@ void main() {
       const ValueKey<String>('incoming-bubble-2'),
     );
 
+    await tester.tap(find.text('我等你继续说呢'));
+    await tester.pumpAndSettle();
+
     final Finder translatedTextFinder = find.text('네가 계속 말해주길 기다리고 있어.');
 
     expect(translatedTextFinder, findsOneWidget);
@@ -874,9 +907,6 @@ void main() {
     final Finder bubbleFinder = find.byKey(
       const ValueKey<String>('incoming-bubble-2'),
     );
-
-    await tester.tap(find.text('네가 계속 말해주길 기다리고 있어.'));
-    await tester.pumpAndSettle();
 
     final Size originalSize = tester.getSize(bubbleFinder);
 
