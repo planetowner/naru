@@ -18,7 +18,7 @@
 		<string>it</string>
 	</array>
 	<key>CFBundleDisplayName</key>
-	<string>naru</string>
+	<string>Naru</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
