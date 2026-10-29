@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 
 os.environ.setdefault("OPENAI_API_KEY", "test-openai-api-key")
-os.environ.setdefault("OPENAI_MODEL", "gpt-5.6-terra")
+os.environ.setdefault("OPENAI_MODEL", "gpt-6.1-terra")
 
 from app import translation
 

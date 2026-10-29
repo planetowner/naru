@@ -44,7 +44,7 @@ OPENAI_API_KEY = required_environment_value(
 
 OPENAI_MODEL = os.getenv(
     "OPENAI_MODEL",
-    "gpt-5.6-terra",
+    "gpt-6.1-terra",
 ).strip()
 
 if not OPENAI_MODEL:
