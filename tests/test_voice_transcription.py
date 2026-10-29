@@ -166,6 +166,26 @@ class VoiceTranscriptionFlowTests(unittest.IsolatedAsyncioTestCase):
                 )
                 self.session.get.assert_any_await(Message, self.message.id, with_for_update=True)
 
+    async def test_recipient_language_transcript_skips_translation(self):
+        self.transcribe.return_value = "안녕하세요"
+
+        async def scalar(statement):
+            entity = statement.column_descriptions[0]["entity"]
+            return {MediaAsset: self.asset, DirectConversation: self.direct}.get(entity)
+
+        self.session.scalar.side_effect = scalar
+        await routes.transcribe_and_publish_message(self.message.id)
+
+        self.translate.assert_not_awaited()
+        self.session.add.assert_not_called()
+        self.send.assert_awaited_once()
+        event = self.send.await_args.args[1]
+        self.assertEqual(event["type"], "message.updated")
+        self.assertEqual(event["message"]["transcription_status"], "completed")
+        self.assertEqual(event["message"]["translation_status"], "completed")
+        self.assertEqual(event["message"]["content"], "안녕하세요")
+        self.assertEqual(event["message"]["translated_content"], "안녕하세요")
+
     async def test_transcription_failure_keeps_recording_and_does_not_translate(self):
         self.transcribe.side_effect = RuntimeError("provider unavailable")
         with self.assertLogs(routes.logger, level="ERROR"):

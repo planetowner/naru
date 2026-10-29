@@ -5,12 +5,15 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 from uuid import uuid4
 
+from fastapi import BackgroundTasks
+
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:5432/naru_test")
 os.environ.setdefault("OPENAI_API_KEY", "test-openai-api-key")
 os.environ.setdefault("JWT_SECRET", "test-jwt-secret-with-at-least-32-bytes")
 
 from app.models import DirectConversation, Message, MessageKind, MessageTranslation, TranslationStatus, User
 from app.routes import messages as routes
+from app.schemas import MessageCreate, MessageUpdate
 from app.translation import TranslationResult
 
 
@@ -60,3 +63,83 @@ class RecipientTranslationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(result.translated_language, receiver.preferred_language)
             self.assertEqual(result.translated_content, translated)
             self.assertEqual(result.content, body)
+
+
+class RecipientLanguageSkipTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.sender = User(id=uuid4(), preferred_language="en", display_name="Sender")
+        self.recipient = User(id=uuid4(), preferred_language="ko", display_name="Recipient")
+        self.direct = DirectConversation(conversation_id=uuid4(), user_one_id=self.sender.id,
+                                         user_two_id=self.recipient.id)
+        self.message = Message(id=uuid4(), conversation_id=self.direct.conversation_id,
+                               sender_id=self.sender.id, kind=MessageKind.TEXT,
+                               body="안녕하세요", source_language="en", metadata_json={},
+                               created_at=datetime.now(timezone.utc), version=1)
+        self.translation = None
+        self.added = []
+
+        def add(record):
+            self.added.append(record)
+            if isinstance(record, Message):
+                record.id = uuid4()
+                record.created_at = datetime.now(timezone.utc)
+
+        async def get(model, key):
+            return {Message: self.message, User: self.recipient}.get(model)
+
+        async def scalar(statement):
+            entity = statement.column_descriptions[0]["entity"]
+            return self.direct if entity is DirectConversation else self.translation
+
+        self.session = SimpleNamespace(
+            get=AsyncMock(side_effect=get), scalar=AsyncMock(side_effect=scalar),
+            scalars=AsyncMock(return_value=[]), execute=AsyncMock(return_value=[]),
+            add=Mock(side_effect=add), flush=AsyncMock(), commit=AsyncMock(), refresh=AsyncMock(),
+        )
+        self.enterContext(patch.object(routes, "load_direct_users", AsyncMock(return_value={
+            self.sender.id: self.sender, self.recipient.id: self.recipient,
+        })))
+        self.enterContext(patch.object(routes, "get_direct_conversation", AsyncMock(return_value=self.direct)))
+        self.enterContext(patch.object(routes, "update_conversation_latest_message", AsyncMock()))
+        self.enterContext(patch.object(routes, "publish_created_message", AsyncMock()))
+        self.enterContext(patch.object(routes, "send_to_direct_participants", AsyncMock()))
+        self.translator = self.enterContext(patch.object(routes, "translate_message", AsyncMock()))
+
+    def assert_skipped(self, result):
+        self.assertEqual(result.content, "안녕하세요")
+        self.assertEqual(result.translated_content, result.content)
+        self.assertEqual(result.translation_status, "completed")
+        self.assertIsNone(result.translation_provider)
+        self.assertIsNone(result.translation_model)
+        self.translator.assert_not_awaited()
+
+    async def test_create_does_not_schedule_translation_for_recipient_language(self):
+        tasks = BackgroundTasks()
+        result = await routes.create_message(
+            MessageCreate(recipient_id=self.recipient.id, content="안녕하세요", message_type="text"),
+            tasks, self.sender, self.session,
+        )
+        self.assert_skipped(result)
+        self.assertFalse(any(isinstance(record, MessageTranslation) for record in self.added))
+        self.assertNotIn(routes.translate_and_publish_message, [task.func for task in tasks.tasks])
+
+    async def test_retry_also_skips_recipient_language(self):
+        result = await routes.retry_message_translation(self.message.id, self.recipient, self.session)
+        self.assert_skipped(result)
+        self.assertFalse(any(isinstance(record, MessageTranslation) for record in self.added))
+
+    async def test_edit_to_recipient_language_clears_previous_translation_failure(self):
+        self.message.body = "Hello"
+        self.translation = MessageTranslation(
+            message_id=self.message.id, source_language="en", target_language="ko",
+            status=TranslationStatus.FAILED, error_message="previous failure", provider="openai",
+        )
+        tasks = BackgroundTasks()
+        result = await routes.update_message(
+            self.message.id, MessageUpdate(content="안녕하세요"), tasks, self.sender, self.session,
+        )
+        self.assert_skipped(result)
+        self.assertEqual(self.translation.status, TranslationStatus.COMPLETED)
+        self.assertEqual(self.translation.translated_body, "안녕하세요")
+        self.assertIsNone(self.translation.error_message)
+        self.assertNotIn(routes.translate_and_publish_message, [task.func for task in tasks.tasks])

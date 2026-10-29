@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import os
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Sequence
 
 from dotenv import load_dotenv
+from lingua import IsoCode639_1, LanguageDetectorBuilder
 from openai import AsyncOpenAI
 
 from app.languages import SUPPORTED_LANGUAGE_NAMES
@@ -55,6 +57,18 @@ if not OPENAI_MODEL:
 TRANSLATION_PROVIDER_NAME = "openai"
 TRANSLATION_MODEL = OPENAI_MODEL
 
+# 짧은 영문을 다른 언어로 단정하지 않도록 판별 점수가 비슷하면 번역을 유지해요.
+language_detector = (
+    LanguageDetectorBuilder.from_iso_codes_639_1(
+        *(
+            getattr(IsoCode639_1, code.split("-")[0].upper())
+            for code in SUPPORTED_LANGUAGE_NAMES
+        )
+    )
+    .with_minimum_relative_distance(0.2)
+    .build()
+)
+
 openai_client = AsyncOpenAI(
     api_key=OPENAI_API_KEY,
     timeout=60.0,
@@ -87,10 +101,28 @@ def should_translate_text(
     *,
     target_language: Optional[str],
 ) -> bool:
-    # 설정 언어와 실제 입력 언어는 다를 수 있어요. 언어 판별은 번역 모델에 맡겨요.
     # 숫자·기호·이모지만 있는 메시지는 번역하지 않아요.
-    return bool((target_language or "").strip()) and any(
+    if not (target_language or "").strip() or not any(
         character.isalpha() for character in text
+    ):
+        return False
+
+    normalized_text = unicodedata.normalize("NFKC", text)
+    scripts = {
+        unicodedata.name(character, "").split(" ")[0]
+        for character in normalized_text
+        if character.isalpha()
+    }
+    # 서로 다른 문자가 섞이면 번역해요. 일본어의 한자·가나는 함께 허용해요.
+    if len(scripts) > 1 and not scripts <= {"CJK", "HIRAGANA", "KATAKANA"}:
+        return True
+
+    detected_language = language_detector.detect_language_of(normalized_text)
+    # 발신자의 설정 언어 대신 실제 본문을 비교하고, 판별이 불확실하면 번역해요.
+    return (
+        detected_language is None
+        or detected_language.iso_code_639_1.name.lower()
+        != target_language.split("-")[0]
     )
 
 

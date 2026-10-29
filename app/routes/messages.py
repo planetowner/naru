@@ -963,7 +963,10 @@ async def build_message_reads(
             )
         else:
             translation_status = TranslationStatus.COMPLETED.value
-            translated_content = None
+            # 번역을 건너뛴 본문은 원문과 같게 보내서 앱에서 재요청하지 않아요.
+            translated_content = (
+                message.body if message_has_translatable_text(message) else None
+            )
             translation_provider = None
             translation_model = None
 
@@ -1242,7 +1245,7 @@ async def transcribe_and_publish_message(message_id: UUID) -> None:
             transcription_status = "failed"
         else:
             transcription_status = "completed"
-            # 발신 시 저장한 설정 언어를 유지하고, 실제 언어 판별은 번역 모델에 맡겨요.
+            # 발신 시 저장한 설정 언어를 유지하고, 번역 여부는 실제 전사 본문으로 판단해요.
 
         # 전사 원문도 메시지 본문에 저장해 기존 번역·검색·캐시 흐름을 공유해요.
         message.metadata_json = {
